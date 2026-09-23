@@ -1,0 +1,80 @@
+services:
+  # 1. API Gateway (Nginx)
+  - type: web
+    name: exe-api-gateway
+    env: docker
+    dockerfilePath: be/src/Gateway/nginx/Dockerfile
+    dockerContext: be/src/Gateway/nginx
+    plan: free
+    region: singapore
+
+  # 2. Identity & Semester Service
+  - type: web
+    name: exe-identity-semester
+    env: docker
+    dockerfilePath: be/src/Services/IdentitySemester/IdentitySemester.Api/Dockerfile
+    dockerContext: be
+    plan: free
+    region: singapore
+    envVars:
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: exe-postgres-db
+          property: connectionString
+      - key: KafkaSettings__BootstrapServers
+        value: exe-kafka:9092
+      - key: JwtSettings__Secret
+        generateValue: true
+
+  # 3. Group Matching Service
+  - type: web
+    name: exe-group-matching
+    env: docker
+    dockerfilePath: be/src/Services/GroupMatching/GroupMatching.Api/Dockerfile
+    dockerContext: be
+    plan: free
+    region: singapore
+    envVars:
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: exe-postgres-db
+          property: connectionString
+      - key: KafkaSettings__BootstrapServers
+        value: exe-kafka:9092
+
+  # 4. Mentor Service
+  - type: web
+    name: exe-mentor
+    env: docker
+    dockerfilePath: be/src/Services/Mentor/Mentor.Api/Dockerfile
+    dockerContext: be
+    plan: free
+    region: singapore
+    envVars:
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: exe-postgres-db
+          property: connectionString
+      - key: KafkaSettings__BootstrapServers
+        value: exe-kafka:9092
+
+  # 5. Notification Worker Service
+  - type: worker
+    name: exe-notification-worker
+    env: docker
+    dockerfilePath: be/src/Services/Notification/Notification.Worker/Dockerfile
+    dockerContext: be
+    plan: free
+    region: singapore
+    envVars:
+      - key: KafkaSettings__BootstrapServers
+        value: exe-kafka:9092
+
+
+# Managed PostgreSQL Database on Render
+databases:
+  - name: exe-postgres-db
+    databaseName: exe_matching_db
+    user: postgres
+    plan: free
+    region: singapore

@@ -1,0 +1,162 @@
+networks:
+  capstone-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  sonarqube-data:
+  sonarqube-logs:
+  sonarqube-extensions:
+
+
+services:
+  nginx:
+    build:
+      context: ./be/src/Gateway/nginx
+      dockerfile: Dockerfile
+    container_name: exe-nginx-gateway
+    ports:
+      - "${GATEWAY_PORT:-8080}:80"
+    depends_on:
+      - identity-semester
+      - group-matching
+      - mentor
+    networks:
+      - capstone-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: exe-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-exe_matching_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./be/deploy/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    networks:
+      - capstone-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: exe-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - capstone-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: exe-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - capstone-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: exe-kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - capstone-network
+
+  identity-semester:
+    build:
+      context: ./be
+      dockerfile: src/Services/IdentitySemester/IdentitySemester.Api/Dockerfile
+    container_name: exe-identity-semester
+    ports:
+      - "${IDENTITY_PORT:-5001}:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=${IDENTITY_DB_CONNECTION:-Host=postgres;Database=identity_db;Username=postgres;Password=postgres}
+      - KafkaSettings__BootstrapServers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      - JwtSettings__Secret=${JWT_SECRET:-SuperSecretKeyForJWTTokenGeneration12345!}
+      - JwtSettings__Issuer=${JWT_ISSUER:-EXETeamMatching}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-EXETeamMatchingClients}
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - capstone-network
+
+  group-matching:
+    build:
+      context: ./be
+      dockerfile: src/Services/GroupMatching/GroupMatching.Api/Dockerfile
+    container_name: exe-group-matching
+    ports:
+      - "${GROUP_MATCHING_PORT:-5002}:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=${GROUP_MATCHING_DB_CONNECTION:-Host=postgres;Database=group_matching_db;Username=postgres;Password=postgres}
+      - KafkaSettings__BootstrapServers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - capstone-network
+
+  mentor:
+    build:
+      context: ./be
+      dockerfile: src/Services/Mentor/Mentor.Api/Dockerfile
+    container_name: exe-mentor
+    ports:
+      - "${MENTOR_PORT:-5003}:8080"
+      - "${MENTOR_GRPC_PORT:-50051}:50051"
+    environment:
+      - ConnectionStrings__DefaultConnection=${MENTOR_DB_CONNECTION:-Host=postgres;Database=mentor_db;Username=postgres;Password=postgres}
+      - KafkaSettings__BootstrapServers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - capstone-network
+
+  notification-worker:
+    build:
+      context: ./be
+      dockerfile: src/Services/Notification/Notification.Worker/Dockerfile
+    container_name: exe-notification-worker
+    environment:
+      - KafkaSettings__BootstrapServers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      - EmailSettings__SmtpServer=${SMTP_SERVER:-smtp.gmail.com}
+      - EmailSettings__SmtpPort=${SMTP_PORT:-587}
+      - EmailSettings__SenderEmail=${SENDER_EMAIL:-noreply@exeteammatching.com}
+      - EmailSettings__SenderName=${SENDER_NAME:-EXE Team Matching System}
+    depends_on:
+      - kafka
+    networks:
+      - capstone-network
+
+  sonarqube:
+    image: sonarqube:lts-community
+    container_name: exe-sonarqube
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-logs:/opt/sonarqube/logs
+      - sonarqube-extensions:/opt/sonarqube/extensions
+    networks:
+      - capstone-network
+
+

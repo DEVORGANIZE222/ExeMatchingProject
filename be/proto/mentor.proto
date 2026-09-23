@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+option csharp_namespace = "EXETeamMatching.Mentor.Grpc";
+
+package mentor;
+
+service MentorGrpcService {
+  rpc GetMentor (GetMentorRequest) returns (MentorResponse);
+  rpc GetMentors (GetMentorsRequest) returns (GetMentorsResponse);
+  rpc GetMentorQuota (GetMentorQuotaRequest) returns (MentorQuotaResponse);
+}
+
+message GetMentorRequest {
+  string id = 1;
+}
+
+message GetMentorsRequest {
+  int32 page_number = 1;
+  int32 page_size = 2;
+}
+
+message MentorResponse {
+  string id = 1;
+  string user_id = 2;
+  string full_name = 3;
+  string email = 4;
+  string department = 5;
+  int32 max_quota = 6;
+  int32 current_assigned = 7;
+}
+
+message GetMentorsResponse {
+  repeated MentorResponse mentors = 1;
+  int32 total_count = 2;
+}
+
+message GetMentorQuotaRequest {
+  string mentor_id = 1;
+}
+
+message MentorQuotaResponse {
+  string mentor_id = 1;
+  int32 max_quota = 2;
+  int32 current_assigned = 3;
+  int32 available_quota = 4;
+}
