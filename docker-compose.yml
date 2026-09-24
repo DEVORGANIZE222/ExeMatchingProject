@@ -5,9 +5,6 @@ networks:
 volumes:
   postgres-data:
   redis-data:
-  sonarqube-data:
-  sonarqube-logs:
-  sonarqube-extensions:
 
 
 services:
@@ -142,20 +139,6 @@ services:
       - EmailSettings__SenderName=${SENDER_NAME:-EXE Team Matching System}
     depends_on:
       - kafka
-    networks:
-      - capstone-network
-
-  sonarqube:
-    image: sonarqube:lts-community
-    container_name: exe-sonarqube
-    ports:
-      - "9000:9000"
-    environment:
-      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
-    volumes:
-      - sonarqube-data:/opt/sonarqube/data
-      - sonarqube-logs:/opt/sonarqube/logs
-      - sonarqube-extensions:/opt/sonarqube/extensions
     networks:
       - capstone-network
 

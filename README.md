@@ -222,31 +222,3 @@ Run all unit & integration test projects across the solution:
 dotnet test EXETeamMatching.sln
 ```
 
----
-
-## 13. SonarQube Code Quality & Security Audit
-
-
-This project includes a **SonarQube Community Edition** container integration for automated static code analysis, code smell detection, and security vulnerability scanning.
-
-### Running SonarQube via Docker Compose
-Start SonarQube alongside the microservices infrastructure:
-```bash
-docker compose up -d sonarqube
-```
-Access the SonarQube Dashboard at [http://localhost:9000](http://localhost:9000) (Default Login: `admin` / `admin`).
-
-### Running Code Analysis via .NET SonarScanner CLI
-Install the dotnet sonarscanner tool globally:
-```bash
-dotnet tool install --global dotnet-sonarscanner
-```
-
-Run a full scan on `be/EXETeamMatching.sln`:
-```bash
-dotnet sonarscanner begin /k:"EXETeamMatching" /d:sonar.host.url="http://localhost:9000" /d:sonar.login="YOUR_SONAR_TOKEN"
-dotnet build be/EXETeamMatching.sln
-dotnet sonarscanner end /d:sonar.login="YOUR_SONAR_TOKEN"
-```
-
-
