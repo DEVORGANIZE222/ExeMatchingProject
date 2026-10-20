@@ -1,0 +1,69 @@
+<mxfile host="app.diagrams.net" modified="2026-09-24T00:00:00.000Z" agent="Codex" version="26.0.14" type="device">
+  <diagram id="exe-team-matching-architecture" name="EXE Team Matching Architecture">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="45" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="system" value="EXE Team Matching System" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fde2c0;strokeColor=#d8aa52;strokeWidth=2;fontSize=16;verticalAlign=bottom;align=left;spacingLeft=6;spacingBottom=6;" vertex="1" parent="1">
+          <mxGeometry x="185" y="305" width="1170" height="510" as="geometry"/>
+        </mxCell>
+        <mxCell id="user" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="764" y="25" width="72" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="web" value="Web Application&lt;br&gt;&lt;font style=&quot;font-size:15px&quot;&gt;React + Vite&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="570" y="178" width="230" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="nginx" value="Nginx&lt;br&gt;[API Gateway]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="575" y="362" width="220" height="83" as="geometry"/>
+        </mxCell>
+        <mxCell id="identity" value="IdentitySemester&lt;br&gt;Service" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="270" y="530" width="205" height="83" as="geometry"/>
+        </mxCell>
+        <mxCell id="group" value="GroupMatching&lt;br&gt;Service" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="585" y="530" width="205" height="83" as="geometry"/>
+        </mxCell>
+        <mxCell id="mentor" value="Mentor Service&lt;br&gt;&lt;font style=&quot;font-size:15px&quot;&gt;REST API + gRPC endpoint&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="900" y="530" width="205" height="83" as="geometry"/>
+        </mxCell>
+        <mxCell id="identity-db" value="Identity Database" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="278" y="668" width="182" height="102" as="geometry"/>
+        </mxCell>
+        <mxCell id="group-db" value="GroupMatching DB" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="593" y="668" width="182" height="102" as="geometry"/>
+        </mxCell>
+        <mxCell id="mentor-db" value="Mentor Database" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="908" y="668" width="182" height="102" as="geometry"/>
+        </mxCell>
+        <mxCell id="kafka" value="Kafka&lt;br&gt;[Message Broker]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="1155" y="530" width="150" height="83" as="geometry"/>
+        </mxCell>
+        <mxCell id="zookeeper" value="Zookeeper" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="1168" y="681" width="125" height="73" as="geometry"/>
+        </mxCell>
+        <mxCell id="worker" value="Notification&lt;br&gt;Worker" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="332" width="160" height="83" as="geometry"/>
+        </mxCell>
+        <mxCell id="smtp" value="SMTP Provider&lt;br&gt;&lt;font style=&quot;font-size:15px&quot;&gt;Gmail (default)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#242424;strokeWidth=2;fontSize=17;" vertex="1" parent="1">
+          <mxGeometry x="1395" y="332" width="165" height="83" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-user-web" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="user" target="web">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="685" y="90"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e-web-nginx" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="web" target="nginx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-nginx-identity" value="HTTP" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nginx" target="identity"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="372" y="486"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-nginx-group" value="HTTP" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nginx" target="group"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-nginx-mentor" value="HTTP" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="nginx" target="mentor"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1002" y="486"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-identity-db" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="identity" target="identity-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-group-db" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="group" target="group-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-mentor-db" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="mentor" target="mentor-db"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-group-kafka" value="Publish events" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="group" target="kafka"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="687" y="646"/><mxPoint x="1230" y="646"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-mentor-kafka" value="Publish events" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="mentor" target="kafka"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1002" y="646"/><mxPoint x="1230" y="646"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-kafka-zookeeper" value="Coordination" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="kafka" target="zookeeper"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-kafka-worker" value="Consume" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="kafka" target="worker"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-worker-smtp" value="SMTP" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;fontSize=15;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="worker" target="smtp"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

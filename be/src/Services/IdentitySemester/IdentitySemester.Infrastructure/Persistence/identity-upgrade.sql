@@ -1,0 +1,30 @@
+-- Idempotent, additive upgrade for existing Phase 1 EnsureCreated databases.
+-- Executed inside a transaction by DatabaseInitializer after EnsureCreated.
+ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "TokenVersion" integer NOT NULL DEFAULT 0;
+ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "GoogleSubject" text;
+ALTER TABLE "Semesters" ADD COLUMN IF NOT EXISTS "RegistrationDeadline" timestamptz;
+ALTER TABLE "Semesters" ADD COLUMN IF NOT EXISTS "TopicDeadline" timestamptz;
+ALTER TABLE "Semesters" ADD COLUMN IF NOT EXISTS "MentorDeadline" timestamptz;
+-- Phase 1 used cascade deletion here. Match the new Restrict model without deleting rows.
+ALTER TABLE "Students" DROP CONSTRAINT IF EXISTS "FK_Students_Semesters_SemesterId";
+ALTER TABLE "Students" ADD CONSTRAINT "FK_Students_Semesters_SemesterId"
+    FOREIGN KEY ("SemesterId") REFERENCES "Semesters" ("Id") ON DELETE RESTRICT;
+CREATE UNIQUE INDEX IF NOT EXISTS "UX_Users_Email_Normalized" ON "Users" (lower(trim("Email")));
+CREATE UNIQUE INDEX IF NOT EXISTS "UX_Users_GoogleSubject" ON "Users" ("GoogleSubject") WHERE "GoogleSubject" IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS "UX_Semesters_Code_Normalized" ON "Semesters" (upper(trim("Code")));
+CREATE UNIQUE INDEX IF NOT EXISTS "UX_Students_Semester_Code" ON "Students" ("SemesterId", upper(trim("StudentCode")));
+CREATE UNIQUE INDEX IF NOT EXISTS "UX_Students_Semester_User" ON "Students" ("SemesterId", "UserId");
+CREATE TABLE IF NOT EXISTS "StudentEventOutbox" (
+    "Id" uuid PRIMARY KEY,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NULL,
+    "Payload" text NOT NULL,
+    "PublishedAt" timestamptz NULL
+);
+CREATE TABLE IF NOT EXISTS "GoogleAllowedEmails" (
+    "Id" uuid PRIMARY KEY,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NULL,
+    "Email" text NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "UX_GoogleAllowedEmails_Email_Normalized" ON "GoogleAllowedEmails" (lower(trim("Email")));

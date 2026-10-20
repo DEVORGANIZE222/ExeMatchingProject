@@ -12,9 +12,22 @@ public class User : BaseEntity
 {
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public string? GoogleSubject { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
+    public int TokenVersion { get; set; }
     public Guid RoleId { get; set; }
     public Role Role { get; set; } = null!;
+}
+
+public class StudentEventOutbox : BaseEntity
+{
+    public string Payload { get; set; } = string.Empty;
+    public DateTime? PublishedAt { get; set; }
+}
+
+public class GoogleAllowedEmail : BaseEntity
+{
+    public string Email { get; set; } = string.Empty;
 }
 
 public class Student : BaseEntity
@@ -36,4 +49,7 @@ public class Semester : BaseEntity
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public bool IsActive { get; set; } = true;
+    public DateTime? RegistrationDeadline { get; set; }
+    public DateTime? TopicDeadline { get; set; }
+    public DateTime? MentorDeadline { get; set; }
 }

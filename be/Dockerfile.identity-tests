@@ -1,0 +1,5 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+WORKDIR /src
+COPY . .
+RUN dotnet restore src/Tests/IdentitySemester.Tests/IdentitySemester.Tests.csproj
+ENTRYPOINT ["dotnet", "test", "src/Tests/IdentitySemester.Tests/IdentitySemester.Tests.csproj", "--no-restore", "--nologo", "-v", "minimal"]
