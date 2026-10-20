@@ -1,63 +1,95 @@
+using System.Text;
 using EXETeamMatching.IdentitySemester.Application.Interfaces;
+using EXETeamMatching.IdentitySemester.Application.Services;
 using EXETeamMatching.IdentitySemester.Infrastructure.Persistence;
 using EXETeamMatching.IdentitySemester.Infrastructure.Services;
-using EXETeamMatching.Messaging.Abstractions;
-using EXETeamMatching.Messaging.Implementations;
-using EXETeamMatching.Messaging.Settings;
-using EXETeamMatching.SharedKernel.Middleware;
+using EXETeamMatching.IdentitySemester.Api;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
-
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "IdentitySemester API", Version = "v1" });
-});
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", policy =>
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT" });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }] = Array.Empty<string>()
     });
 });
-
-builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
-builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection("KafkaSettings"));
-
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-                       ?? builder.Configuration["DATABASE_CONNECTION_STRING"];
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
+    .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173", "http://localhost:3000"])
+    .AllowAnyHeader().AllowAnyMethod()));
+builder.Services.AddOptions<JwtSettings>().Bind(builder.Configuration.GetSection("JwtSettings"))
+    .Validate(s => Encoding.UTF8.GetByteCount(s.Secret) >= 32 && !string.IsNullOrWhiteSpace(s.Issuer)
+        && !string.IsNullOrWhiteSpace(s.Audience) && s.ExpirationInMinutes is >= 1 and <= 1440,
+        "JWT requires a secret of at least 32 bytes, issuer, audience and expiry between 1 and 1440 minutes.")
+    .ValidateOnStart();
+builder.Services.AddOptions<GoogleAuthSettings>().Bind(builder.Configuration.GetSection("GoogleAuth"));
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+{
+    var jwt = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>() ?? new JwtSettings();
+    options.MapInboundClaims = false;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true, ValidIssuer = jwt.Issuer,
+        ValidateAudience = true, ValidAudience = jwt.Audience,
+        ValidateLifetime = true, RequireExpirationTime = true,
+        ValidateIssuerSigningKey = true, RequireSignedTokens = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Secret)),
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+        NameClaimType = "sub", RoleClaimType = "role", ClockSkew = TimeSpan.FromSeconds(30)
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var store = context.HttpContext.RequestServices.GetRequiredService<IIdentityStore>();
+            if (!Guid.TryParse(context.Principal?.FindFirst("sub")?.Value, out var id))
+            { context.Fail("Invalid subject."); return; }
+            var user = await store.UserById(id, context.HttpContext.RequestAborted);
+            if (user is null || context.Principal?.FindFirst("ver")?.Value != user.TokenVersion.ToString()
+                || context.Principal?.FindFirst("role")?.Value != user.Role.Name)
+                context.Fail("Account or token is no longer valid.");
+        }
+    };
+});
+builder.Services.AddAuthorization();
 builder.Services.AddDbContext<IdentitySemesterDbContext>(options =>
-    options.UseNpgsql(connectionString));
-
-builder.Services.AddScoped<IJwtService, JwtService>();
-builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<IIdentityStore, IdentityRepository>();
+builder.Services.AddScoped<IdentityService>();
+builder.Services.AddScoped<IAuthenticationService>(sp => sp.GetRequiredService<IdentityService>());
+builder.Services.AddSingleton<IPasswordService, PasswordService>();
+builder.Services.AddSingleton<JwtService>();
+builder.Services.AddSingleton<ITokenIssuer>(sp => sp.GetRequiredService<JwtService>());
+builder.Services.AddSingleton<IJwtService>(sp => sp.GetRequiredService<JwtService>());
+builder.Services.AddSingleton<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+builder.Services.AddSingleton<IStudentImportReader, StudentImportReader>();
+builder.Services.AddSingleton<IGoogleEmailImportReader, GoogleEmailImportReader>();
+builder.Services.AddScoped<DatabaseInitializer>();
+builder.Services.AddHostedService<StudentOutboxPublisher>();
 
 var app = builder.Build();
-
 using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<IdentitySemesterDbContext>();
-    dbContext.Database.EnsureCreated();
-}
+    await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().Initialize();
 
-app.UseMiddleware<GlobalExceptionHandler>();
-app.UseCors("AllowAll");
-
-
+app.UseMiddleware<IdentityErrorHandler>();
+app.UseCors();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "IdentitySemester API v1");
     c.RoutePrefix = string.Empty;
 });
-
+app.UseAuthentication();
 app.UseAuthorization();
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "IdentitySemester" })).AllowAnonymous();
 app.MapControllers();
-
 app.Run();
+
+public partial class Program { }

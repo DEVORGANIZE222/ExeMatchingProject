@@ -1,0 +1,9 @@
+services:
+  identity-tests:
+    build:
+      context: ./be
+      dockerfile: Dockerfile.identity-tests
+    environment:
+      TEST_POSTGRES_CONNECTION: Host=postgres;Database=postgres;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+    networks:
+      - capstone-network

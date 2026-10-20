@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">EXE Team Matching System Architecture</title>
+  <desc id="desc">Architecture diagram showing a React web application through Nginx to IdentitySemester, GroupMatching and Mentor services, each with its own PostgreSQL database, plus Kafka, Zookeeper and the Notification Worker.</desc>
+  <defs>
+    <pattern id="grid" width="45" height="45" patternUnits="userSpaceOnUse">
+      <path d="M 45 0 L 0 0 0 45" fill="none" stroke="#e8e8e8" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#242424"/>
+    </marker>
+    <style>
+      .line { fill:none; stroke:#242424; stroke-width:2; marker-end:url(#arrow); }
+      .plain { fill:none; stroke:#242424; stroke-width:2; }
+      .box { fill:#fff; stroke:#242424; stroke-width:2; }
+      .label { font-family:Arial, Helvetica, sans-serif; font-size:17px; fill:#151515; text-anchor:middle; dominant-baseline:middle; }
+      .small { font-family:Arial, Helvetica, sans-serif; font-size:15px; fill:#151515; text-anchor:middle; }
+      .caption { font-family:Arial, Helvetica, sans-serif; font-size:16px; fill:#151515; }
+      .system { fill:#fde2c0; stroke:#d8aa52; stroke-width:2; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="#fff"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+
+  <!-- User -->
+  <circle cx="800" cy="54" r="23" class="box"/>
+  <path d="M764 135 L764 103 Q764 79 800 79 Q836 79 836 103 L836 135 Z" class="box"/>
+  <text x="800" y="104" class="label">User</text>
+
+  <!-- Outside clients -->
+  <rect x="570" y="178" width="230" height="82" class="box"/>
+  <text x="685" y="214" class="label">Web Application</text>
+  <text x="685" y="239" class="small">React + Vite</text>
+
+  <!-- System boundary -->
+  <rect x="185" y="305" width="1170" height="510" class="system"/>
+  <text x="190" y="808" class="caption">EXE Team Matching System</text>
+
+  <!-- Entry flow -->
+  <path d="M780 98 H685 V178" class="line"/>
+  <text x="732" y="91" class="small">HTTPS</text>
+  <path d="M685 260 V362" class="line"/>
+  <text x="717" y="320" class="small">HTTPS</text>
+
+  <!-- Gateway -->
+  <rect x="575" y="362" width="220" height="83" class="box"/>
+  <text x="685" y="397" class="label">Nginx</text>
+  <text x="685" y="422" class="label">[API Gateway]</text>
+
+  <!-- Services -->
+  <rect x="270" y="530" width="205" height="83" class="box"/>
+  <text x="372" y="564" class="label">IdentitySemester</text>
+  <text x="372" y="589" class="label">Service</text>
+  <rect x="585" y="530" width="205" height="83" class="box"/>
+  <text x="687" y="564" class="label">GroupMatching</text>
+  <text x="687" y="589" class="label">Service</text>
+  <rect x="900" y="530" width="205" height="83" class="box"/>
+  <text x="1002" y="564" class="label">Mentor Service</text>
+  <text x="1002" y="589" class="small">REST API + gRPC endpoint</text>
+
+  <!-- Gateway routes -->
+  <path d="M625 445 V486 H372 V530" class="line"/>
+  <path d="M685 445 V530" class="line"/>
+  <path d="M745 445 V486 H1002 V530" class="line"/>
+  <text x="494" y="478" class="small">HTTP</text>
+  <text x="718" y="495" class="small">HTTP</text>
+  <text x="873" y="478" class="small">HTTP</text>
+
+  <!-- Databases: cylinder bodies first -->
+  <path d="M278 692 V750 C278 770 460 770 460 750 V692" class="box"/>
+  <ellipse cx="369" cy="692" rx="91" ry="24" class="box"/>
+  <text x="369" y="726" class="label">Identity Database</text>
+  <path d="M593 692 V750 C593 770 775 770 775 750 V692" class="box"/>
+  <ellipse cx="684" cy="692" rx="91" ry="24" class="box"/>
+  <text x="684" y="726" class="label">GroupMatching DB</text>
+  <path d="M908 692 V750 C908 770 1090 770 1090 750 V692" class="box"/>
+  <ellipse cx="999" cy="692" rx="91" ry="24" class="box"/>
+  <text x="999" y="726" class="label">Mentor Database</text>
+  <path d="M372 613 V668" class="line"/>
+  <path d="M687 613 V668" class="line"/>
+  <path d="M1002 613 V668" class="line"/>
+
+  <!-- Messaging and coordination -->
+  <rect x="1155" y="530" width="150" height="83" class="box"/>
+  <text x="1230" y="564" class="label">Kafka</text>
+  <text x="1230" y="589" class="label">[Message Broker]</text>
+  <rect x="1168" y="681" width="125" height="73" class="box"/>
+  <text x="1230" y="717" class="label">Zookeeper</text>
+  <path d="M687 613 V646 H1230 V613" class="line"/>
+  <path d="M1002 613 V646 H1230 V613" class="line"/>
+  <text x="1098" y="637" class="small">Publish events</text>
+  <path d="M1230 613 V681" class="line"/>
+  <text x="1263" y="655" class="small">Coordination</text>
+
+  <!-- Worker and SMTP -->
+  <rect x="1150" y="332" width="160" height="83" class="box"/>
+  <text x="1230" y="366" class="label">Notification</text>
+  <text x="1230" y="391" class="label">Worker</text>
+  <path d="M1230 530 V415" class="line"/>
+  <text x="1267" y="475" class="small">Consume</text>
+  <rect x="1395" y="332" width="165" height="83" class="box"/>
+  <text x="1477" y="366" class="label">SMTP Provider</text>
+  <text x="1477" y="391" class="small">Gmail (default)</text>
+  <path d="M1310 373 H1395" class="line"/>
+  <text x="1353" y="358" class="small">SMTP</text>
+</svg>

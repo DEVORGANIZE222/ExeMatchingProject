@@ -1,4 +1,4 @@
-# EXE Team Matching System - Microservices Architecture (Phase 1 Code Base)
+# EXE Team Matching System - Microservices Architecture
 
 An enterprise-grade Capstone / EXE Team Matching System built with **.NET 8 Microservices Architecture**, featuring Clean Architecture, Nginx API Gateway, EF Core PostgreSQL with seed data, gRPC services, Apache Kafka event-driven messaging abstractions, Docker Compose, and xUnit testing.
 
@@ -7,41 +7,22 @@ An enterprise-grade Capstone / EXE Team Matching System built with **.NET 8 Micr
 ## 1. Project Overview
 The **EXE Team Matching System** coordinates student registration, team formation, leader voting, mentor assignment, and topic approval for Capstone/EXE courses.
 
-> **Phase 1 Note**: This repository contains the complete **Code Base Skeleton, Infrastructure, Configurations, DbContexts with Seed Data, gRPC & Kafka Contracts**. Business logic methods throw `NotImplementedException()` or return skeleton responses for Phase 2 implementation.
+> **Service 1 update (2026-09-29)**: IdentitySemester now implements JWT/RBAC, account information/password changes, student CRUD/Excel import, semester CRUD/milestones, PostgreSQL repositories and a Kafka outbox producer. See [Service 1 guide and requirements checklist](docs/identity-semester.md) and [working agreement](AGENTS.md). GroupMatching, Mentor and Notification remain Phase 1 skeletons; their end-to-end requirements are not complete.
 
 ---
 
 ## 2. Architecture
 The solution enforces **Clean Architecture** for each microservice with strict dependency direction:
 
-```
-[ HTTP Clients ] --> [ Nginx API Gateway (Port 80) ]
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│ Identity      │   │ GroupMatching │   │ Mentor        │
-│ Semester API  │   │ Service API   │   │ Service API   │
-│ (Port 5001)   │   │ (Port 5002)   │   │ (Port 5003)   │
-└───────┬───────┘   └───────┬───────┘   └───────┬───────┘
-        │                   │                   │
-        └───────────────────┼───────────────────┘
-                            ▼
-              ┌──────────────────────────┐
-              │ PostgreSQL (Port 5432)   │
-              │ (Isolated Db Contexts)   │
-              └──────────────────────────┘
-                            │
-                            ▼
-              ┌──────────────────────────┐
-              │ Kafka Broker (Port 9092) │
-              └─────────────┬────────────┘
-                            │
-                            ▼
-              ┌──────────────────────────┐
-              │ Notification Worker      │
-              │ Service                  │
-              └──────────────────────────┘
+```text
+React/Vite client --> Nginx gateway --> IdentitySemester --> identity_db
+                                  --> GroupMatching    --> group_matching_db
+                                  --> Mentor REST/gRPC --> mentor_db
+
+IdentitySemester --> durable outbox --> Kafka --> Notification Worker (pending)
+GroupMatching / Mentor --> Kafka (contracts only; implementation pending)
+PostgreSQL hosts three separate databases.
+Kafka uses Zookeeper; Redis is provisioned but not integrated.
 ```
 
 ---
@@ -55,6 +36,7 @@ The solution enforces **Clean Architecture** for each microservice with strict d
 | **Mentor.Api** | 8080 / 50051 | 5003 / 50051 | Mentor profiles, quota tracking, REST & gRPC operations |
 | **Notification.Worker** | N/A | N/A | Background worker consuming Kafka events to send email notifications |
 | **Nginx API Gateway** | 8080 | 8080 | Unified entry point & routing reverse proxy |
+| **React Frontend** | 80 | 3000 | Browser UI, served by Nginx |
 
 ---
 
@@ -126,8 +108,11 @@ dotnet run --project be/src/Services/Mentor/Mentor.Api
 
 ### Start All Services & Infrastructure
 ```bash
+# Copy .env.example to .env and supply the private values first.
 docker compose up --build
 ```
+
+Open `http://localhost:3000`. The browser UI calls the gateway at `http://localhost:8080`.
 
 ### Stop All Services
 ```bash
@@ -219,6 +204,20 @@ service MentorGrpcService {
 
 Run all unit & integration test projects across the solution:
 ```bash
-dotnet test EXETeamMatching.sln
+dotnet test be/EXETeamMatching.sln
 ```
+
+Service 1 tests use real PostgreSQL in isolated temporary databases. With Docker infrastructure running, use `./be/scripts/test-identity.ps1` to avoid host database port conflicts. Run `./be/scripts/smoke-identity.ps1` for Nginx/JWT/CRUD/Kafka verification against the local stack. Existing tests for other services are placeholders.
+
+## 13. Team responsibilities
+
+| Assignment | Responsibility | Status |
+|---|---|---|
+| Service 1 - current contributor | Authentication/JWT/RBAC, student import and account information, semester milestones | Implemented; see Service 1 guide |
+| Service 2 owner | Groups, membership, vote leader, locking, random matching, topic workflow | Team implementation pending |
+| Service 3 owner | Mentor profiles, quotas, mentor decisions, real REST-to-gRPC interaction | Team implementation pending |
+| Service 4 owner | Kafka event consumer, notification/email worker | Team implementation pending |
+| Infrastructure/integration owner | Shared gateway deployment, integration and complete end-to-end demonstration | Compose scaffold present; integration pending |
+
+The supplied team document does not name individual members. Replace responsibility labels with actual team member names before submission; do not invent names.
 

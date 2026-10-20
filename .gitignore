@@ -27,6 +27,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # OS
+tmp/
 .DS_Store
 Thumbs.db
 
