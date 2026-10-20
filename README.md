@@ -36,6 +36,7 @@ Kafka uses Zookeeper; Redis is provisioned but not integrated.
 | **Mentor.Api** | 8080 / 50051 | 5003 / 50051 | Mentor profiles, quota tracking, REST & gRPC operations |
 | **Notification.Worker** | N/A | N/A | Background worker consuming Kafka events to send email notifications |
 | **Nginx API Gateway** | 8080 | 8080 | Unified entry point & routing reverse proxy |
+| **React Frontend** | 80 | 3000 | Browser UI, served by Nginx |
 
 ---
 
@@ -107,8 +108,11 @@ dotnet run --project be/src/Services/Mentor/Mentor.Api
 
 ### Start All Services & Infrastructure
 ```bash
+# Copy .env.example to .env and supply the private values first.
 docker compose up --build
 ```
+
+Open `http://localhost:3000`. The browser UI calls the gateway at `http://localhost:8080`.
 
 ### Stop All Services
 ```bash
