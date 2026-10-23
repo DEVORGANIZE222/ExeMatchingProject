@@ -11,6 +11,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.Configure<KafkaSettings>(context.Configuration.GetSection("KafkaSettings"));
         services.Configure<EmailSettings>(context.Configuration.GetSection("EmailSettings"));
 
+        services.AddSingleton<IDeduplicationService, InMemoryDeduplicationService>();
+        services.AddSingleton<INotificationStore, InMemoryNotificationStore>();
         services.AddSingleton<IEmailService, EmailService>();
         services.AddSingleton<INotificationService, NotificationHandler>();
         services.AddSingleton<IKafkaConsumer, KafkaConsumer>();

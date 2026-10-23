@@ -17,14 +17,20 @@ public class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Notification Worker Service running at: {time}", DateTimeOffset.Now);
+        _logger.LogInformation("Notification Background Worker Service started at: {Time}", DateTimeOffset.Now);
 
-        await _kafkaConsumer.StartConsumingAsync(stoppingToken);
-
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            // TODO: Consume Kafka events
-            await Task.Delay(5000, stoppingToken);
+            await _kafkaConsumer.StartConsumingAsync(stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("Notification Background Worker Service gracefully stopped at: {Time}", DateTimeOffset.Now);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex, "Notification Background Worker Service terminated unexpectedly.");
+            throw;
         }
     }
 }

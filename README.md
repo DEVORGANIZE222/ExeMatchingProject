@@ -19,8 +19,8 @@ React/Vite client --> Nginx gateway --> IdentitySemester --> identity_db
                                   --> GroupMatching    --> group_matching_db
                                   --> Mentor REST/gRPC --> mentor_db
 
-IdentitySemester --> durable outbox --> Kafka --> Notification Worker (pending)
-GroupMatching / Mentor --> Kafka (contracts only; implementation pending)
+IdentitySemester --> durable outbox --> Kafka --> Notification Worker (implemented)
+GroupMatching / Mentor --> Kafka (implemented)
 PostgreSQL hosts three separate databases.
 Kafka uses Zookeeper; Redis is provisioned but not integrated.
 ```
