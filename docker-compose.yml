@@ -156,6 +156,8 @@ services:
       - EmailSettings__SmtpPort=${SMTP_PORT:-587}
       - EmailSettings__SenderEmail=${SENDER_EMAIL:-noreply@exeteammatching.com}
       - EmailSettings__SenderName=${SENDER_NAME:-EXE Team Matching System}
+      - EmailSettings__Username=${SMTP_USER:-}
+      - EmailSettings__Password=${SMTP_PASSWORD:-}
     depends_on:
       - kafka
     networks:
