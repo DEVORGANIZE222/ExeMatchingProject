@@ -19,7 +19,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="page-title">Tổng quan học kỳ</h1>
           <p className="page-subtitle">
-            Chào {account?.username || 'Bạn'}, theo dõi tiến độ ghép nhóm, phê duyệt đề tài và lịch trình học kỳ Capstone.
+            Chào {account?.username || 'Bạn'}, theo dõi tiến độ ghép nhóm, phê duyệt đề tài và lịch trình học kỳ Khởi nghiệp.
           </p>
         </div>
 
@@ -92,7 +92,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>
-                  Lộ trình học kỳ Capstone
+                  Lộ trình học kỳ Khởi nghiệp
                 </h2>
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
                   4 giai đoạn chính từ lúc mở cổng đến bảo vệ cuối kỳ

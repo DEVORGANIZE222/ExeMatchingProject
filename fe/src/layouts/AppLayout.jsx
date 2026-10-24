@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { NavLink, Outlet, Link } from 'react-router-dom'
 import {
-  GraduationCap, LayoutDashboard, Users, Calendar,
+  LayoutDashboard, Users, Calendar,
   Layers, ShieldCheck, LogOut, Menu, X
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import logoImg from '../assets/logo.png'
 import './layout.css'
 
 const adminNav = [
@@ -35,11 +36,11 @@ export default function AppLayout() {
         <div className="topbar-container">
           {/* Left: Brand */}
           <Link to="/" className="brand-link">
-            <div className="brand-icon">
-              <GraduationCap size={18} />
-            </div>
-            <span>CapstoneMatch</span>
-            <span className="brand-badge">EXE</span>
+            <img src={logoImg} alt="ExeMatching Logo" className="brand-logo-img" style={{ width: 28, height: 28 }} />
+            <span className="brand-title" style={{ fontSize: 18 }}>
+              <span className="text-exe">Exe</span>
+              <span className="text-matching">Matching</span>
+            </span>
           </Link>
 
           {/* Center: Desktop Navigation */}

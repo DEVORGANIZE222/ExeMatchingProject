@@ -9,7 +9,7 @@ const mockSemesters = [
   {
     id: 'sem-1',
     code: 'FA26',
-    name: 'Fall 2026 - Capstone Khởi nghiệp',
+    name: 'Fall 2026 - Dự án Khởi nghiệp EXE',
     startDate: '2026-09-01T08:00:00Z',
     endDate: '2026-12-30T17:00:00Z',
     registrationDeadline: '2026-09-20T23:59:59Z',
@@ -31,7 +31,7 @@ const mockSemesters = [
   {
     id: 'sem-3',
     code: 'SU26',
-    name: 'Summer 2026 - Accelerated Capstone',
+    name: 'Summer 2026 - Khởi nghiệp tăng tốc',
     startDate: '2026-05-02T08:00:00Z',
     endDate: '2026-08-25T17:00:00Z',
     registrationDeadline: '2026-05-15T23:59:59Z',

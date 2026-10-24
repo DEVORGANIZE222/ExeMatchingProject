@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Topbar Navigation Layout — CapstoneMatch
+   Topbar Navigation Layout — ExeMatching
    White Header · Green Indicator · EdTech Clean Standards
    ═══════════════════════════════════════════════════════════ */
 
@@ -33,38 +33,33 @@
   height: 100%;
 }
 
-/* ── Brand Logo ──────────────────────────────────────────── */
 .brand-link {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
   text-decoration: none;
-  color: var(--text-main);
-  font-weight: 700;
-  font-size: 17px;
-  letter-spacing: -0.02em;
 }
 
-.brand-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background-color: var(--primary-light);
-  color: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.brand-logo-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
   flex-shrink: 0;
 }
 
-.brand-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--primary);
-  background-color: var(--primary-light);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-  margin-left: 2px;
+.brand-title {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  display: flex;
+  align-items: center;
+}
+
+.text-exe {
+  color: #0F172A; /* Black */
+}
+
+.text-matching {
+  color: #15803D; /* Growth Green */
 }
 
 /* ── Nav Links (Center) ──────────────────────────────────── */

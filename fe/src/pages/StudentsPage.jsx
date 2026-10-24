@@ -81,7 +81,7 @@ export default function StudentsPage() {
         <div>
           <h1 className="page-title">Quản lý Sinh viên & Roster</h1>
           <p className="page-subtitle">
-            Nhập danh sách sinh viên đủ điều kiện làm Capstone từ file Excel. Hệ thống sẽ tự động đồng bộ email vào Google Access.
+            Nhập danh sách sinh viên đủ điều kiện làm Dự án Khởi nghiệp từ file Excel. Hệ thống sẽ tự động đồng bộ email vào Google Access.
           </p>
         </div>
         <span className="badge badge-green" style={{ fontSize: 13, padding: '4px 12px' }}>

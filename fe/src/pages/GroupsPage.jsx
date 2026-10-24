@@ -10,7 +10,7 @@ const initialGroups = [
   {
     id: 'grp-1',
     name: 'ExeMatching DevCore',
-    topic: 'Nền tảng ghép nhóm sinh viên Capstone thông minh tích hợp đề xuất thuật toán',
+    topic: 'Nền tảng ghép nhóm sinh viên Khởi nghiệp EXE thông minh tích hợp đề xuất thuật toán',
     leader: 'Nguyễn Trần Quang Duy',
     members: [
       { name: 'Nguyễn Trần Quang Duy', role: 'Trưởng nhóm / Backend', major: 'SE' },
@@ -111,7 +111,7 @@ export default function GroupsPage() {
         <div>
           <h1 className="page-title">Nhóm & Đề tài Khởi nghiệp</h1>
           <p className="page-subtitle">
-            Khám phá danh sách các nhóm Capstone, tìm đồng đội bù trừ kỹ năng hoặc đăng ký đề tài mới.
+            Khám phá danh sách các nhóm Khởi nghiệp, tìm đồng đội bù trừ kỹ năng hoặc đăng ký đề tài mới.
           </p>
         </div>
 
@@ -318,7 +318,7 @@ export default function GroupsPage() {
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>
-                Tạo nhóm Capstone mới
+                Tạo nhóm Khởi nghiệp mới
               </h2>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowCreateModal(false)} style={{ padding: 4 }}>
                 <X size={18} />

@@ -130,7 +130,7 @@ export default function SemestersPage() {
           <p className="page-subtitle">
             {isAdmin
               ? 'Khởi tạo các mốc thời gian ghép nhóm, duyệt đề tài và phân công mentor cho học kỳ.'
-              : 'Theo dõi các mốc quan trọng trong học kỳ Capstone của bạn.'}
+              : 'Theo dõi các mốc quan trọng trong học kỳ Khởi nghiệp của bạn.'}
           </p>
         </div>
 
@@ -268,7 +268,7 @@ export default function SemestersPage() {
                   <input
                     required
                     className="input"
-                    placeholder="VD: Fall 2026 - Capstone Khởi nghiệp"
+                    placeholder="VD: Fall 2026 - Dự án Khởi nghiệp EXE"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                   />
