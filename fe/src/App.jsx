@@ -16,12 +16,9 @@ function ProtectedRoute({ children, adminOnly = false }) {
   if (loading) {
     return (
       <div className="app-loading-screen">
-        <div className="app-loading-orb" />
-        <div className="brand-mark" style={{ width: 52, height: 52, fontSize: 18, zIndex: 1 }}>
-          EXE
-        </div>
-        <p style={{ marginTop: 18, color: 'var(--text-secondary)', fontSize: 13, letterSpacing: '0.06em', zIndex: 1 }}>
-          ĐANG KHỞI TẠO KHÔNG GIAN HỌC KỲ...
+        <div className="spinner" />
+        <p style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+          Đang tải không gian học kỳ...
         </p>
       </div>
     )
@@ -88,27 +85,25 @@ export default function App() {
           toastOptions={{
             duration: 3500,
             style: {
-              background: '#13151f',
-              color: '#f8fafc',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '12px',
-              padding: '12px 18px',
-              fontSize: '13px',
+              background: '#FFFFFF',
+              color: '#0F172A',
+              border: '1px solid #E2E8F0',
+              borderRadius: '10px',
+              padding: '10px 16px',
+              fontSize: '13.5px',
               fontWeight: 500,
-              boxShadow: '0 20px 40px -8px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.05)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)'
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04)'
             },
             success: {
               iconTheme: {
-                primary: '#34d399',
-                secondary: '#13151f'
+                primary: '#15803D',
+                secondary: '#FFFFFF'
               }
             },
             error: {
               iconTheme: {
-                primary: '#fb7185',
-                secondary: '#13151f'
+                primary: '#BA1A1A',
+                secondary: '#FFFFFF'
               }
             }
           }}

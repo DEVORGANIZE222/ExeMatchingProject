@@ -1,28 +1,39 @@
 import { useEffect, useRef } from 'react'
 import { Navigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Users, KeyRound, ShieldCheck } from 'lucide-react'
+import { GraduationCap, ShieldCheck, Sparkles } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import './LoginPage.css'
 
-function GoogleSignInButton({ onCredential }) {
+function GoogleAuthButton({ onCredential }) {
   const mount = useRef(null)
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   useEffect(() => {
     if (!clientId) return
     const render = () => {
-      window.google.accounts.id.initialize({ client_id: clientId, callback: onCredential })
-      window.google.accounts.id.renderButton(mount.current, {
-        theme: 'filled_black',
-        size: 'large',
-        width: 320,
-        text: 'continue_with',
-        shape: 'pill'
-      })
+      try {
+        if (window.google?.accounts?.id && mount.current) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: onCredential
+          })
+          window.google.accounts.id.renderButton(mount.current, {
+            theme: 'outline',
+            size: 'large',
+            width: 320,
+            text: 'continue_with',
+            shape: 'rectangular',
+            logo_alignment: 'left'
+          })
+        }
+      } catch {
+        // Fallback gracefully without breaking UI
+      }
     }
-    if (window.google?.accounts?.id) render()
-    else {
+
+    if (window.google?.accounts?.id) {
+      render()
+    } else {
       const script = document.createElement('script')
       script.src = 'https://accounts.google.com/gsi/client'
       script.async = true
@@ -32,19 +43,11 @@ function GoogleSignInButton({ onCredential }) {
     }
   }, [clientId, onCredential])
 
-  if (!clientId) {
-    return <p className="form-status" role="alert">Thiếu VITE_GOOGLE_CLIENT_ID trong fe/.env.local.</p>
-  }
-  return <div ref={mount} className="google-button-slot" />
-}
-
-const containerVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } }
-}
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }
+  return (
+    <div className="google-btn-wrapper">
+      <div ref={mount} style={{ display: 'flex', justifyContent: 'center' }} />
+    </div>
+  )
 }
 
 export default function LoginPage() {
@@ -55,124 +58,116 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="login-page">
-      {/* Left — Pitch */}
-      <section className="login-pitch">
-        <motion.div
-          className="login-brand"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <span className="brand-mark">EXE</span>
-          <strong>Team Matching</strong>
-        </motion.div>
-
-        <motion.div
-          className="pitch-content"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <motion.p className="eyebrow" variants={itemVariants}>
-            CAPSTONE WORKSPACE
-          </motion.p>
-          <motion.h1 variants={itemVariants}>
-            Nhóm tốt bắt đầu từ{' '}
-            <span className="gradient-text">một kết nối đúng.</span>
-          </motion.h1>
-          <motion.p variants={itemVariants}>
-            Không gian phối hợp cho sinh viên, đề tài và mentor
-            trong toàn bộ học kỳ — từ ghép nhóm đến bảo vệ cuối kỳ.
-          </motion.p>
-        </motion.div>
-
-        <div className="pitch-stats">
-          <motion.div
-            className="stat-card stat-card-1"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.4, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <strong>200+</strong>
-            <span>sinh viên</span>
-          </motion.div>
-          <motion.div
-            className="stat-card stat-card-2"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.6, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <strong>72</strong>
-            <span>nhóm đã tạo</span>
-          </motion.div>
-          <motion.div
-            className="pitch-orb"
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <Users size={34} />
-          </motion.div>
+    <main className="login-page-wrapper">
+      {/* ── Left Pane (55%): Value proposition & 3-step process ── */}
+      <section className="login-left-pane">
+        <div className="login-left-brand">
+          <div className="brand-icon">
+            <GraduationCap size={20} />
+          </div>
+          <span>CapstoneMatch</span>
         </div>
 
-        <p className="login-footer">EXE Team Matching · FPT University</p>
-      </section>
-
-      {/* Right — Form */}
-      <section className="login-form-section">
-        <motion.div
-          className="login-card"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <div className="google-logo">G</div>
-          <p className="eyebrow eyebrow-accent">CHÀO MỪNG TRỞ LẠI</p>
-          <h2>Đăng nhập để tiếp tục</h2>
-          <p className="login-help">
-            Sử dụng tài khoản Google FPT đã được Admin phê duyệt.
-          </p>
-
-          {loginError && (
-            <motion.div
-              className="login-error"
-              role="alert"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-            >
-              {loginError}
-            </motion.div>
-          )}
-
-          <GoogleSignInButton onCredential={googleLogin} />
-
-          <div className="login-note">
-            <KeyRound size={16} />
-            <span>Chỉ email trong whitelist mới truy cập được hệ thống.</span>
+        <div className="login-hero-content">
+          <div className="login-badge-eyebrow">
+            <Sparkles size={13} />
+            <span>Học kỳ Fall 2026</span>
           </div>
 
-          <div className="demo-access-box">
-            <span className="demo-badge">TRẢI NGHIỆM NHANH (DEMO MODE)</span>
-            <p className="demo-text">Xem trước không gian quản trị hoặc sinh viên:</p>
-            <div className="demo-actions">
+          <h1 className="login-hero-title">
+            Nền tảng kết nối & điều phối đề tài Capstone
+          </h1>
+
+          <p className="login-hero-desc">
+            Không gian làm việc chính thức cho sinh viên, đề tài và giảng viên hướng dẫn trong toàn bộ học kỳ khởi nghiệp tại Đại học FPT.
+          </p>
+
+          <div className="process-steps">
+            <div className="step-card">
+              <span className="step-number">1</span>
+              <div>
+                <h3 className="step-title">Khởi tạo hồ sơ & chuyên ngành</h3>
+                <p className="step-desc">
+                  Đồng bộ thông tin sinh viên từ danh sách Roster chính thức theo chuyên ngành SE, AI, IA, MKT, IB.
+                </p>
+              </div>
+            </div>
+
+            <div className="step-card">
+              <span className="step-number">2</span>
+              <div>
+                <h3 className="step-title">Khớp đề tài & tìm đồng đội</h3>
+                <p className="step-desc">
+                  Tự do tìm nhóm phù hợp theo kỹ năng hoặc sử dụng hệ thống gợi ý ghép đội cân bằng chuyên môn.
+                </p>
+              </div>
+            </div>
+
+            <div className="step-card">
+              <span className="step-number">3</span>
+              <div>
+                <h3 className="step-title">Chốt nhóm & Ghép Mentor hướng dẫn</h3>
+                <p className="step-desc">
+                  Khóa danh sách nhóm tối đa 5 thành viên, gửi đăng ký đề tài và kết nối với giảng viên phụ trách.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="login-left-footer">
+          © 2026 CapstoneMatch · FPT University EXE Capstone Project
+        </div>
+      </section>
+
+      {/* ── Right Pane (45%): Centered Auth Card ── */}
+      <section className="login-right-pane">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h2 className="auth-title">Đăng nhập hệ thống</h2>
+            <p className="auth-subtitle">
+              Sử dụng tài khoản Google FPT (@fpt.edu.vn) để truy cập không gian học kỳ của bạn.
+            </p>
+          </div>
+
+          {/* Whitelist Alert */}
+          <div className="alert alert-success auth-alert">
+            <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>Chỉ email sinh viên và giảng viên có trong danh sách phê duyệt mới có thể đăng nhập.</span>
+          </div>
+
+          {/* Error Message if any */}
+          {loginError && (
+            <div className="alert alert-error" style={{ marginBottom: 16 }}>
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          {/* Google Sign-in CTA */}
+          <GoogleAuthButton onCredential={googleLogin} />
+
+          {/* Subtle Demo Mode Links at Footer */}
+          <div className="auth-footer-notes">
+            <div className="demo-access-links">
+              <span>Trải nghiệm nhanh:</span>
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="demo-link-btn"
                 onClick={() => loginAsDemo('Admin')}
               >
-                <ShieldCheck size={14} /> Quản trị viên
+                Vào vai Quản trị viên
               </button>
+              <span>·</span>
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="demo-link-btn"
                 onClick={() => loginAsDemo('Student')}
               >
-                <Users size={14} /> Sinh viên
+                Vào vai Sinh viên
               </button>
             </div>
           </div>
-        </motion.div>
+        </div>
       </section>
     </main>
   )

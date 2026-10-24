@@ -1,38 +1,38 @@
 import { useState, useCallback, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Upload, ChevronRight } from 'lucide-react'
+import { Upload, Search, Users, FileSpreadsheet } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import toast from 'react-hot-toast'
 import './ServicePages.css'
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } }
-}
 
 export default function StudentsPage() {
   const { request, isAdmin } = useAuth()
   const [semesters, setSemesters] = useState([])
   const [students, setStudents] = useState([])
   const [studentTotal, setStudentTotal] = useState(0)
-  const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
+  const [search, setSearch] = useState('')
   const [importForm, setImportForm] = useState({
-    semesterCode: '', initialPassword: '', file: null
+    semesterCode: '',
+    initialPassword: '',
+    file: null
   })
 
   const load = useCallback(async () => {
-    setBusy(true); setStatus('')
+    setBusy(true)
     try {
       const semData = await request('/api/semesters?page=1&pageSize=50&sortBy=startDate&descending=true')
       setSemesters(semData.items || [])
+
       if (isAdmin) {
         const roster = await request('/api/students?page=1&pageSize=2000&sortBy=code')
         setStudents(roster.items || [])
         setStudentTotal(roster.totalCount || 0)
       }
-    } catch (e) { setStatus(e.message) }
-    finally { setBusy(false) }
+    } catch {
+      toast.error('Không thể tải dữ liệu danh sách sinh viên.')
+    } finally {
+      setBusy(false)
+    }
   }, [isAdmin, request])
 
   useEffect(() => {
@@ -40,96 +40,176 @@ export default function StudentsPage() {
     return () => clearTimeout(id)
   }, [load])
 
-  const importRoster = async (event) => {
-    event.preventDefault()
-    if (!importForm.file) { setStatus('Chọn tệp Excel trước khi import.'); return }
-    setStatus('')
+  const importRoster = async (e) => {
+    e.preventDefault()
+    if (!importForm.file) {
+      toast.error('Vui lòng chọn tệp Excel (.xlsx) trước khi import.')
+      return
+    }
+
     try {
+      setBusy(true)
       const data = new FormData()
       data.append('file', importForm.file)
       data.append('semesterCode', importForm.semesterCode)
       data.append('initialPassword', importForm.initialPassword)
+
       const result = await request('/api/students/import/excel', { method: 'POST', body: data })
-      toast.success(`Đã import ${result.importedCount} sinh viên và đồng bộ Google Access.`)
+      toast.success(`Đã thêm ${result?.importedCount || 0} sinh viên và cấp quyền Google Access.`)
       setImportForm({ semesterCode: '', initialPassword: '', file: null })
       await load()
-    } catch (e) { setStatus(e.message) }
+    } catch {
+      toast.error('Import danh sách sinh viên không thành công.')
+    } finally {
+      setBusy(false)
+    }
   }
 
+  const filteredStudents = students.filter((s) => {
+    const q = search.toLowerCase()
+    return (
+      s.fullName?.toLowerCase().includes(q) ||
+      s.studentCode?.toLowerCase().includes(q) ||
+      s.email?.toLowerCase().includes(q)
+    )
+  })
+
   return (
-    <motion.div initial="hidden" animate="visible" variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}>
-      <motion.div className="section-heading" variants={fadeUp}>
+    <div>
+      {/* ── Page Header ── */}
+      <div className="page-header">
         <div>
-          <p className="eyebrow eyebrow-accent">ROSTER & GOOGLE ACCESS</p>
-          <h1>Sinh viên</h1>
-          <p>Email từ roster sẽ được tự động thêm vào Google whitelist.</p>
+          <h1 className="page-title">Quản lý Sinh viên & Roster</h1>
+          <p className="page-subtitle">
+            Nhập danh sách sinh viên đủ điều kiện làm Capstone từ file Excel. Hệ thống sẽ tự động đồng bộ email vào Google Access.
+          </p>
         </div>
-        <span className="count-chip">{studentTotal}</span>
-      </motion.div>
+        <span className="badge badge-green" style={{ fontSize: 13, padding: '4px 12px' }}>
+          {studentTotal} sinh viên đã nạp
+        </span>
+      </div>
 
-      <motion.div className="service-grid" variants={fadeUp}>
-        {/* Import Form */}
-        <form className="glass-card product-form" onSubmit={importRoster}>
-          <p className="eyebrow">IMPORT EXCEL</p>
-          <h2>Thêm roster một lần</h2>
-          <select
-            className="select"
-            required
-            value={importForm.semesterCode}
-            onChange={(e) => setImportForm({ ...importForm, semesterCode: e.target.value })}
-          >
-            <option value="">Chọn học kỳ</option>
-            {semesters.filter(s => s.isActive).map(s => (
-              <option key={s.id} value={s.code}>{s.code} · {s.name}</option>
-            ))}
-          </select>
-          <input
-            className="input"
-            required
-            type="password"
-            minLength={12}
-            placeholder="Mật khẩu khởi tạo (từ 12 ký tự)"
-            value={importForm.initialPassword}
-            onChange={(e) => setImportForm({ ...importForm, initialPassword: e.target.value })}
-          />
-          <label className="drop-zone">
+      {/* ── 2-Column Layout ── */}
+      <div className="service-layout-grid">
+        {/* Left Column: Import Form */}
+        <div className="card">
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>
+            Import danh sách Roster (.xlsx)
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+            File Excel cần có các cột: MSSV, Họ tên, Email/Gmail và Ngành đào tạo.
+          </p>
+
+          <form onSubmit={importRoster} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label className="input-label">Học kỳ áp dụng *</label>
+              <select
+                className="select"
+                required
+                value={importForm.semesterCode}
+                onChange={(e) => setImportForm({ ...importForm, semesterCode: e.target.value })}
+              >
+                <option value="">-- Chọn học kỳ --</option>
+                {semesters.filter((s) => s.isActive).map((s) => (
+                  <option key={s.id} value={s.code}>
+                    {s.code} · {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="input-label">Mật khẩu khởi tạo ban đầu *</label>
+              <input
+                className="input"
+                required
+                type="password"
+                minLength={12}
+                placeholder="Tối thiểu 12 ký tự"
+                value={importForm.initialPassword}
+                onChange={(e) => setImportForm({ ...importForm, initialPassword: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="input-label">Tệp danh sách Excel (.xlsx) *</label>
+              <label className="drop-zone">
+                <input
+                  required
+                  type="file"
+                  accept=".xlsx"
+                  onChange={(e) => setImportForm({ ...importForm, file: e.target.files?.[0] || null })}
+                />
+                {importForm.file ? (
+                  <FileSpreadsheet size={26} color="var(--primary)" />
+                ) : (
+                  <Upload size={24} color="var(--text-muted)" />
+                )}
+                <strong>{importForm.file ? importForm.file.name : 'Nhấn để chọn tệp .xlsx'}</strong>
+                <span>Hỗ trợ tệp bảng tính tối đa 2.000 sinh viên</span>
+              </label>
+            </div>
+
+            <button className="btn btn-primary" type="submit" disabled={busy || !importForm.file} style={{ width: '100%', marginTop: 4 }}>
+              {busy ? 'Đang xử lý...' : 'Import & Cấp quyền Google'}
+            </button>
+          </form>
+        </div>
+
+        {/* Right Column: Roster List */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>
+              Danh sách sinh viên trong hệ thống
+            </h2>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              {filteredStudents.length} / {studentTotal}
+            </span>
+          </div>
+
+          {/* Search Box */}
+          <div style={{ position: 'relative', marginBottom: 10 }}>
+            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
             <input
-              required
-              type="file"
-              accept=".xlsx"
-              onChange={(e) => setImportForm({ ...importForm, file: e.target.files?.[0] || null })}
+              type="text"
+              className="input input-sm"
+              placeholder="Tìm theo mã số, tên hoặc email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ paddingLeft: 34 }}
             />
-            <Upload size={24} />
-            <strong>{importForm.file?.name || 'Chọn file roster .xlsx'}</strong>
-            <span>Nhận các cột MSSV, Họ tên, Email/Gmail, Ngành · tối đa 2.000 sinh viên</span>
-          </label>
-          <button className="btn btn-primary" disabled={busy} style={{ width: '100%' }}>
-            Import & cấp Google Access <ChevronRight size={15} />
-          </button>
-        </form>
+          </div>
 
-        {/* Roster List */}
-        <article className="glass-card roster-panel">
-          <p className="eyebrow">DANH SÁCH ROSTER</p>
-          <h2>{studentTotal || '—'} sinh viên</h2>
-          <div className="roster-list">
-            {students.map(s => (
-              <div key={s.id}>
-                <span className="student-initial">{s.fullName.slice(0, 1)}</span>
-                <span>
-                  <strong>{s.fullName}</strong>
-                  <small>{s.studentCode} · {s.email}</small>
-                </span>
+          <div className="roster-list-box">
+            {filteredStudents.map((item) => (
+              <div className="roster-row" key={item.id}>
+                <div className="student-info-col">
+                  <div className="avatar avatar-md avatar-primary">
+                    {item.fullName ? item.fullName.charAt(0) : 'S'}
+                  </div>
+                  <div className="student-meta-block">
+                    <strong>{item.fullName}</strong>
+                    <span>{item.studentCode} · {item.email}</span>
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <span className="badge badge-neutral" style={{ fontSize: 11 }}>
+                    {item.major || 'Kỹ thuật PM'}
+                  </span>
+                </div>
               </div>
             ))}
-            {!students.length && (
-              <p className="empty-state">Chưa có roster cho học kỳ này.</p>
+
+            {!filteredStudents.length && !busy && (
+              <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-secondary)' }}>
+                <Users size={28} color="var(--text-muted)" style={{ margin: '0 auto 8px' }} />
+                <p style={{ fontSize: 13 }}>Không tìm thấy sinh viên nào phù hợp.</p>
+              </div>
             )}
           </div>
-        </article>
-      </motion.div>
-
-      {status && <p className="form-status" role="status">{status}</p>}
-    </motion.div>
+        </div>
+      </div>
+    </div>
   )
 }

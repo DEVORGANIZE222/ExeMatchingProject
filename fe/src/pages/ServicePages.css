@@ -1,291 +1,295 @@
 /* ═══════════════════════════════════════════════════════════
-   Students / Semesters / Service Pages
+   Service Pages — Semesters, Students, Google Access, Groups
+   SaaS EdTech Clean Standard · White Surfaces · Growth Green (#15803D)
    ═══════════════════════════════════════════════════════════ */
 
-/* ── Service Grid ──────────────────────────────────────── */
-.service-grid {
-  display: grid;
-  grid-template-columns: minmax(300px, 0.95fr) 1.05fr;
-  gap: var(--space-5);
-}
-
-/* ── Product Form ──────────────────────────────────────── */
-.product-form {
-  display: grid;
-  gap: var(--space-3);
-}
-.product-form h2 {
-  font-family: var(--font-display);
-  font-size: 18px;
-  margin: 2px 0 var(--space-2);
-}
-
-/* ── Roster List ───────────────────────────────────────── */
-.roster-panel h2 {
-  font-family: var(--font-display);
-  font-size: 18px;
-  margin: 2px 0;
-}
-.roster-list {
-  margin-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-  max-height: 440px;
-  overflow-y: auto;
-  padding-right: 6px;
-  scrollbar-gutter: stable;
-}
-.roster-list > div {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.student-initial {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  background: rgba(139, 92, 246, 0.12);
-  color: var(--accent-400);
-  font-size: 12px;
-  font-weight: 800;
-  flex-shrink: 0;
-}
-.roster-list strong {
-  display: block;
-  font-size: 12px;
-  color: var(--text-primary);
-}
-.roster-list small {
-  display: block;
-  color: var(--text-tertiary);
-  font-size: 10px;
-  margin-top: 2px;
-  overflow-wrap: anywhere;
-}
-
-/* ── Semester Cards ────────────────────────────────────── */
-.semester-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-.semester-card {
-  position: relative;
-  min-height: 180px;
-}
-.semester-card h2 {
-  font-family: var(--font-display);
-  font-size: 18px;
-  margin: 2px 0;
-}
-.semester-card > p:not(.eyebrow) {
-  color: var(--text-secondary);
-  font-size: 12px;
-  margin: var(--space-2) 0 var(--space-4);
-}
-.semester-dot {
-  position: absolute;
-  right: var(--space-4);
-  top: var(--space-5);
-}
-.mini-milestones {
-  display: grid;
-  gap: 5px;
-  color: var(--text-tertiary);
-  font-size: 10px;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-3);
-}
-
-/* ── Semester Form ─────────────────────────────────────── */
-.semester-form {
-  margin-bottom: var(--space-5);
-}
-.semester-form .form-grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* ── Access Page ───────────────────────────────────────── */
-.access-intro {
-  display: flex;
-  gap: var(--space-4);
-  align-items: center;
-  margin-bottom: var(--space-6);
-}
-.access-icon {
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: var(--radius-lg);
-  color: var(--accent-400);
-  background: rgba(139, 92, 246, 0.12);
-  flex-shrink: 0;
-}
-.access-intro h1 {
-  font-family: var(--font-display);
-  font-size: 26px;
-  letter-spacing: -0.8px;
-  margin: 4px 0;
-}
-.access-intro p:not(.eyebrow) {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.access-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-5);
-}
-.upload-panel h2,
-.allowed-panel h2,
-.login-required h2 {
-  font-family: var(--font-display);
-  font-size: 18px;
-  margin: 6px 0;
-}
-.upload-panel > p:not(.eyebrow),
-.login-required p {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.upload-panel code {
-  background: rgba(139, 92, 246, 0.1);
-  color: var(--accent-400);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.allowed-list {
-  margin-top: var(--space-4);
-  max-height: 300px;
-  overflow-y: auto;
-  border-top: 1px solid var(--border-subtle);
-}
-.allowed-row {
+/* ── Tab Navigation Bar ──────────────────────────────────── */
+.filter-tab-bar {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 10px 2px;
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 12px;
-  min-width: 0;
-}
-.allowed-row > span:nth-child(2) {
-  overflow-wrap: anywhere;
-  color: var(--text-primary);
-}
-.email-dot {
-  width: 8px; height: 8px;
-  background: var(--success);
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.allowed-row button {
-  margin-left: auto;
-  background: var(--error-bg);
-  color: var(--error);
-  border: 1px solid rgba(251, 113, 133, 0.15);
-  border-radius: 6px;
-  display: grid;
-  place-items: center;
-  padding: 5px;
-  cursor: pointer;
-  transition: all var(--duration-fast);
-}
-.allowed-row button:hover {
-  background: rgba(251, 113, 133, 0.2);
+  border-bottom: 1px solid var(--border-default);
+  margin-bottom: var(--space-6);
+  padding-bottom: 2px;
 }
 
-.login-required {
-  text-align: center;
-  max-width: 470px;
-  margin: var(--space-10) auto;
-}
-.login-required > svg {
-  color: var(--accent-400);
-  margin-bottom: var(--space-3);
-}
-
-/* ── Groups Page ───────────────────────────────────────── */
-.groups-coming-soon {
-  text-align: center;
-  padding: var(--space-16) var(--space-8);
-}
-.groups-coming-soon .coming-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  margin: 0 auto var(--space-6);
-  background: rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  color: var(--accent-400);
-  animation: glow 4s ease-in-out infinite;
-}
-.groups-coming-soon h1 {
-  font-family: var(--font-display);
-  font-size: 32px;
-  letter-spacing: -1px;
-  margin-bottom: var(--space-3);
-}
-.groups-coming-soon p {
+.tab-btn {
+  padding: 8px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
   color: var(--text-secondary);
-  font-size: 14px;
-  max-width: 500px;
-  margin: 0 auto var(--space-6);
-  line-height: 1.7;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
 }
 
-.feature-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-4);
-  max-width: 700px;
-  margin: var(--space-8) auto 0;
+.tab-btn:hover {
+  color: var(--text-main);
+  background-color: var(--bg-hover);
 }
-.feature-preview-card {
-  text-align: center;
+
+.tab-btn.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--primary);
+  border-radius: 2px;
+}
+
+/* ── 2-Column Service Grid ───────────────────────────────── */
+.service-layout-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) 1.1fr;
+  gap: var(--space-6);
+}
+
+/* ── Semester Cards Grid ─────────────────────────────────── */
+.semesters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--space-5);
+}
+
+.semester-clean-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   padding: var(--space-5);
-}
-.feature-preview-card .feature-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
-  display: grid;
-  place-items: center;
-  margin: 0 auto var(--space-3);
-}
-.feature-preview-card h3 {
-  font-family: var(--font-display);
-  font-size: 14px;
-  margin-bottom: var(--space-1);
-}
-.feature-preview-card p {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin: 0;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-/* ── Responsive ────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .service-grid { grid-template-columns: 1fr; }
-  .semester-cards { grid-template-columns: repeat(2, 1fr); }
-  .access-grid { grid-template-columns: 1fr; }
-  .feature-preview-grid { grid-template-columns: 1fr; max-width: 300px; }
+.semester-clean-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
 }
-@media (max-width: 560px) {
-  .semester-cards { grid-template-columns: 1fr; }
-  .form-grid { grid-template-columns: 1fr; }
-  .access-intro h1 { font-size: 22px; }
+
+.semester-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.semester-code-tag {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+}
+
+.semester-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-top: 4px;
+}
+
+.semester-dates-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+.milestones-box {
+  background-color: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  margin-top: auto;
+}
+
+.milestone-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.milestone-item strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* ── Students Roster List ────────────────────────────────── */
+.roster-list-box {
+  max-height: 480px;
+  overflow-y: auto;
+  margin-top: var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-surface);
+}
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-default);
+  transition: background-color var(--transition-fast);
+}
+
+.roster-row:last-child {
+  border-bottom: none;
+}
+
+.roster-row:hover {
+  background-color: var(--bg-hover);
+}
+
+.student-info-col {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.student-meta-block strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.student-meta-block span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── Google Whitelist Panel ──────────────────────────────── */
+.whitelist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: var(--space-3);
+}
+
+.whitelist-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--bg-subtle);
+}
+
+.whitelist-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-main);
+}
+
+.whitelist-table tr:hover td {
+  background-color: var(--bg-hover);
+}
+
+.whitelist-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Groups & Team Cards ─────────────────────────────────── */
+.groups-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-5);
+}
+
+.group-clean-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.group-clean-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.group-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.group-title {
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+
+.group-topic {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-4);
+  flex: 1;
+}
+
+.group-members-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.member-avatar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+}
+
+.member-avatar-pill strong {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.group-actions-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: auto;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .service-layout-grid {
+    grid-template-columns: 1fr;
+  }
 }

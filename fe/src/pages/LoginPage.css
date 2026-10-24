@@ -1,320 +1,254 @@
 /* ═══════════════════════════════════════════════════════════
-   Login Page — Full-screen dark glassmorphism auth
+   Login Page — Clean SaaS EdTech Split Screen (55% / 45%)
+   WCAG 2.1 AA Compliant · Zero AI Clichés
    ═══════════════════════════════════════════════════════════ */
-.login-page {
-  min-height: 100dvh;
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  background: var(--bg-primary);
+
+.login-page-wrapper {
+  min-height: 100vh;
+  display: flex;
+  background-color: var(--bg-surface);
 }
 
-/* ── Left: Pitch Section ───────────────────────────────── */
-.login-pitch {
-  position: relative;
-  overflow: hidden;
+/* ── Left Pitch Section (55%) ────────────────────────────── */
+.login-left-pane {
+  flex: 0 0 55%;
+  background-color: var(--bg-subtle);
+  border-right: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
-  padding: clamp(30px, 5vw, 70px);
-  background:
-    radial-gradient(ellipse at 20% 80%, rgba(139, 92, 246, 0.25) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(34, 211, 238, 0.12) 0%, transparent 50%),
-    linear-gradient(145deg, #0c1220, #1a1145 50%, #0f0a2e);
+  justify-content: space-between;
+  padding: var(--space-10) var(--space-12);
+  position: relative;
 }
 
-/* Animated grid background */
-.login-pitch::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
-  mask-image: radial-gradient(ellipse at 50% 50%, black 20%, transparent 70%);
-  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 20%, transparent 70%);
-}
-
-/* Floating orbs */
-.login-pitch::after {
-  content: '';
-  position: absolute;
-  width: 500px;
-  height: 500px;
-  right: -150px;
-  bottom: -200px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.15), transparent 60%);
-  animation: float 8s ease-in-out infinite;
-}
-
-.login-brand {
+.login-left-brand {
   display: flex;
   align-items: center;
-  gap: 11px;
-  position: relative;
-  z-index: 1;
+  gap: var(--space-2);
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
 }
-.login-brand .brand-mark {
-  display: grid;
-  place-items: center;
-  height: 36px;
-  min-width: 46px;
-  border-radius: var(--radius-md);
-  background: var(--accent-gradient);
-  color: white;
-  font-family: var(--font-display);
+
+.login-left-brand .brand-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background-color: var(--primary-light);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-hero-content {
+  max-width: 520px;
+  margin: var(--space-8) 0;
+}
+
+.login-badge-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
-  font-weight: 800;
-  box-shadow: 0 4px 16px var(--accent-glow);
-}
-.login-brand strong {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 800;
-  color: white;
+  font-weight: 600;
+  color: var(--primary);
+  background-color: var(--primary-light);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  margin-bottom: var(--space-4);
 }
 
-/* Pitch content */
-.pitch-content {
-  margin: auto 0;
-  max-width: 540px;
-  position: relative;
-  z-index: 1;
+.login-hero-title {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-4);
 }
-.pitch-content .eyebrow {
-  color: var(--accent-300);
-  margin-bottom: var(--space-3);
-}
-.pitch-content h1 {
-  font-family: var(--font-display);
-  font-size: clamp(36px, 4.5vw, 56px);
-  line-height: 1.08;
-  letter-spacing: -2.4px;
-  color: white;
-  margin-bottom: var(--space-5);
-}
-.pitch-content h1 .gradient-text {
-  background: linear-gradient(135deg, var(--accent-400), var(--neon-cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.pitch-content > p {
-  color: rgba(255, 255, 255, 0.6);
+
+.login-hero-desc {
   font-size: 15px;
-  line-height: 1.7;
-  max-width: 420px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-8);
 }
 
-/* Floating stat cards */
-.pitch-stats {
-  position: relative;
-  z-index: 1;
-  height: 200px;
-  margin-top: var(--space-8);
-}
-.stat-card {
-  position: absolute;
+/* 3-Step Process List */
+.process-steps {
   display: flex;
   flex-direction: column;
-  padding: 14px 18px;
-  min-width: 110px;
-  border-radius: var(--radius-lg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: var(--shadow-lg);
-}
-.stat-card strong {
-  font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 800;
-}
-.stat-card span {
-  font-size: 11px;
-  margin-top: 2px;
-  opacity: 0.7;
-}
-.stat-card-1 {
-  left: 10%;
-  top: 10px;
-  background: rgba(139, 92, 246, 0.2);
-  color: white;
-  animation: float 6s ease-in-out infinite;
-}
-.stat-card-2 {
-  left: 55%;
-  top: 100px;
-  background: rgba(251, 191, 36, 0.2);
-  color: var(--neon-amber);
-  animation: float 6s ease-in-out 1s infinite;
+  gap: var(--space-4);
 }
 
-/* Center orb */
-.pitch-orb {
-  position: absolute;
-  left: 38%;
-  top: 35px;
-  width: 80px;
-  height: 80px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  box-shadow: 0 0 0 16px rgba(139, 92, 246, 0.06);
-  color: var(--accent-400);
-  animation: glow 4s ease-in-out infinite;
+.step-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-xs);
 }
 
-.login-footer {
-  position: relative;
-  z-index: 1;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  margin-top: var(--space-8);
-}
-
-/* ── Right: Login Form ─────────────────────────────────── */
-.login-form-section {
-  display: grid;
-  place-items: center;
-  padding: var(--space-8);
-  background: var(--bg-primary);
-}
-
-.login-card {
-  width: min(380px, 100%);
-  text-align: center;
-}
-.login-card h2 {
-  font-family: var(--font-display);
-  font-size: 26px;
-  letter-spacing: -0.8px;
-  margin: var(--space-2) 0;
-  color: var(--text-primary);
-}
-.login-help {
-  color: var(--text-secondary);
+.step-number {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background-color: var(--primary-light);
+  color: var(--primary);
+  font-weight: 700;
   font-size: 13px;
-  line-height: 1.6;
-  margin: 0 auto var(--space-6);
-  max-width: 300px;
-}
-.login-card .google-button-slot {
+  display: flex;
+  align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 2px;
+}
+
+.step-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.login-left-footer {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ── Right Auth Section (45%) ───────────────────────────── */
+.login-right-pane {
+  flex: 0 0 45%;
+  background-color: var(--bg-page);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-sm);
+}
+
+.auth-header {
+  margin-bottom: var(--space-6);
+  text-align: left;
+}
+
+.auth-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.auth-subtitle {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.auth-alert {
+  margin-bottom: var(--space-5);
+  font-size: 12.5px;
+}
+
+/* Google Sign-in Button Container */
+.google-btn-wrapper {
+  margin: var(--space-6) 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
   min-height: 44px;
 }
 
-.login-note {
-  margin-top: var(--space-6);
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  text-align: left;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.5;
-  padding: var(--space-3);
-  background: var(--bg-glass);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-.login-note svg { flex-shrink: 0; color: var(--accent-400); }
-
-.login-error {
-  color: var(--error);
-  background: var(--error-bg);
-  border: 1px solid rgba(251, 113, 133, 0.2);
-  text-align: left;
-  border-radius: var(--radius-md);
-  padding: 10px 14px;
-  font-size: 12px;
-  line-height: 1.5;
-  margin: 0 0 var(--space-4);
-}
-
-.demo-access-box {
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-.demo-badge {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--accent-400);
-}
-.demo-text {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin: 0;
-}
-.demo-actions {
-  display: flex;
-  gap: 8px;
+.google-native-btn {
   width: 100%;
-  margin-top: 4px;
-}
-.demo-actions .btn {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 44px;
+  background-color: #FFFFFF;
+  border: 1px solid #DADCE0;
+  border-radius: var(--radius-input);
+  color: #3C4043;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+  transition: all var(--transition-fast);
 }
 
-/* Loading splash */
-.loading-splash {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  background: var(--bg-primary);
+.google-native-btn:hover {
+  background-color: #F8FAFD;
+  border-color: #D2E3FC;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15);
 }
-.loading-splash-card {
+
+.auth-footer-notes {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-default);
   text-align: center;
 }
-.loading-splash-card .google-logo {
-  margin-bottom: var(--space-4);
-  width: 56px;
-  height: 56px;
-  font-size: 24px;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-.loading-splash-card h2 {
-  font-family: var(--font-display);
-  font-size: 20px;
-  color: var(--text-primary);
-}
-.loading-splash-card p {
-  color: var(--text-tertiary);
-  font-size: 13px;
-  margin-top: var(--space-2);
+
+.demo-access-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
 }
 
-/* ── Responsive ────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .login-page { grid-template-columns: 1fr; }
-  .login-pitch {
-    min-height: 320px;
-    padding: 30px;
-  }
-  .pitch-content h1 {
-    font-size: 34px;
-    max-width: 440px;
-  }
-  .pitch-stats { display: none; }
-  .login-footer { margin-top: auto; }
-  .login-form-section {
-    padding: var(--space-10) var(--space-6);
-    min-height: calc(100dvh - 320px);
-  }
+.demo-link-btn {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  font-size: 12px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: color var(--transition-fast);
 }
 
-@media (max-width: 480px) {
-  .login-pitch { min-height: 260px; padding: 24px; }
-  .pitch-content h1 { font-size: 28px; letter-spacing: -1.4px; }
-  .pitch-content > p { font-size: 13px; }
-  .login-form-section { padding: var(--space-8) var(--space-5); }
-  .login-card h2 { font-size: 22px; }
+.demo-link-btn:hover {
+  color: var(--primary);
+}
+
+/* ── Responsive Split Screen ─────────────────────────────── */
+@media (max-width: 1024px) {
+  .login-page-wrapper {
+    flex-direction: column;
+  }
+  .login-left-pane {
+    flex: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-default);
+    padding: var(--space-8) var(--space-6);
+  }
+  .login-right-pane {
+    flex: 1;
+    padding: var(--space-8) var(--space-4);
+  }
 }

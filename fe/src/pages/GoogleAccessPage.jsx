@@ -1,17 +1,11 @@
 import { useState, useCallback, useEffect } from 'react'
-import { motion } from 'framer-motion'
 import {
-  KeyRound, Upload, Search, Trash2,
-  FileSpreadsheet, ShieldAlert, ArrowRight, ShieldCheck
+  Upload, Search, Trash2,
+  FileSpreadsheet, AlertCircle
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import toast from 'react-hot-toast'
 import './ServicePages.css'
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } }
-}
 
 export default function GoogleAccessPage() {
   const { request, token, isAdmin } = useAuth()
@@ -19,7 +13,6 @@ export default function GoogleAccessPage() {
   const [file, setFile] = useState(null)
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
 
   const load = useCallback(async () => {
     if (!token || !isAdmin) return
@@ -27,8 +20,8 @@ export default function GoogleAccessPage() {
     try {
       const data = await request('/api/google-access')
       setItems(data || [])
-    } catch (err) {
-      toast.error(err.message || 'Không thể tải danh sách email Google.')
+    } catch {
+      toast.error('Không thể tải danh sách email Google Access.')
     } finally {
       setBusy(false)
     }
@@ -42,7 +35,7 @@ export default function GoogleAccessPage() {
   const handleUpload = async (e) => {
     e?.preventDefault()
     if (!file) {
-      toast.error('Chọn tệp .xlsx có cột Email trước khi tải lên.')
+      toast.error('Chọn tệp .xlsx trước khi tải lên.')
       return
     }
 
@@ -57,29 +50,27 @@ export default function GoogleAccessPage() {
         headers: { Authorization: `Bearer ${token}` },
         body: form
       })
-      const body = await response.json()
+      const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.message || 'Import không thành công.')
 
       setFile(null)
-      toast.success(
-        `Đã thêm ${body.data?.importedCount || 0} email mới (${body.data?.existingCount || 0} email đã tồn tại).`
-      )
+      toast.success(`Đã thêm ${body.data?.importedCount || 0} email vào whitelist.`)
       await load()
-    } catch (err) {
-      toast.error(err.message || 'Lỗi khi import file Excel.')
+    } catch {
+      toast.error('Có lỗi xảy ra khi tải lên tệp Excel.')
     } finally {
       setBusy(false)
     }
   }
 
   const handleRemove = async (id, email) => {
-    if (!window.confirm(`Gỡ quyền đăng nhập Google cho tài khoản "${email}"?`)) return
+    if (!window.confirm(`Xác nhận gỡ quyền đăng nhập Google của "${email}"?`)) return
     try {
       await request(`/api/google-access/${id}`, { method: 'DELETE' })
       toast.success(`Đã xóa ${email} khỏi whitelist.`)
       await load()
-    } catch (err) {
-      toast.error(err.message || 'Không thể gỡ email. Vui lòng thử lại.')
+    } catch {
+      toast.error('Không thể gỡ email này khỏi hệ thống.')
     }
   }
 
@@ -89,104 +80,68 @@ export default function GoogleAccessPage() {
 
   if (!isAdmin) {
     return (
-      <div className="glass-card login-required">
-        <ShieldAlert size={48} style={{ color: 'var(--accent-400)', margin: '0 auto 16px' }} />
-        <h2>Quyền hạn không đủ</h2>
-        <p>Chỉ tài khoản Quản trị viên (Admin) mới có quyền truy cập và quản lý Google Access Whitelist.</p>
+      <div className="card" style={{ maxWidth: 500, margin: '40px auto', textAlign: 'center' }}>
+        <AlertCircle size={36} color="var(--error)" style={{ margin: '0 auto 12px' }} />
+        <h2 style={{ fontSize: 18, fontWeight: 700 }}>Giới hạn quyền truy cập</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+          Chỉ tài khoản Quản trị viên (Admin) mới có quyền quản lý danh sách email Google Whitelist.
+        </p>
       </div>
     )
   }
 
   return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
-    >
-      {/* Intro Header */}
-      <motion.div className="access-intro" variants={fadeUp}>
-        <div className="access-icon">
-          <KeyRound size={28} />
-        </div>
+    <div>
+      {/* ── Page Header ── */}
+      <div className="page-header">
         <div>
-          <p className="eyebrow eyebrow-accent">BẢO MẬT & XÁC THỰC</p>
-          <h1>Google Access Whitelist</h1>
-          <p>
-            Chỉ những email FPT University nằm trong danh sách này mới có thể đăng nhập Google vào hệ thống.
+          <h1 className="page-title">Quản lý Google Access Whitelist</h1>
+          <p className="page-subtitle">
+            Kiểm soát danh sách email FPT University được phép đăng nhập Google Sign-In vào hệ thống.
           </p>
         </div>
-      </motion.div>
+        <span className="badge badge-green" style={{ fontSize: 13, padding: '4px 12px' }}>
+          {items.length} email đang được phép
+        </span>
+      </div>
 
-      {/* Grid: Upload & Allowed List */}
-      <motion.div className="access-grid" variants={fadeUp}>
+      {/* ── 2-Step Layout ── */}
+      <div className="service-layout-grid">
         {/* Step 1: Upload */}
-        <article className="glass-card upload-panel">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                background: 'rgba(139, 92, 246, 0.15)',
-                color: 'var(--accent-400)',
-                fontSize: 11,
-                fontWeight: 800,
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-sm)'
-              }}
-            >
-              BƯỚC 1
-            </span>
-            <p className="eyebrow" style={{ margin: 0 }}>
-              IMPORT WHITELIST
-            </p>
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span className="badge badge-green">Bước 1</span>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+              Thêm email từ tệp Excel
+            </h2>
           </div>
-          <h2>Thêm email từ Excel</h2>
-          <p>
-            Tải lên file danh sách sinh viên hoặc giảng viên. Hệ thống tự động nhận diện cột{' '}
-            <code>Email</code> hoặc <code>Gmail</code> (tối đa 2.000 email/lần).
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+            Tải lên file danh sách sinh viên hoặc giảng viên. Hệ thống tự động nhận diện cột <code>Email</code> hoặc <code>Gmail</code>.
           </p>
 
-          <label
-            className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setDragOver(true)
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault()
-              setDragOver(false)
-              if (e.dataTransfer.files?.[0]) setFile(e.dataTransfer.files[0])
-            }}
-            style={{
-              borderColor: dragOver ? 'var(--accent-400)' : file ? 'var(--accent-500)' : undefined,
-              background: dragOver ? 'rgba(139, 92, 246, 0.08)' : undefined
-            }}
-          >
+          <label className="drop-zone">
             <input
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
             {file ? (
-              <FileSpreadsheet size={32} style={{ color: 'var(--accent-400)' }} />
+              <FileSpreadsheet size={28} color="var(--primary)" />
             ) : (
-              <Upload size={28} />
+              <Upload size={24} color="var(--text-muted)" />
             )}
-            <strong>{file ? file.name : 'Chọn tệp danh sách Excel (.xlsx)'}</strong>
-            <span>
-              {file
-                ? `${(file.size / 1024).toFixed(1)} KB · Sẵn sàng tải lên`
-                : 'Kéo thả file vào đây hoặc bấm để duyệt từ máy tính'}
-            </span>
+            <strong>{file ? file.name : 'Chọn tệp Excel (.xlsx)'}</strong>
+            <span>Hỗ trợ tối đa 2.000 email trong một lần import</span>
           </label>
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             {file && (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => setFile(null)}
               >
-                Hủy chọn
+                Hủy
               </button>
             )}
             <button
@@ -195,89 +150,79 @@ export default function GoogleAccessPage() {
               onClick={handleUpload}
               style={{ flex: 1 }}
             >
-              {busy ? 'Đang xử lý import...' : 'Tiến hành Import Email'} <ArrowRight size={16} />
+              {busy ? 'Đang xử lý...' : 'Tiến hành nạp Whitelist'}
             </button>
           </div>
-        </article>
+        </div>
 
-        {/* Step 2: Allowed list */}
-        <article className="glass-card allowed-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span
-                  style={{
-                    background: 'rgba(52, 211, 153, 0.15)',
-                    color: 'var(--success)',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-sm)'
-                  }}
-                >
-                  BƯỚC 2
-                </span>
-                <p className="eyebrow" style={{ margin: 0 }}>
-                  KIỂM TRA DANH SÁCH
-                </p>
-              </div>
-              <h2>Email Được Phép Truy Cập</h2>
+        {/* Step 2: Whitelist View */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="badge badge-teal">Bước 2</span>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                Kiểm tra email được cấp quyền
+              </h2>
             </div>
-            <span className="count-chip">{items.length} email</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              {filteredItems.length} kết quả
+            </span>
           </div>
 
-          {/* Search filter */}
-          <div style={{ position: 'relative', marginTop: 14, marginBottom: 8 }}>
-            <Search
-              size={14}
-              style={{
-                position: 'absolute',
-                left: 12,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--text-tertiary)'
-              }}
-            />
+          <div style={{ position: 'relative', marginBottom: 10 }}>
+            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
               className="input input-sm"
-              placeholder="Tìm kiếm email..."
+              placeholder="Tìm kiếm địa chỉ email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ paddingLeft: 34 }}
             />
           </div>
 
-          <div className="allowed-list">
-            {filteredItems.map((item) => (
-              <div className="allowed-row" key={item.id}>
-                <span className="email-dot" />
-                <span title={item.email}>{item.email}</span>
-                <button
-                  title={`Gỡ ${item.email}`}
-                  aria-label={`Gỡ ${item.email}`}
-                  onClick={() => handleRemove(item.id, item.email)}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            ))}
+          <div className="roster-list-box" style={{ maxHeight: 380 }}>
+            <table className="whitelist-table">
+              <thead>
+                <tr>
+                  <th>Địa chỉ Email</th>
+                  <th style={{ width: 80, textAlign: 'right' }}>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: 'var(--primary)', flexShrink: 0 }} />
+                        <span style={{ fontWeight: 500 }}>{item.email}</span>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '4px 6px', color: 'var(--text-muted)' }}
+                        onClick={() => handleRemove(item.id, item.email)}
+                        title={`Gỡ ${item.email}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
 
-            {!filteredItems.length && (
-              <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-tertiary)' }}>
-                {search ? (
-                  <p>Không tìm thấy email khớp với "{search}"</p>
-                ) : (
-                  <>
-                    <ShieldCheck size={36} style={{ color: 'var(--accent-400)', opacity: 0.4, margin: '0 auto 8px' }} />
-                    <p>Chưa có email nào trong danh sách whitelist.</p>
-                  </>
+                {!filteredItems.length && (
+                  <tr>
+                    <td colSpan={2} style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-secondary)' }}>
+                      Không có email nào khớp với tìm kiếm.
+                    </td>
+                  </tr>
                 )}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
-        </article>
-      </motion.div>
-    </motion.div>
+        </div>
+      </div>
+    </div>
   )
 }
