@@ -1,0 +1,291 @@
+/* ═══════════════════════════════════════════════════════════
+   Students / Semesters / Service Pages
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Service Grid ──────────────────────────────────────── */
+.service-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.95fr) 1.05fr;
+  gap: var(--space-5);
+}
+
+/* ── Product Form ──────────────────────────────────────── */
+.product-form {
+  display: grid;
+  gap: var(--space-3);
+}
+.product-form h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  margin: 2px 0 var(--space-2);
+}
+
+/* ── Roster List ───────────────────────────────────────── */
+.roster-panel h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  margin: 2px 0;
+}
+.roster-list {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  max-height: 440px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+.roster-list > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.student-initial {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--accent-400);
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.roster-list strong {
+  display: block;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.roster-list small {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+/* ── Semester Cards ────────────────────────────────────── */
+.semester-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.semester-card {
+  position: relative;
+  min-height: 180px;
+}
+.semester-card h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  margin: 2px 0;
+}
+.semester-card > p:not(.eyebrow) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: var(--space-2) 0 var(--space-4);
+}
+.semester-dot {
+  position: absolute;
+  right: var(--space-4);
+  top: var(--space-5);
+}
+.mini-milestones {
+  display: grid;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-3);
+}
+
+/* ── Semester Form ─────────────────────────────────────── */
+.semester-form {
+  margin-bottom: var(--space-5);
+}
+.semester-form .form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Access Page ───────────────────────────────────────── */
+.access-intro {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+.access-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: var(--radius-lg);
+  color: var(--accent-400);
+  background: rgba(139, 92, 246, 0.12);
+  flex-shrink: 0;
+}
+.access-intro h1 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: -0.8px;
+  margin: 4px 0;
+}
+.access-intro p:not(.eyebrow) {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.access-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+.upload-panel h2,
+.allowed-panel h2,
+.login-required h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  margin: 6px 0;
+}
+.upload-panel > p:not(.eyebrow),
+.login-required p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.upload-panel code {
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--accent-400);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.allowed-list {
+  margin-top: var(--space-4);
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-subtle);
+}
+.allowed-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  min-width: 0;
+}
+.allowed-row > span:nth-child(2) {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+.email-dot {
+  width: 8px; height: 8px;
+  background: var(--success);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.allowed-row button {
+  margin-left: auto;
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid rgba(251, 113, 133, 0.15);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  padding: 5px;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.allowed-row button:hover {
+  background: rgba(251, 113, 133, 0.2);
+}
+
+.login-required {
+  text-align: center;
+  max-width: 470px;
+  margin: var(--space-10) auto;
+}
+.login-required > svg {
+  color: var(--accent-400);
+  margin-bottom: var(--space-3);
+}
+
+/* ── Groups Page ───────────────────────────────────────── */
+.groups-coming-soon {
+  text-align: center;
+  padding: var(--space-16) var(--space-8);
+}
+.groups-coming-soon .coming-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin: 0 auto var(--space-6);
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: var(--accent-400);
+  animation: glow 4s ease-in-out infinite;
+}
+.groups-coming-soon h1 {
+  font-family: var(--font-display);
+  font-size: 32px;
+  letter-spacing: -1px;
+  margin-bottom: var(--space-3);
+}
+.groups-coming-soon p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  max-width: 500px;
+  margin: 0 auto var(--space-6);
+  line-height: 1.7;
+}
+
+.feature-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  max-width: 700px;
+  margin: var(--space-8) auto 0;
+}
+.feature-preview-card {
+  text-align: center;
+  padding: var(--space-5);
+}
+.feature-preview-card .feature-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  margin: 0 auto var(--space-3);
+}
+.feature-preview-card h3 {
+  font-family: var(--font-display);
+  font-size: 14px;
+  margin-bottom: var(--space-1);
+}
+.feature-preview-card p {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .service-grid { grid-template-columns: 1fr; }
+  .semester-cards { grid-template-columns: repeat(2, 1fr); }
+  .access-grid { grid-template-columns: 1fr; }
+  .feature-preview-grid { grid-template-columns: 1fr; max-width: 300px; }
+}
+@media (max-width: 560px) {
+  .semester-cards { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .access-intro h1 { font-size: 22px; }
+}
