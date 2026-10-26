@@ -4,6 +4,7 @@ import {
   FileSpreadsheet, AlertCircle
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { API_BASE_URL as apiBase } from '../config/api'
 import toast from 'react-hot-toast'
 import './ServicePages.css'
 
@@ -44,7 +45,6 @@ export default function GoogleAccessPage() {
       const form = new FormData()
       form.append('file', file)
 
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
       const response = await fetch(`${apiBase}/api/google-access/import/excel`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
