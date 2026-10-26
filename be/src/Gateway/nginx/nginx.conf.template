@@ -39,10 +39,14 @@ http {
     # Rate limiting zone
     limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
 
-    # DNS Resolver: 127.0.0.11 for Docker Compose internal DNS, 8.8.8.8 and 1.1.1.1 for Public DNS (Render/Cloud)
-    # Using dynamic resolver + variables ensures Nginx NEVER crashes at boot if an upstream service is not deployed yet.
-    resolver 127.0.0.11 8.8.8.8 1.1.1.1 valid=30s ipv6=off;
+    # DNS Resolver: automatically detected from system /etc/resolv.conf
+    resolver ${DNS_RESOLVER} valid=30s ipv6=off;
     resolver_timeout 5s;
+
+    # Shared SSL proxy settings
+    proxy_ssl_server_name on;
+    proxy_ssl_protocols TLSv1.2 TLSv1.3;
+    proxy_ssl_session_reuse off;
 
     # Shared proxy settings
     # The gateway owns browser CORS headers. Hide upstream headers to avoid
@@ -59,10 +63,13 @@ http {
         listen 80;
         server_name _;
 
-        # Dynamic upstream URLs configured via environment variables or defaults
+        # Dynamic upstream URLs and hosts configured via environment variables or defaults
         set $identity_service "${IDENTITY_SERVICE_URL}";
+        set $identity_host "${IDENTITY_HOST}";
         set $group_matching_service "${GROUP_MATCHING_SERVICE_URL}";
+        set $group_matching_host "${GROUP_MATCHING_HOST}";
         set $mentor_service "${MENTOR_SERVICE_URL}";
+        set $mentor_host "${MENTOR_HOST}";
 
         # Rate limiting
         limit_req zone=api_limit burst=50 nodelay;
@@ -97,13 +104,15 @@ http {
             proxy_pass_request_body off;
             proxy_set_header Content-Length "";
             proxy_set_header Authorization $http_authorization;
-            proxy_set_header Host $proxy_host;
-            proxy_ssl_server_name on;
+            proxy_set_header Host $identity_host;
+            proxy_ssl_name $identity_host;
         }
 
         location /api/auth {
             proxy_pass $identity_service$request_uri;
             include /etc/nginx/proxy_params;
+            proxy_set_header Host $identity_host;
+            proxy_ssl_name $identity_host;
         }
 
         # Large academic rosters can contain thousands of rows. Keep the longer
@@ -111,13 +120,13 @@ http {
         location = /api/students/import/excel {
             auth_request /_identity_auth;
             proxy_pass $identity_service$request_uri;
-            proxy_set_header Host $proxy_host;
+            proxy_set_header Host $identity_host;
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
             proxy_set_header X-Request-ID $request_id;
-            proxy_ssl_server_name on;
+            proxy_ssl_name $identity_host;
             proxy_connect_timeout 15s;
             proxy_send_timeout 300s;
             proxy_read_timeout 300s;
@@ -130,40 +139,54 @@ http {
             auth_request /_identity_auth;
             proxy_pass $identity_service$request_uri;
             include /etc/nginx/proxy_params;
+            proxy_set_header Host $identity_host;
+            proxy_ssl_name $identity_host;
         }
 
         location /api/semesters {
             auth_request /_identity_auth;
             proxy_pass $identity_service$request_uri;
             include /etc/nginx/proxy_params;
+            proxy_set_header Host $identity_host;
+            proxy_ssl_name $identity_host;
         }
 
         location /api/google-access {
             auth_request /_identity_auth;
             proxy_pass $identity_service$request_uri;
             include /etc/nginx/proxy_params;
+            proxy_set_header Host $identity_host;
+            proxy_ssl_name $identity_host;
         }
 
         # ─── Group & Matching Service ───
         location /api/groups {
             proxy_pass $group_matching_service$request_uri;
             include /etc/nginx/proxy_params;
+            proxy_set_header Host $group_matching_host;
+            proxy_ssl_name $group_matching_host;
         }
 
         location /api/matching {
             proxy_pass $group_matching_service$request_uri;
             include /etc/nginx/proxy_params;
+            proxy_set_header Host $group_matching_host;
+            proxy_ssl_name $group_matching_host;
         }
 
         # ─── Mentor Service ───
         location /api/mentors {
             proxy_pass $mentor_service$request_uri;
             include /etc/nginx/proxy_params;
+            proxy_set_header Host $mentor_host;
+            proxy_ssl_name $mentor_host;
         }
 
         location /api/mentor-requests {
             proxy_pass $mentor_service$request_uri;
             include /etc/nginx/proxy_params;
+            proxy_set_header Host $mentor_host;
+            proxy_ssl_name $mentor_host;
         }
 
         # ─── Block everything else ───

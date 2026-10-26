@@ -21,9 +21,7 @@ builder.Services.AddSwaggerGen(c =>
         [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }] = Array.Empty<string>()
     });
 });
-builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
-    .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173", "http://localhost:3000"])
-    .AllowAnyHeader().AllowAnyMethod()));
+
 builder.Services.AddOptions<JwtSettings>().Bind(builder.Configuration.GetSection("JwtSettings"))
     .Validate(s => Encoding.UTF8.GetByteCount(s.Secret) >= 32 && !string.IsNullOrWhiteSpace(s.Issuer)
         && !string.IsNullOrWhiteSpace(s.Audience) && s.ExpirationInMinutes is >= 1 and <= 1440,
@@ -74,12 +72,22 @@ builder.Services.AddSingleton<IGoogleEmailImportReader, GoogleEmailImportReader>
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddHostedService<StudentOutboxPublisher>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().Initialize();
 
 app.UseMiddleware<IdentityErrorHandler>();
-app.UseCors();
+app.UseCors("AllowAll");
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
