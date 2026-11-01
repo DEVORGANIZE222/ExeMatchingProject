@@ -5,9 +5,8 @@ import {
   Clock, ShieldAlert, Sparkles
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '../../hooks/useAuth'
 import './MentorPages.css'
-import './DashboardPage.css'
 
 export default function MentorDashboardPage() {
   const {

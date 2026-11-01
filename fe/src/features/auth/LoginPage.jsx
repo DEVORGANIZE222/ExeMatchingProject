@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Navigate } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
-import logoImg from '../assets/logo.png'
+import { useAuth } from '../../hooks/useAuth'
+import logoImg from '../../assets/logo.png'
 import './LoginPage.css'
 
 function GoogleAuthButton({ onCredential }) {

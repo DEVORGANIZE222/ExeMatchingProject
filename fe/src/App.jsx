@@ -2,15 +2,20 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import AppLayout from './layouts/AppLayout'
-import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
-import StudentsPage from './pages/StudentsPage'
-import SemestersPage from './pages/SemestersPage'
-import GroupsPage from './pages/GroupsPage'
-import GoogleAccessPage from './pages/GoogleAccessPage'
-import MentorDashboardPage from './pages/MentorDashboardPage'
-import MentorRequestsPage from './pages/MentorRequestsPage'
-import AdminMentorsPage from './pages/AdminMentorsPage'
+
+// ── Feature-based Modules (Vertical Slices) ────────────────
+import { LoginPage } from './features/auth'
+import { DashboardPage } from './features/dashboard'
+import { StudentsPage } from './features/students'
+import { SemestersPage } from './features/semesters'
+import { GroupsPage } from './features/groups'
+import { GoogleAccessPage } from './features/google-access'
+import {
+  MentorDashboardPage,
+  MentorRequestsPage,
+  AdminMentorsPage
+} from './features/mentors'
+
 import './components/shared.css'
 
 function ProtectedRoute({ children, adminOnly = false, mentorOnly = false }) {

@@ -3,10 +3,10 @@ import {
   Upload, Search, Trash2,
   FileSpreadsheet, AlertCircle
 } from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
-import { API_BASE_URL as apiBase } from '../config/api'
+import { useAuth } from '../../hooks/useAuth'
+import { API_BASE_URL as apiBase } from '../../config/api'
 import toast from 'react-hot-toast'
-import './ServicePages.css'
+import '../../components/ServicePages.css'
 
 export default function GoogleAccessPage() {
   const { request, token, isAdmin } = useAuth()
