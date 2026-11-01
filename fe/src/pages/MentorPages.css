@@ -1,0 +1,436 @@
+/* ═══════════════════════════════════════════════════════════
+   MentorPages.css — ExeMatching Mentor & Admin Quota System
+   Human Crafted · WCAG 2.1 AA Compliant · Zero AI Clichés
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Quota Hero Banner (Dashboard / Portal Header) ───────── */
+.quota-hero-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-6);
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: var(--space-6);
+  align-items: center;
+}
+
+.quota-hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.quota-hero-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.quota-hero-subtitle {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.quota-expertise-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-2);
+}
+
+.expertise-pill {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+  background-color: var(--primary-light);
+  border: 1px solid var(--primary-border);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+}
+
+/* ── Quota Gauge Container ───────────────────────────────── */
+.quota-gauge-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quota-gauge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.quota-gauge-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.quota-gauge-numbers {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.quota-gauge-numbers .highlight {
+  color: var(--primary);
+  font-size: 20px;
+}
+
+.quota-progress-track {
+  width: 100%;
+  height: 8px;
+  background-color: #E2E8F0;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.quota-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 300ms ease;
+}
+
+.quota-progress-fill.green {
+  background-color: var(--primary);
+}
+
+.quota-progress-fill.amber {
+  background-color: #D97706;
+}
+
+.quota-progress-fill.full {
+  background-color: #475569;
+}
+
+.quota-gauge-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ── Filter / Navigation Tabs ────────────────────────────── */
+.proposal-filter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: 12px;
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.proposal-tab-btn {
+  padding: 7px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.proposal-tab-btn:hover {
+  background-color: var(--bg-subtle);
+  color: var(--text-main);
+}
+
+.proposal-tab-btn.active {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ── Proposal / Request Cards ────────────────────────────── */
+.proposal-card-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.proposal-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.proposal-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.proposal-card.approved {
+  border-left: 4px solid var(--primary);
+}
+
+.proposal-card.rejected {
+  border-left: 4px solid #94A3B8;
+  opacity: 0.85;
+}
+
+.proposal-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.proposal-group-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.proposal-topic-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1E293B;
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+
+/* 2-Column Summary Box */
+.proposal-highlight-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.proposal-highlight-box {
+  background-color: var(--bg-subtle);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.proposal-highlight-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.proposal-highlight-text {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* Team Roster Avatars Row */
+.proposal-roster-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background-color: #FAFAFA;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.roster-members-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.roster-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #FFFFFF;
+  border: 1px solid var(--border-default);
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.major-badge-tiny {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: #E2E8F0;
+  color: #334155;
+}
+
+.major-badge-tiny.SE { background-color: #DBEAFE; color: #1E40AF; }
+.major-badge-tiny.AI { background-color: #FCE7F3; color: #9D174D; }
+.major-badge-tiny.IB { background-color: #FEF3C7; color: #92400E; }
+.major-badge-tiny.MKT { background-color: #DCFCE7; color: #166534; }
+.major-badge-tiny.IA { background-color: #E0E7FF; color: #3730A3; }
+.major-badge-tiny.GD { background-color: #F3E8FF; color: #6B21A8; }
+
+/* Message from Group to Mentor */
+.team-pitch-quote {
+  background-color: #F0FDF4;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: #166534;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.team-pitch-quote strong {
+  color: #14532D;
+}
+
+/* Card Actions Toolbar */
+.proposal-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.deck-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--primary);
+  background-color: transparent;
+  cursor: pointer;
+}
+
+.deck-link-btn:hover {
+  text-decoration: underline;
+}
+
+.decision-buttons-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Admin Mentors Management Page ───────────────────────── */
+.mentor-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.mentor-admin-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: border-color var(--transition-fast);
+}
+
+.mentor-admin-card:hover {
+  border-color: var(--border-strong);
+}
+
+.mentor-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mentor-avatar-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background-color: var(--primary-light);
+  color: var(--primary);
+  font-size: 17px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mentor-info-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 2px;
+}
+
+.mentor-info-dept {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Quota Mini Bar */
+.quota-mini-stat {
+  margin: 12px 0;
+  padding: 10px 14px;
+  background-color: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.quota-mini-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .quota-hero-card {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+  .proposal-highlight-grid {
+    grid-template-columns: 1fr;
+  }
+  .proposal-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .decision-buttons-group {
+    justify-content: stretch;
+  }
+  .decision-buttons-group button {
+    flex: 1;
+  }
+}
