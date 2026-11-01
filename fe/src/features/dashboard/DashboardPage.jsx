@@ -4,7 +4,7 @@ import {
   Users, Layers, FileText, Calendar,
   ChevronRight, ArrowRight, CheckCircle2
 } from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '../../hooks/useAuth'
 import './DashboardPage.css'
 
 export default function DashboardPage() {

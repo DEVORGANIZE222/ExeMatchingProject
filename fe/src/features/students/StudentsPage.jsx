@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Upload, Search, Users, FileSpreadsheet } from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
-import './ServicePages.css'
+import '../../components/ServicePages.css'
 
 export default function StudentsPage() {
   const { request, isAdmin } = useAuth()

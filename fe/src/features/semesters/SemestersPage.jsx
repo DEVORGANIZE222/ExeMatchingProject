@@ -2,9 +2,9 @@ import { useState, useCallback, useEffect } from 'react'
 import {
   Calendar, Plus, Clock, Trash2, X
 } from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
-import './ServicePages.css'
+import '../../components/ServicePages.css'
 
 const toUtc = (value) => (value ? new Date(value).toISOString() : null)
 const formatDate = (dateStr) => {

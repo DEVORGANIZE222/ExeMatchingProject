@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { API_BASE_URL as apiBase } from '../config/api'
 
@@ -311,13 +312,16 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!token || account) return
-    loadAccount(token)
-      .catch(() => {
-        localStorage.removeItem('exe_access_token')
-        localStorage.removeItem('exe_account')
-        setToken('')
-      })
-      .finally(() => setLoading(false))
+    const timer = setTimeout(() => {
+      loadAccount(token)
+        .catch(() => {
+          localStorage.removeItem('exe_access_token')
+          localStorage.removeItem('exe_account')
+          setToken('')
+        })
+        .finally(() => setLoading(false))
+    }, 0)
+    return () => clearTimeout(timer)
   }, [account, loadAccount, token])
 
   const googleLogin = async ({ credential }) => {

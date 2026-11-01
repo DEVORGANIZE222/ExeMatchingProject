@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '../../hooks/useAuth'
 import './MentorPages.css'
 
 export default function MentorRequestsPage() {
