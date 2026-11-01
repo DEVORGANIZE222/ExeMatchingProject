@@ -8,10 +8,13 @@ import StudentsPage from './pages/StudentsPage'
 import SemestersPage from './pages/SemestersPage'
 import GroupsPage from './pages/GroupsPage'
 import GoogleAccessPage from './pages/GoogleAccessPage'
+import MentorDashboardPage from './pages/MentorDashboardPage'
+import MentorRequestsPage from './pages/MentorRequestsPage'
+import AdminMentorsPage from './pages/AdminMentorsPage'
 import './components/shared.css'
 
-function ProtectedRoute({ children, adminOnly = false }) {
-  const { token, loading, isAdmin } = useAuth()
+function ProtectedRoute({ children, adminOnly = false, mentorOnly = false }) {
+  const { token, loading, isAdmin, isMentor } = useAuth()
 
   if (loading) {
     return (
@@ -29,10 +32,22 @@ function ProtectedRoute({ children, adminOnly = false }) {
   }
 
   if (adminOnly && !isAdmin) {
-    return <Navigate to="/semesters" replace />
+    return <Navigate to="/" replace />
+  }
+
+  if (mentorOnly && !isMentor) {
+    return <Navigate to="/" replace />
   }
 
   return children
+}
+
+function RoleAdaptiveHome() {
+  const { isMentor } = useAuth()
+  if (isMentor) {
+    return <MentorDashboardPage />
+  }
+  return <DashboardPage />
 }
 
 function AppRoutes() {
@@ -48,7 +63,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<DashboardPage />} />
+        <Route index element={<RoleAdaptiveHome />} />
         <Route
           path="students"
           element={
@@ -64,6 +79,34 @@ function AppRoutes() {
           element={
             <ProtectedRoute adminOnly>
               <GoogleAccessPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ── Mentor Routes ── */}
+        <Route
+          path="mentor/dashboard"
+          element={
+            <ProtectedRoute mentorOnly>
+              <MentorDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="mentor/requests"
+          element={
+            <ProtectedRoute mentorOnly>
+              <MentorRequestsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ── Admin Mentors & Quota Management Route ── */}
+        <Route
+          path="mentors"
+          element={
+            <ProtectedRoute adminOnly>
+              <AdminMentorsPage />
             </ProtectedRoute>
           }
         />

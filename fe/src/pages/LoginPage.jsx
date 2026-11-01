@@ -164,7 +164,7 @@ export default function LoginPage() {
               <span>Chỉ email sinh viên và giảng viên có trong whitelist mới có quyền truy cập.</span>
             </div>
 
-            {/* Demo Mode: 2 pills horizontal */}
+            {/* Demo Mode: 3 pills horizontal */}
             <div className="demo-mode-footer">
               <span className="demo-mode-label">Trải nghiệm nhanh:</span>
               <div className="demo-pills-row">
@@ -174,6 +174,13 @@ export default function LoginPage() {
                   onClick={() => loginAsDemo('Admin')}
                 >
                   Quản trị viên
+                </button>
+                <button
+                  type="button"
+                  className="demo-pill-btn"
+                  onClick={() => loginAsDemo('Mentor')}
+                >
+                  Giảng viên Mentor
                 </button>
                 <button
                   type="button"

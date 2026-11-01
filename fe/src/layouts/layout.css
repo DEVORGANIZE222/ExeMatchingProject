@@ -206,3 +206,19 @@
     display: none;
   }
 }
+
+/* ── Notification / Pending Count Pill on Nav ────────────── */
+.nav-pill-badge {
+  background-color: var(--primary);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  margin-left: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+

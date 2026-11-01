@@ -2,32 +2,61 @@ import { useState } from 'react'
 import { NavLink, Outlet, Link } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Calendar,
-  Layers, ShieldCheck, LogOut, Menu, X
+  Layers, ShieldCheck, LogOut, Menu, X,
+  GraduationCap, Inbox
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import logoImg from '../assets/logo.png'
 import './layout.css'
 
-const adminNav = [
-  { to: '/',          icon: LayoutDashboard, label: 'Tổng quan', end: true },
-  { to: '/students',  icon: Users,           label: 'Sinh viên' },
-  { to: '/semesters', icon: Calendar,        label: 'Học kỳ' },
-  { to: '/groups',    icon: Layers,          label: 'Nhóm & Đề tài' },
-  { to: '/access',    icon: ShieldCheck,     label: 'Google Access' },
-]
-
-const studentNav = [
-  { to: '/semesters', icon: Calendar,        label: 'Học kỳ' },
-  { to: '/groups',    icon: Layers,          label: 'Nhóm & Đề tài' },
-]
-
 export default function AppLayout() {
-  const { account, logout, isAdmin } = useAuth()
+  const { account, logout, isAdmin, isMentor, mentorRequests } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const navItems = isAdmin ? adminNav : studentNav
+
+  // Calculate pending requests count for mentor badge
+  const pendingRequestsCount = mentorRequests?.filter((r) => r.status === 'Pending').length || 0
+
+  const adminNav = [
+    { to: '/',          icon: LayoutDashboard, label: 'Tổng quan', end: true },
+    { to: '/students',  icon: Users,           label: 'Sinh viên' },
+    { to: '/semesters', icon: Calendar,        label: 'Học kỳ' },
+    { to: '/groups',    icon: Layers,          label: 'Nhóm & Đề tài' },
+    { to: '/mentors',   icon: GraduationCap,   label: 'Giảng viên Mentor' },
+    { to: '/access',    icon: ShieldCheck,     label: 'Google Access' },
+  ]
+
+  const mentorNav = [
+    { to: '/mentor/dashboard', icon: LayoutDashboard, label: 'Tổng quan Cố vấn', end: true },
+    {
+      to: '/mentor/requests',
+      icon: Inbox,
+      label: 'Duyệt nhóm & Đề tài',
+      badge: pendingRequestsCount > 0 ? pendingRequestsCount : null
+    },
+    { to: '/groups',           icon: Layers,          label: 'Tất cả Nhóm' },
+    { to: '/semesters',        icon: Calendar,        label: 'Lịch trình Học kỳ' },
+  ]
+
+  const studentNav = [
+    { to: '/semesters', icon: Calendar, label: 'Học kỳ' },
+    { to: '/groups',    icon: Layers,   label: 'Nhóm & Đề tài' },
+  ]
+
+  let navItems = studentNav
+  let roleName = 'Sinh viên Khởi nghiệp'
+  let roleBadgeClass = 'badge-green'
+
+  if (isAdmin) {
+    navItems = adminNav
+    roleName = 'Quản trị viên'
+    roleBadgeClass = 'badge-neutral'
+  } else if (isMentor) {
+    navItems = mentorNav
+    roleName = 'Giảng viên Mentor'
+    roleBadgeClass = 'badge-teal'
+  }
 
   const userInitial = account?.username ? account.username.charAt(0).toUpperCase() : 'U'
-  const roleName = isAdmin ? 'Quản trị viên' : 'Sinh viên'
 
   return (
     <div className="app-shell">
@@ -54,6 +83,11 @@ export default function AppLayout() {
               >
                 <item.icon size={15} />
                 <span>{item.label}</span>
+                {item.badge && (
+                  <span className="nav-pill-badge" title={`${item.badge} yêu cầu chờ duyệt`}>
+                    {item.badge}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -66,7 +100,11 @@ export default function AppLayout() {
               </div>
               <div style={{ textAlign: 'left' }}>
                 <div className="user-name">{account?.username || 'Người dùng'}</div>
-                <div className="user-role">{roleName}</div>
+                <div className="user-role" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span className={`badge ${roleBadgeClass}`} style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 10 }}>
+                    {roleName}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -104,6 +142,11 @@ export default function AppLayout() {
             >
               <item.icon size={16} />
               <span>{item.label}</span>
+              {item.badge && (
+                <span className="nav-pill-badge" style={{ marginLeft: 'auto' }}>
+                  {item.badge}
+                </span>
+              )}
             </NavLink>
           ))}
         </div>
