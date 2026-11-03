@@ -13,7 +13,7 @@ services:
       context: ./fe
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     container_name: exe-frontend
     ports:
@@ -122,6 +122,10 @@ services:
     environment:
       - ConnectionStrings__DefaultConnection=${GROUP_MATCHING_DB_CONNECTION:-Host=postgres;Database=group_matching_db;Username=postgres;Password=postgres}
       - KafkaSettings__BootstrapServers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      - IdentitySemester__BaseUrl=http://identity-semester:8080/
+      - JwtSettings__Secret=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - JwtSettings__Issuer=${JWT_ISSUER:-EXETeamMatching}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-EXETeamMatchingClients}
     depends_on:
       - postgres
       - kafka

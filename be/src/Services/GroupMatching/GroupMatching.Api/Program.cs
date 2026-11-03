@@ -1,10 +1,17 @@
 using EXETeamMatching.GroupMatching.Infrastructure.Persistence;
+using EXETeamMatching.GroupMatching.Api;
+using EXETeamMatching.GroupMatching.Infrastructure.Services;
+using EXETeamMatching.GroupMatching.Application.Interfaces;
+using EXETeamMatching.GroupMatching.Application.Services;
 using EXETeamMatching.Messaging.Abstractions;
 using EXETeamMatching.Messaging.Implementations;
 using EXETeamMatching.Messaging.Settings;
 using EXETeamMatching.SharedKernel.Middleware;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +20,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "GroupMatching API", Version = "v1" });
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT" });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement { [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }] = Array.Empty<string>() });
 });
 
 builder.Services.AddCors(options =>
@@ -32,18 +41,40 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<GroupMatchingDbContext>(options =>
     options.UseNpgsql(connectionString));
+builder.Services.AddScoped<GroupDatabaseInitializer>();
 
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
+builder.Services.AddScoped<IGroupRepository, GroupRepository>();
+builder.Services.AddScoped<IGroupService, GroupService>();
+builder.Services.AddScoped<IMatchingService, MatchingService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IRequestAccessToken, RequestAccessToken>();
+builder.Services.AddHttpClient<IIdentitySemesterClient, IdentitySemesterClient>(client =>
+    client.BaseAddress = new Uri(builder.Configuration["IdentitySemester:BaseUrl"] ?? "http://identity-semester:8080/"));
+var jwt = builder.Configuration.GetSection("JwtSettings");
+var secret = jwt["Secret"] ?? throw new InvalidOperationException("JwtSettings:Secret is required.");
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+{
+    options.MapInboundClaims = false;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true, ValidIssuer = jwt["Issuer"], ValidateAudience = true, ValidAudience = jwt["Audience"],
+        ValidateLifetime = true, RequireExpirationTime = true, ValidateIssuerSigningKey = true, RequireSignedTokens = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)), ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+        NameClaimType = "sub", RoleClaimType = "role", ClockSkew = TimeSpan.FromSeconds(30)
+    };
+});
+builder.Services.AddAuthorization();
+builder.Services.AddHostedService<GroupOutboxPublisher>();
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<GroupMatchingDbContext>();
-    dbContext.Database.EnsureCreated();
+    await scope.ServiceProvider.GetRequiredService<GroupDatabaseInitializer>().Initialize();
 }
 
-app.UseMiddleware<GlobalExceptionHandler>();
+app.UseMiddleware<GroupErrorHandler>();
 app.UseCors("AllowAll");
 
 
@@ -54,7 +85,9 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = string.Empty;
 });
 
+app.UseAuthentication();
 app.UseAuthorization();
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "GroupMatching" })).AllowAnonymous();
 app.MapControllers();
 
 app.Run();

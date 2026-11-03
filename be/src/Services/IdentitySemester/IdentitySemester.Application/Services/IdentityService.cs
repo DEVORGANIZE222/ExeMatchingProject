@@ -119,6 +119,17 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         if (!isAdmin && student.UserId != actor) throw new IdentityException(403, "You can only access your own profile.");
         return Map(student);
     }
+    public async Task<GroupEnrollmentResponse> CurrentEnrollment(Guid actor, string semesterCode, CancellationToken ct)
+    {
+        var code = Required(semesterCode).ToUpperInvariant();
+        var student = await store.StudentByUserSemester(actor, code, ct) ?? throw new IdentityException(404, "No enrollment found for this semester.");
+        return new(student.Id, student.UserId, student.StudentCode, student.FullName, student.Semester.Code, student.HasGroup);
+    }
+    public async Task<SemesterWorkflowResponse> Workflow(string semesterCode, CancellationToken ct)
+    {
+        var semester = await store.SemesterByCode(Required(semesterCode).ToUpperInvariant(), ct) ?? throw new IdentityException(404, "Semester not found.");
+        return new(semester.Code, semester.IsActive, semester.StartDate, semester.EndDate, semester.RegistrationDeadline, semester.TopicDeadline, semester.MentorDeadline);
+    }
     public async Task<StudentResponse> CreateStudent(CreateStudentRequest request, CancellationToken ct)
     {
         ValidatePassword(request.InitialPassword);

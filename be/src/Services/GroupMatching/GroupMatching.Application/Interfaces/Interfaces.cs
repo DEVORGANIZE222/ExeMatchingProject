@@ -5,26 +5,47 @@ namespace EXETeamMatching.GroupMatching.Application.Interfaces;
 
 public interface IGroupRepository
 {
-    Task<Group?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<IEnumerable<Group>> GetAllAsync(CancellationToken cancellationToken = default);
-    Task AddAsync(Group group, CancellationToken cancellationToken = default);
-    Task UpdateAsync(Group group, CancellationToken cancellationToken = default);
+    Task<Group?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, CancellationToken ct = default);
+    Task<Group?> GetStudentGroupAsync(Guid studentId, string semesterCode, CancellationToken ct = default);
+    Task<List<Group>> OpenGroupsAsync(string semesterCode, CancellationToken ct = default);
+    void Add(Group group);
+    void AddMember(GroupMember member);
+    void AddVote(LeaderVote vote);
+    void Remove(Group group);
+    void AddOutbox(GroupEventOutbox item);
+    Task SaveAsync(CancellationToken ct = default);
+    Task<IGroupTransaction> BeginSerializableTransactionAsync(CancellationToken ct = default);
+}
+
+public interface IGroupTransaction : IAsyncDisposable
+{
+    Task CommitAsync(CancellationToken ct = default);
+}
+
+public interface IIdentitySemesterClient
+{
+    Task<EnrollmentContext> CurrentEnrollmentAsync(string semesterCode, CancellationToken ct = default);
+    Task<SemesterWorkflowContext> WorkflowAsync(string semesterCode, CancellationToken ct = default);
+    Task<IReadOnlyList<EnrollmentContext>> UnmatchedEnrollmentsAsync(string semesterCode, CancellationToken ct = default);
 }
 
 public interface IGroupService
 {
-    Task<GroupDto> CreateGroupAsync(CreateGroupRequest request, CancellationToken cancellationToken = default);
-    Task AddMemberAsync(Guid groupId, AddGroupMemberRequest request, CancellationToken cancellationToken = default);
-    Task RemoveMemberAsync(Guid groupId, Guid studentId, CancellationToken cancellationToken = default);
-    Task LockGroupAsync(Guid groupId, CancellationToken cancellationToken = default);
+    Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<GroupDto> JoinAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
+    Task LeaveAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default);
+    Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> RegisterTopicAsync(Guid id, RegisterTopicRequest request, Guid actorUserId, CancellationToken ct = default);
 }
 
 public interface IMatchingService
 {
-    Task RandomMatchingAsync(string semesterCode, CancellationToken cancellationToken = default);
-}
-
-public interface ILeaderVoteService
-{
-    Task VoteLeaderAsync(Guid groupId, VoteLeaderRequest request, CancellationToken cancellationToken = default);
+    Task<RandomMatchingResult> RandomMatchingAsync(string semesterCode, CancellationToken cancellationToken = default);
 }

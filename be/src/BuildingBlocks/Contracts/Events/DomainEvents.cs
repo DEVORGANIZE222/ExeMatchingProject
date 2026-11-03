@@ -37,6 +37,12 @@ public record TopicRegisteredEvent(
     DateTime RegisteredAt
 );
 
+public record StudentGroupMembershipChangedEvent(
+    Guid StudentId,
+    bool HasGroup,
+    DateTime ChangedAt
+);
+
 public record MentorRequestedEvent(
     Guid RequestId,
     Guid GroupId,

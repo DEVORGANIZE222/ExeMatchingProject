@@ -40,3 +40,6 @@ public class ListQuery
     public bool Descending { get; set; }
 }
 public record PageResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
+public record GroupEnrollmentResponse(Guid StudentId, Guid UserId, string StudentCode, string FullName, string SemesterCode, bool HasGroup);
+public record SemesterWorkflowResponse(string SemesterCode, bool IsActive, DateTime StartDate, DateTime EndDate,
+    DateTime? RegistrationDeadline, DateTime? TopicDeadline, DateTime? MentorDeadline);
