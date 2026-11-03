@@ -1,92 +1,99 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Layers, Users, Plus, Search,
   CheckCircle2, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
-
-const initialGroups = [
-  {
-    id: 'grp-1',
-    name: 'ExeMatching DevCore',
-    topic: 'Nền tảng ghép nhóm sinh viên Khởi nghiệp EXE thông minh tích hợp đề xuất thuật toán',
-    leader: 'Nguyễn Trần Quang Duy',
-    members: [
-      { name: 'Nguyễn Trần Quang Duy', role: 'Trưởng nhóm / Backend', major: 'SE' },
-      { name: 'Phan Minh Tuấn', role: 'Frontend React', major: 'SE' },
-      { name: 'Trần Bảo Ngọc', role: 'Machine Learning', major: 'AI' },
-      { name: 'Lê Hoàng Nam', role: 'DevOps & Cloud', major: 'SE' }
-    ],
-    maxMembers: 5,
-    statusText: 'Cần thêm 1 thành viên (UI/UX)',
-    statusType: 'recruiting',
-    mentor: 'TS. Hoàng Văn Thông'
-  },
-  {
-    id: 'grp-2',
-    name: 'FinFlow - FinTech Startup',
-    topic: 'Ứng dụng quản lý tài chính doanh nghiệp vừa và nhỏ tích hợp Open Banking',
-    leader: 'Lê Thảo Vy',
-    members: [
-      { name: 'Lê Thảo Vy', role: 'Trưởng nhóm / Product Owner', major: 'IB' },
-      { name: 'Đặng Quốc Huy', role: 'Fullstack Engineer', major: 'SE' },
-      { name: 'Vũ Đức Trí', role: 'Bảo mật & Smart Contract', major: 'IA' },
-      { name: 'Nguyễn Mai Anh', role: 'Marketing & Tăng trưởng', major: 'MKT' },
-      { name: 'Phạm Hồng Sơn', role: 'Mobile Flutter Dev', major: 'SE' }
-    ],
-    maxMembers: 5,
-    statusText: 'Đã đủ thành viên',
-    statusType: 'full',
-    mentor: 'ThS. Nguyễn Quỳnh Nga'
-  },
-  {
-    id: 'grp-3',
-    name: 'MediSync AI Health',
-    topic: 'Hệ thống gợi ý chẩn đoán sơ bộ qua hình ảnh y tế và hỗ trợ đặt lịch khám',
-    leader: 'Bùi Gia Huy',
-    members: [
-      { name: 'Bùi Gia Huy', role: 'Trưởng nhóm / Data Scientist', major: 'AI' },
-      { name: 'Trần Văn Mạnh', role: 'Backend Spring Boot', major: 'SE' },
-      { name: 'Nguyễn Thu Trang', role: 'Business Analyst', major: 'IB' }
-    ],
-    maxMembers: 5,
-    statusText: 'Cần thêm 2 thành viên (Frontend & AI)',
-    statusType: 'recruiting',
-    mentor: 'Đang liên hệ Mentor'
-  }
-]
+import { useAuth } from '../../hooks/useAuth'
 
 export default function GroupsPage() {
-  const [groups, setGroups] = useState(initialGroups)
+  const { account, request } = useAuth()
+  const [groups, setGroups] = useState([])
   const [filter, setFilter] = useState('all') // 'all' | 'recruiting' | 'full'
   const [search, setSearch] = useState('')
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupTopic, setNewGroupTopic] = useState('')
+  const [semesterCode, setSemesterCode] = useState('')
 
-  const handleCreateGroup = (e) => {
-    e.preventDefault()
-    if (!newGroupName.trim()) return
-
-    const newGroup = {
-      id: 'grp-' + Date.now(),
-      name: newGroupName.trim(),
-      topic: newGroupTopic.trim(),
-      leader: 'Bạn (Trưởng nhóm)',
-      members: [{ name: 'Bạn', role: 'Trưởng nhóm', major: 'SE' }],
+  const mapGroup = useCallback((group) => {
+    const leader = group.members?.find((member) => member.role === 1 || member.role === 'Leader')
+    const memberCount = group.memberCount ?? group.members?.length ?? 0
+    return {
+      ...group,
+      name: group.groupName,
+      topic: group.topicTitle || 'Chưa đăng ký đề tài',
+      leader: leader?.fullName || 'Chưa bầu trưởng nhóm',
+      members: (group.members || []).map((member) => ({
+        ...member,
+        name: member.fullName,
+        role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
+        major: member.studentCode
+      })),
       maxMembers: 5,
-      statusText: 'Cần thêm 4 thành viên',
-      statusType: 'recruiting',
-      mentor: 'Chưa phân công'
+      statusText: group.status === 2 || group.status === 'Locked'
+        ? 'Đã khóa nhóm'
+        : memberCount >= 5 ? 'Đã đủ thành viên' : `Cần thêm ${5 - memberCount} thành viên`,
+      statusType: memberCount >= 5 || group.status === 2 || group.status === 'Locked' ? 'full' : 'recruiting',
+      mentor: 'Chưa kết nối Mentor'
     }
+  }, [])
 
-    setGroups([newGroup, ...groups])
-    toast.success(`Đã khởi tạo nhóm "${newGroupName}".`)
-    setShowCreateModal(false)
-    setNewGroupName('')
-    setNewGroupTopic('')
+  const loadGroups = useCallback(async () => {
+    let code = account?.student?.semesterCode
+    if (!code) {
+      const semesters = await request('/api/semesters?isActive=true&page=1&pageSize=100&sortBy=code')
+      code = semesters.items?.[0]?.code
+    }
+    if (!code) {
+      setGroups([])
+      return
+    }
+    setSemesterCode(code)
+    const result = await request(`/api/groups?semesterCode=${encodeURIComponent(code)}&page=1&pageSize=100`)
+    setGroups((result.items || []).map(mapGroup))
+  }, [account, mapGroup, request])
+
+  // Synchronize the existing card UI with the remote GroupMatching resource.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      loadGroups().catch((error) => {
+        toast.error(error.message || 'Không thể tải danh sách nhóm.')
+      })
+    }, 0)
+    return () => clearTimeout(id)
+  }, [loadGroups])
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault()
+    if (!newGroupName.trim() || !semesterCode) return
+    try {
+      await request('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupName: newGroupName.trim(), semesterCode })
+      })
+      toast.success(`Đã khởi tạo nhóm "${newGroupName}".`)
+      setShowCreateModal(false)
+      setNewGroupName('')
+      setNewGroupTopic('')
+      await loadGroups()
+    } catch (error) {
+      toast.error(error.message || 'Không thể tạo nhóm.')
+    }
+  }
+
+  const handleJoin = async (group) => {
+    try {
+      await request(`/api/groups/${group.id}/members`, { method: 'POST' })
+      toast.success(`Đã tham gia nhóm "${group.name}".`)
+      setSelectedGroup(null)
+      await loadGroups()
+    } catch (error) {
+      toast.error(error.message || 'Không thể tham gia nhóm.')
+    }
   }
 
   const filteredGroups = groups.filter((g) => {
@@ -217,7 +224,7 @@ export default function GroupsPage() {
                   <button
                     className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
-                    onClick={() => toast.success(`Đã gửi yêu cầu xin gia nhập nhóm "${group.name}".`)}
+                    onClick={() => handleJoin(group)}
                   >
                     Xin gia nhập
                   </button>
@@ -299,10 +306,7 @@ export default function GroupsPage() {
               {selectedGroup.statusType === 'recruiting' && (
                 <button
                   className="btn btn-primary btn-sm"
-                  onClick={() => {
-                    toast.success(`Đã gửi yêu cầu gia nhập ${selectedGroup.name}!`)
-                    setSelectedGroup(null)
-                  }}
+                  onClick={() => handleJoin(selectedGroup)}
                 >
                   Gửi yêu cầu xin gia nhập
                 </button>

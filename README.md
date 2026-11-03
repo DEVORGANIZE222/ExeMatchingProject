@@ -7,7 +7,7 @@ An enterprise-grade Capstone / EXE Team Matching System built with **.NET 8 Micr
 ## 1. Project Overview
 The **EXE Team Matching System** coordinates student registration, team formation, leader voting, mentor assignment, and topic approval for Capstone/EXE courses.
 
-> **Service 1 update (2026-09-29)**: IdentitySemester now implements JWT/RBAC, account information/password changes, student CRUD/Excel import, semester CRUD/milestones, PostgreSQL repositories and a Kafka outbox producer. See [Service 1 guide and requirements checklist](docs/identity-semester.md) and [working agreement](AGENTS.md). GroupMatching, Mentor and Notification remain Phase 1 skeletons; their end-to-end requirements are not complete.
+> **Service updates**: IdentitySemester implements JWT/RBAC, roster/semester management and a Kafka outbox. GroupMatching implements the group lifecycle, leader vote, random matching and its own outbox. See [IdentitySemester](docs/identity-semester.md) and [GroupMatching](docs/group-matching.md). Mentor and Notification still require their own end-to-end implementation.
 
 ---
 

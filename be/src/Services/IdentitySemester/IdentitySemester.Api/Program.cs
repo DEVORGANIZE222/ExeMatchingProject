@@ -71,6 +71,7 @@ builder.Services.AddSingleton<IStudentImportReader, StudentImportReader>();
 builder.Services.AddSingleton<IGoogleEmailImportReader, GoogleEmailImportReader>();
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddHostedService<StudentOutboxPublisher>();
+builder.Services.AddHostedService<GroupMembershipConsumer>();
 
 builder.Services.AddCors(options =>
 {

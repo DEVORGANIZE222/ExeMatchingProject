@@ -31,6 +31,9 @@ public class KafkaEventPublisher : IEventPublisher, IDisposable
     }
 
     public async Task PublishAsync<TEvent>(string topic, TEvent @event, CancellationToken cancellationToken = default) where TEvent : class
+        => await PublishAsync(topic, Guid.NewGuid().ToString(), @event, cancellationToken);
+
+    public async Task PublishAsync<TEvent>(string topic, string key, TEvent @event, CancellationToken cancellationToken = default) where TEvent : class
     {
         if (@event == null) return;
 
@@ -39,14 +42,7 @@ public class KafkaEventPublisher : IEventPublisher, IDisposable
 
         try
         {
-            var json = JsonSerializer.Serialize(@event);
-            var message = new Message<string, string>
-            {
-                Key = Guid.NewGuid().ToString(),
-                Value = json
-            };
-
-            await _producer.Value.ProduceAsync(topic, message, cancellationToken);
+            await PublishRawAsync(topic, key, JsonSerializer.Serialize(@event), cancellationToken);
             _logger.LogInformation("Successfully published event {EventName} to Kafka topic {Topic}", eventName, topic);
         }
         catch (Exception ex)
@@ -54,6 +50,12 @@ public class KafkaEventPublisher : IEventPublisher, IDisposable
             _logger.LogError(ex, "Failed to publish event {EventName} to Kafka topic {Topic}", eventName, topic);
             throw;
         }
+    }
+
+    public async Task PublishRawAsync(string topic, string key, string payload, CancellationToken cancellationToken = default)
+    {
+        var message = new Message<string, string> { Key = key, Value = payload };
+        await _producer.Value.ProduceAsync(topic, message, cancellationToken);
     }
 
     public void Dispose()
