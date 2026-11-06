@@ -19,8 +19,8 @@ React/Vite client --> Nginx gateway --> IdentitySemester --> identity_db
                                   --> GroupMatching    --> group_matching_db
                                   --> Mentor REST/gRPC --> mentor_db
 
-IdentitySemester --> durable outbox --> Kafka --> Notification Worker (implemented)
-GroupMatching / Mentor --> Kafka (implemented)
+IdentitySemester --> durable outbox --> Kafka --> consumers
+GroupMatching --> durable outbox --> Kafka --> IdentitySemester membership consumer
 PostgreSQL hosts three separate databases.
 Kafka uses Zookeeper; Redis is provisioned but not integrated.
 ```
@@ -32,7 +32,7 @@ Kafka uses Zookeeper; Redis is provisioned but not integrated.
 | Service | Internal Port | External Port | Description |
 |---|---|---|---|
 | **IdentitySemester.Api** | 8080 | 5001 | User authentication, JWT tokens, Student imports & Semester management |
-| **GroupMatching.Api** | 8080 | 5002 | Team creation, member management, leader voting, matching placeholder |
+| **GroupMatching.Api** | 8080 | 5002 | Team lifecycle, leader voting, random matching, topic registration and Mentor gRPC recommendation client |
 | **Mentor.Api** | 8080 / 50051 | 5003 / 50051 | Mentor profiles, quota tracking, REST & gRPC operations |
 | **Notification.Worker** | N/A | N/A | Background worker consuming Kafka events to send email notifications |
 | **Nginx API Gateway** | 8080 | 8080 | Unified entry point & routing reverse proxy |
@@ -214,10 +214,10 @@ Service 1 tests use real PostgreSQL in isolated temporary databases. With Docker
 | Assignment | Responsibility | Status |
 |---|---|---|
 | Service 1 - current contributor | Authentication/JWT/RBAC, student import and account information, semester milestones | Implemented; see Service 1 guide |
-| Service 2 owner | Groups, membership, vote leader, locking, random matching, topic workflow | Team implementation pending |
+| Service 2 owner | Groups, membership, vote leader, locking, random matching, topic workflow; Kafka outbox and Mentor gRPC client | Implemented for Service 2; Service 3 must provide real Mentor gRPC data for end-to-end mentor recommendations |
 | Service 3 owner | Mentor profiles, quotas, mentor decisions, real REST-to-gRPC interaction | Team implementation pending |
 | Service 4 owner | Kafka event consumer, notification/email worker | Team implementation pending |
-| Infrastructure/integration owner | Shared gateway deployment, integration and complete end-to-end demonstration | Compose scaffold present; integration pending |
+| Infrastructure/integration owner | Shared gateway deployment, integration and complete end-to-end demonstration | Compose available; see `docs/DEMO_SCRIPT.md` for verified Service 1/2 flow and remaining Service 3/4 dependency |
 
 The supplied team document does not name individual members. Replace responsibility labels with actual team member names before submission; do not invent names.
 

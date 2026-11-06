@@ -74,7 +74,7 @@ Mốc học kỳ dùng UTC, gửi hậu tố `Z`: `startDate < registrationDeadl
 
 ## Database và Kafka
 
-`DatabaseInitializer` hỗ trợ database trống (EF EnsureCreated) và database Phase 1 đã tồn tại. Script embedded `IdentitySemester.Infrastructure/Persistence/identity-upgrade.sql` bổ sung TokenVersion, 3 deadline, outbox, unique indexes và FK Restrict. Script có thể chạy lại, nằm trong transaction, không drop table hay xóa dữ liệu. Nếu DB có dữ liệu trùng từ trước, unique index sẽ báo lỗi và dừng; không tự xóa dữ liệu để vượt lỗi. Repo này dùng SQL upgrade script, chưa chuyển sang lịch sử EF migrations.
+`DatabaseInitializer` hỗ trợ database trống (EF EnsureCreated) và database Phase 1 đã tồn tại. Script embedded `IdentitySemester.Infrastructure/Persistence/identity-upgrade.sql` bổ sung TokenVersion, 3 deadline, outbox, unique indexes và FK Restrict. Script có thể chạy lại, nằm trong transaction, không drop table hay xóa dữ liệu. Nếu DB có dữ liệu trùng từ trước, unique index sẽ báo lỗi và dừng; không tự xóa dữ liệu để vượt lỗi. Full baseline DDL cho database mới nằm ở `be/database-scripts/01_identity_db_schema.sql`; script này không được tự chạy trên volume hiện có.
 
 Khi tạo/import sinh viên, `StudentImportedEvent` và dữ liệu được lưu cùng transaction EF. `StudentOutboxPublisher` kiểm tra mỗi 5 giây, gửi topic `student-imported`, chỉ đánh dấu PublishedAt khi Kafka xác nhận. Kafka tạm lỗi không làm mất sự kiện đã lưu. Message key là outbox id, payload giữ contract hiện có (StudentId, StudentCode, FullName, Email, SemesterCode, ImportedAt), không có mật khẩu. Delivery là **at-least-once**: Notification phải deduplicate theo message key; chưa cam kết exactly-once. Tắt publisher trong test bằng `Outbox:Enabled=false`.
 

@@ -28,3 +28,15 @@ CREATE TABLE IF NOT EXISTS "GoogleAllowedEmails" (
     "Email" text NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "UX_GoogleAllowedEmails_Email_Normalized" ON "GoogleAllowedEmails" (lower(trim("Email")));
+
+-- Remove only the immutable scaffold sample account.  Do not touch real roster
+-- entries or semesters: existing installations may already use FALL2026.
+DELETE FROM "Students"
+WHERE "Id" = '55555555-5555-5555-5555-555555555555'
+  AND "StudentCode" = 'SE160001'
+  AND "FullName" = 'Nguyen Van A';
+DELETE FROM "Users"
+WHERE "Id" = '44444444-4444-4444-4444-444444444444'
+  AND lower("Email") = 'student01@fpt.edu.vn';
+DELETE FROM "GoogleAllowedEmails"
+WHERE lower("Email") = 'student01@fpt.edu.vn';

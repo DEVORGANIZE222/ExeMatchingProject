@@ -4,7 +4,6 @@ import {
   FileSpreadsheet, AlertCircle
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { API_BASE_URL as apiBase } from '../../config/api'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 
@@ -45,19 +44,16 @@ export default function GoogleAccessPage() {
       const form = new FormData()
       form.append('file', file)
 
-      const response = await fetch(`${apiBase}/api/google-access/import/excel`, {
+      const result = await request('/api/google-access/import/excel', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: form
       })
-      const body = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(body.message || 'Import không thành công.')
 
       setFile(null)
-      toast.success(`Đã thêm ${body.data?.importedCount || 0} email vào whitelist.`)
+      toast.success(`Đã thêm ${result?.importedCount || 0} email vào whitelist.`)
       await load()
-    } catch {
-      toast.error('Có lỗi xảy ra khi tải lên tệp Excel.')
+    } catch (error) {
+      toast.error(error.message || 'Có lỗi xảy ra khi tải lên tệp Excel.')
     } finally {
       setBusy(false)
     }

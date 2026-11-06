@@ -16,6 +16,9 @@ public sealed class GroupMembershipConsumer(IServiceScopeFactory scopes, IOption
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Do not let initial Kafka metadata discovery delay Kestrel startup.
+        // The worker retries independently while the API is already available.
+        await Task.Yield();
         var config = new ConsumerConfig
         {
             BootstrapServers = configuration["KafkaSettings:BootstrapServers"] ?? settings.Value.BootstrapServers,
