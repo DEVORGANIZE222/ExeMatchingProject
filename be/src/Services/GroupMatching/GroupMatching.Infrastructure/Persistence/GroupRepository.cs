@@ -10,17 +10,18 @@ namespace EXETeamMatching.GroupMatching.Infrastructure.Persistence;
 public sealed class GroupRepository(GroupMatchingDbContext db) : IGroupRepository
 {
     public Task<Group?> GetByIdAsync(Guid id, CancellationToken ct = default) => db.Groups
-        .Include(x => x.Members).Include(x => x.Votes).SingleOrDefaultAsync(x => x.Id == id, ct);
+        .Include(x => x.Members).Include(x => x.Votes).Include(x => x.RecruitmentNeeds).SingleOrDefaultAsync(x => x.Id == id, ct);
 
     public async Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, CancellationToken ct = default)
     {
         var semester = query.SemesterCode.Trim().ToUpperInvariant();
-        var groups = db.Groups.AsNoTracking().Include(x => x.Members).Where(x => x.SemesterCode == semester);
+        var groups = db.Groups.AsNoTracking().Include(x => x.Members).Include(x => x.RecruitmentNeeds).Where(x => x.SemesterCode == semester);
         if (query.Status.HasValue) groups = groups.Where(x => x.Status == query.Status.Value);
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var term = query.Search.Trim().ToLower();
             groups = groups.Where(x => x.GroupName.ToLower().Contains(term) ||
+                x.ProjectDescription.ToLower().Contains(term) ||
                 (x.TopicTitle != null && x.TopicTitle.ToLower().Contains(term)) || x.GroupCode.ToLower().Contains(term));
         }
         var total = await groups.CountAsync(ct);
@@ -29,11 +30,11 @@ public sealed class GroupRepository(GroupMatchingDbContext db) : IGroupRepositor
     }
 
     public Task<Group?> GetStudentGroupAsync(Guid studentId, string semesterCode, CancellationToken ct = default) => db.Groups
-        .Include(x => x.Members).Include(x => x.Votes)
+        .Include(x => x.Members).Include(x => x.Votes).Include(x => x.RecruitmentNeeds)
         .SingleOrDefaultAsync(x => x.SemesterCode == semesterCode && x.Members.Any(m => m.StudentId == studentId), ct);
 
     public Task<List<Group>> OpenGroupsAsync(string semesterCode, CancellationToken ct = default) => db.Groups
-        .Include(x => x.Members).Include(x => x.Votes)
+        .Include(x => x.Members).Include(x => x.Votes).Include(x => x.RecruitmentNeeds)
         .Where(x => x.SemesterCode == semesterCode && x.Status == Domain.Enums.GroupStatus.Open)
         .OrderBy(x => x.CreatedAt).ToListAsync(ct);
 
@@ -49,7 +50,9 @@ public sealed class GroupRepository(GroupMatchingDbContext db) : IGroupRepositor
 
     public static GroupDto Map(Group group) => new(group.Id, group.GroupCode, group.GroupName, group.SemesterCode, group.Status,
         group.LeaderStudentId, group.TopicTitle, group.TopicRegisteredAt, group.Members.Count,
-        group.Members.OrderBy(x => x.JoinedAt).Select(m => new GroupMemberDto(m.StudentId, m.StudentCode, m.FullName, m.Role, m.JoinedAt)).ToList());
+        group.Members.OrderBy(x => x.JoinedAt).Select(m => new GroupMemberDto(m.StudentId, m.StudentCode, m.FullName, m.Role, m.JoinedAt)).ToList(),
+        group.ProjectDescription,
+        group.RecruitmentNeeds.OrderBy(x => x.RoleCode).Select(x => new RecruitmentNeedDto(x.RoleCode, x.Slots)).ToList());
 
     private sealed class EfGroupTransaction(IDbContextTransaction transaction) : IGroupTransaction
     {

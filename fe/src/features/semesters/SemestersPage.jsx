@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect } from 'react'
 import {
-  Calendar, Plus, Clock, Trash2, X
+  Calendar, Plus, Clock, Trash2, X, Pencil
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 
 const toUtc = (value) => (value ? new Date(value).toISOString() : null)
+const toLocalInput = (value) => (value ? new Date(value).toISOString().slice(0, 16) : '')
 const formatDate = (dateStr) => {
   if (!dateStr) return '—'
   try {
@@ -26,6 +27,7 @@ export default function SemestersPage() {
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState('all') // 'all' | 'active' | 'ended'
   const [showModal, setShowModal] = useState(false)
+  const [editingSemester, setEditingSemester] = useState(null)
   const [form, setForm] = useState({
     code: '',
     name: '',
@@ -53,7 +55,11 @@ export default function SemestersPage() {
     return () => clearTimeout(id)
   }, [load])
 
-  const handleCreate = async (e) => {
+  const resetForm = () => setForm({
+    code: '', name: '', startDate: '', endDate: '', registrationDeadline: '', topicDeadline: '', mentorDeadline: ''
+  })
+
+  const handleSave = async (e) => {
     e.preventDefault()
     const milestones = [form.registrationDeadline, form.topicDeadline, form.mentorDeadline]
     const filledCount = milestones.filter(Boolean).length
@@ -64,8 +70,8 @@ export default function SemestersPage() {
 
     try {
       setBusy(true)
-      await request('/api/semesters', {
-        method: 'POST',
+      await request(editingSemester ? `/api/semesters/${editingSemester.id}` : '/api/semesters', {
+        method: editingSemester ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code: form.code.trim().toUpperCase(),
@@ -74,19 +80,13 @@ export default function SemestersPage() {
           endDate: toUtc(form.endDate),
           registrationDeadline: toUtc(form.registrationDeadline),
           topicDeadline: toUtc(form.topicDeadline),
-          mentorDeadline: toUtc(form.mentorDeadline)
+          mentorDeadline: toUtc(form.mentorDeadline),
+          ...(editingSemester ? { isActive: editingSemester.isActive } : {})
         })
       })
-      toast.success(`Đã tạo học kỳ ${form.code} thành công.`)
-      setForm({
-        code: '',
-        name: '',
-        startDate: '',
-        endDate: '',
-        registrationDeadline: '',
-        topicDeadline: '',
-        mentorDeadline: ''
-      })
+      toast.success(`${editingSemester ? 'Đã cập nhật' : 'Đã tạo'} học kỳ ${form.code} thành công.`)
+      resetForm()
+      setEditingSemester(null)
       setShowModal(false)
       await load()
     } catch (err) {
@@ -94,6 +94,17 @@ export default function SemestersPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const startEdit = (semester) => {
+    setEditingSemester(semester)
+    setForm({
+      code: semester.code, name: semester.name,
+      startDate: toLocalInput(semester.startDate), endDate: toLocalInput(semester.endDate),
+      registrationDeadline: toLocalInput(semester.registrationDeadline),
+      topicDeadline: toLocalInput(semester.topicDeadline), mentorDeadline: toLocalInput(semester.mentorDeadline)
+    })
+    setShowModal(true)
   }
 
   const handleDelete = async (id, code) => {
@@ -135,7 +146,7 @@ export default function SemestersPage() {
         </div>
 
         {isAdmin && (
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          <button className="btn btn-primary" onClick={() => { resetForm(); setEditingSemester(null); setShowModal(true) }}>
             <Plus size={16} />
             <span>Tạo học kỳ mới</span>
           </button>
@@ -191,6 +202,17 @@ export default function SemestersPage() {
                     <button
                       className="btn btn-ghost btn-sm"
                       style={{ padding: 4, color: 'var(--text-muted)' }}
+                      onClick={() => startEdit(item)}
+                      aria-label={`Chỉnh sửa học kỳ ${item.code}`}
+                      title="Chỉnh sửa học kỳ"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ padding: 4, color: 'var(--text-muted)' }}
                       onClick={() => handleDelete(item.id, item.code)}
                       title="Xóa học kỳ"
                     >
@@ -240,18 +262,18 @@ export default function SemestersPage() {
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>
-                Tạo học kỳ mới
+                {editingSemester ? `Chỉnh sửa học kỳ ${editingSemester.code}` : 'Tạo học kỳ mới'}
               </h2>
               <button
                 className="btn btn-ghost btn-sm"
-                onClick={() => setShowModal(false)}
+                onClick={() => { setShowModal(false); setEditingSemester(null); resetForm() }}
                 style={{ padding: 4 }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreate}>
+            <form onSubmit={handleSave}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, marginBottom: 12 }}>
                 <div>
                   <label className="input-label">Mã học kỳ *</label>
@@ -338,12 +360,12 @@ export default function SemestersPage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); setEditingSemester(null); resetForm() }}
                 >
                   Hủy
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {busy ? 'Đang lưu...' : 'Lưu học kỳ'}
+                  {busy ? 'Đang lưu...' : editingSemester ? 'Cập nhật học kỳ' : 'Lưu học kỳ'}
                 </button>
               </div>
             </form>

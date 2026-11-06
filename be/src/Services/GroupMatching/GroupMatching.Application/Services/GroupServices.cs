@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EXETeamMatching.Contracts.Events;
+using EXETeamMatching.Contracts.TeamRoles;
 using EXETeamMatching.GroupMatching.Application.DTOs;
 using EXETeamMatching.GroupMatching.Application.Interfaces;
 using EXETeamMatching.GroupMatching.Domain.Entities;
@@ -34,9 +35,10 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         var group = new Group
         {
             GroupCode = NewCode(semester),
-            GroupName = Required(request.GroupName), SemesterCode = semester, CreatedByStudentId = actor.StudentId,
+            GroupName = Required(request.GroupName), ProjectDescription = Required(request.ProjectDescription), SemesterCode = semester, CreatedByStudentId = actor.StudentId,
             Members = [Member(actor)]
         };
+        ApplyRecruitmentNeeds(group, request.RecruitmentNeeds);
         repository.Add(group);
         MembershipEvent(actor.StudentId, true);
         Event("group-created", new GroupCreatedEvent(group.Id, group.GroupCode, group.GroupName, actor.StudentId, DateTime.UtcNow));
@@ -51,7 +53,8 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         var actor = isAdmin ? null : await Enrollment(actorUserId, group.SemesterCode, ct);
         if (group.Status != GroupStatus.Open) throw Conflict("A locked group cannot be renamed.");
         if (!isAdmin && group.CreatedByStudentId != actor!.StudentId) throw Forbidden("Only the group creator can rename an open group.");
-        group.GroupName = Required(request.GroupName); group.UpdatedAt = DateTime.UtcNow;
+        group.GroupName = Required(request.GroupName); group.ProjectDescription = Required(request.ProjectDescription);
+        ApplyRecruitmentNeeds(group, request.RecruitmentNeeds); group.UpdatedAt = DateTime.UtcNow;
         await repository.SaveAsync(ct);
         return Map(group);
     }
@@ -188,7 +191,24 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
     private static GroupMember Member(EnrollmentContext item) => new() { StudentId = item.StudentId, StudentCode = item.StudentCode, FullName = item.FullName, JoinedAt = DateTime.UtcNow };
     private static GroupDto Map(Group group) => new(group.Id, group.GroupCode, group.GroupName, group.SemesterCode, group.Status,
         group.LeaderStudentId, group.TopicTitle, group.TopicRegisteredAt, group.Members.Count,
-        group.Members.OrderBy(x => x.JoinedAt).Select(x => new GroupMemberDto(x.StudentId, x.StudentCode, x.FullName, x.Role, x.JoinedAt)).ToList());
+        group.Members.OrderBy(x => x.JoinedAt).Select(x => new GroupMemberDto(x.StudentId, x.StudentCode, x.FullName, x.Role, x.JoinedAt)).ToList(),
+        group.ProjectDescription,
+        group.RecruitmentNeeds.OrderBy(x => x.RoleCode).Select(x => new RecruitmentNeedDto(x.RoleCode, x.Slots)).ToList());
+    private static void ApplyRecruitmentNeeds(Group group, IEnumerable<RecruitmentNeedRequest>? source)
+    {
+        var requested = (source ?? []).ToList();
+        if (requested.Count > 4) throw BadRequest("A group can recruit at most four role types.");
+        if (requested.Any(x => x.Slots is < 1 or > 4 || !TeamRoleCatalog.IsValid(x.RoleCode)))
+            throw BadRequest("Recruitment roles or slots are invalid.");
+        var normalized = requested.Select(x => new RecruitmentNeedDto(TeamRoleCatalog.Normalize(x.RoleCode), x.Slots)).ToList();
+        if (normalized.Select(x => x.RoleCode).Distinct(StringComparer.OrdinalIgnoreCase).Count() != normalized.Count)
+            throw BadRequest("Recruitment roles must not contain duplicates.");
+        if (normalized.Sum(x => x.Slots) > 5 - group.Members.Count)
+            throw BadRequest("Recruitment slots cannot exceed the group's available capacity.");
+        group.RecruitmentNeeds.Clear();
+        foreach (var item in normalized)
+            group.RecruitmentNeeds.Add(new GroupRecruitmentNeed { RoleCode = item.RoleCode, Slots = item.Slots });
+    }
     private static string Code(string value) => Required(value).ToUpperInvariant();
     private static string NewCode(string semester)
     {
@@ -242,7 +262,7 @@ public sealed class MatchingService(IGroupRepository repository, IIdentitySemest
         foreach (var size in Partition(remaining))
         {
             var rawCode = $"GRP-{code}-{Guid.NewGuid():N}";
-            var group = new Group { GroupCode = rawCode[..Math.Min(64, rawCode.Length)], GroupName = $"Nhóm ghép ngẫu nhiên {created + 1}", SemesterCode = code };
+            var group = new Group { GroupCode = rawCode[..Math.Min(64, rawCode.Length)], GroupName = $"Nhóm ghép ngẫu nhiên {created + 1}", ProjectDescription = "Nhóm được tạo từ thuật toán ghép ngẫu nhiên.", SemesterCode = code };
             for (var i = 0; i < size; i++) group.Members.Add(Member(candidates[index++]));
             repository.Add(group); created++;
         }

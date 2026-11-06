@@ -30,6 +30,7 @@ Tài khoản demo `student01` từ skeleton chứa hash không hợp lệ nên k
 | GET `/api/auth/me` | Đã đăng nhập | id, username, email, role |
 | PUT `/api/auth/me` | Chủ tài khoản | Sửa username; không thay role/email |
 | PUT `/api/auth/password` | Chủ tài khoản | Xác nhận mật khẩu cũ, hash mật khẩu mới; token cũ hết hiệu lực |
+| PUT `/api/students/{id}/strength-roles` | Chủ hồ sơ hoặc Admin | Chọn 1–6 role chuyên môn; không thay đổi RBAC |
 | GET `/api/auth/validate` | JWT hợp lệ | 204, dùng cho gateway |
 | GET `/api/students` | Admin | Tìm kiếm/lọc/sắp xếp/phân trang |
 | GET `/api/students/{id}` | Admin hoặc chủ hồ sơ | Chi tiết sinh viên |
@@ -40,7 +41,7 @@ Tài khoản demo `student01` từ skeleton chứa hash không hợp lệ nên k
 | POST `/api/students/import/excel` | Admin | Import `.xlsx`, multipart/form-data |
 | GET `/api/semesters`, GET `/api/semesters/{id}` | Đã đăng nhập | Danh sách/chi tiết và các mốc học kỳ |
 | POST `/api/semesters` | Admin | Tạo học kỳ, 201 + Location |
-| PUT `/api/semesters/{id}` | Admin | Cập nhật lịch, tên, isActive |
+| PUT `/api/semesters/{id}` | Admin | Cập nhật code, lịch, tên, isActive; đổi code phát event đồng bộ GroupMatching |
 | DELETE `/api/semesters/{id}` | Admin | Chỉ xóa học kỳ chưa có sinh viên |
 | GET `/health` | Public | Kiểm tra API đang chạy |
 
@@ -66,7 +67,7 @@ Tạo sinh viên:
 
 Import JSON dùng `semesterCode`, `initialPassword`, `students` (mảng có cấu trúc như `student` ở trên). Mật khẩu ban đầu do Admin cung cấp, không nằm trong Excel hoặc event; sinh viên đổi mật khẩu qua API tài khoản. Chỉ account mới dùng mật khẩu ban đầu; nhập cùng account ở học kỳ mới không reset mật khẩu cũ.
 
-Excel: worksheet đầu tiên; hệ thống tìm hàng tiêu đề hợp lệ trong 30 dòng đầu để hỗ trợ file roster có phần thông báo, deadline hoặc tiêu đề phía trên bảng. Cần bốn trường, chấp nhận tên cột `StudentCode`/`MSSV`, `FullName`/`Họ & Tên`, `Email`/`Gmail`, `Major`/`Ngành`; các cột nhóm, đề tài, leader hoặc giảng viên bị bỏ qua vì không thuộc Service 1. Mã sinh viên phải giữ dạng text. Form gồm `file`, `semesterCode`, `initialPassword`. Chấp nhận `.xlsx` tối đa 2 MB, nội dung giải nén tối đa 10 MB, 1–2.000 dòng đầy đủ bốn trường. Không chấp nhận formula. Giá trị không rỗng ở cột Email/Gmail được giữ nguyên sau chuẩn hóa chữ thường, không kiểm tra cú pháp; các dòng thiếu bất kỳ trường bắt buộc nào được bỏ qua. Kiểm tra email/code trùng trong file, trùng enrollment, học kỳ tồn tại và đang active trước khi lưu. Lỗi bất kỳ dòng hợp lệ nào không tạo enrollment/account/event của cả lô. HTTP body import không được log.
+Excel: worksheet đầu tiên; hệ thống tìm hàng tiêu đề hợp lệ trong 30 dòng đầu để hỗ trợ file roster có phần thông báo, deadline hoặc tiêu đề phía trên bảng. Cần năm trường: `StudentCode`/`MSSV`, `FullName`/`Họ & Tên`, `Email`/`Gmail`, `Major`/`Ngành`, `SemesterCode`/`Mã học kỳ`. Toàn bộ file phải có đúng một `SemesterCode`; nếu frontend gửi học kỳ chọn kèm theo thì giá trị phải khớp. Mật khẩu khởi tạo có độ dài 6–128; mật khẩu đổi tài khoản vẫn dùng chính sách bảo mật riêng. Chấp nhận `.xlsx` tối đa 2 MB, nội dung giải nén tối đa 10 MB, 1–2.000 dòng đầy đủ năm trường. Không chấp nhận formula. Lỗi bất kỳ dòng hợp lệ nào không tạo enrollment/account/event của cả lô.
 
 Email normalize lowercase, mã normalize uppercase. Khi Admin tạo/import roster, mọi email sinh viên được thêm vào Google whitelist trong đúng transaction import; lỗi import sẽ không để lại quyền Google rời rạc. Việc xóa enrollment vẫn giữ account và whitelist để Admin chủ động quyết định gỡ quyền qua Google Access. DB có unique indexes cho email, semester code, `(SemesterId, StudentCode)` và `(SemesterId, UserId)`. Account Student có thể ghi danh học kỳ tiếp theo với cùng email/code; account dùng lại không bị reset mật khẩu.
 
@@ -76,7 +77,7 @@ Mốc học kỳ dùng UTC, gửi hậu tố `Z`: `startDate < registrationDeadl
 
 `DatabaseInitializer` hỗ trợ database trống (EF EnsureCreated) và database Phase 1 đã tồn tại. Script embedded `IdentitySemester.Infrastructure/Persistence/identity-upgrade.sql` bổ sung TokenVersion, 3 deadline, outbox, unique indexes và FK Restrict. Script có thể chạy lại, nằm trong transaction, không drop table hay xóa dữ liệu. Nếu DB có dữ liệu trùng từ trước, unique index sẽ báo lỗi và dừng; không tự xóa dữ liệu để vượt lỗi. Full baseline DDL cho database mới nằm ở `be/database-scripts/01_identity_db_schema.sql`; script này không được tự chạy trên volume hiện có.
 
-Khi tạo/import sinh viên, `StudentImportedEvent` và dữ liệu được lưu cùng transaction EF. `StudentOutboxPublisher` kiểm tra mỗi 5 giây, gửi topic `student-imported`, chỉ đánh dấu PublishedAt khi Kafka xác nhận. Kafka tạm lỗi không làm mất sự kiện đã lưu. Message key là outbox id, payload giữ contract hiện có (StudentId, StudentCode, FullName, Email, SemesterCode, ImportedAt), không có mật khẩu. Delivery là **at-least-once**: Notification phải deduplicate theo message key; chưa cam kết exactly-once. Tắt publisher trong test bằng `Outbox:Enabled=false`.
+Khi tạo/import sinh viên, `StudentImportedEvent` và dữ liệu được lưu cùng transaction EF. Khi Admin đổi mã học kỳ, `SemesterCodeChangedEvent` được lưu cùng transaction và GroupMatching consume để cập nhật `Groups.SemesterCode` idempotent, không có cross-service FK. `StudentOutboxPublisher` kiểm tra mỗi 5 giây và publish theo `Topic` của outbox. Kafka tạm lỗi không làm mất sự kiện đã lưu. Delivery là **at-least-once**: consumer phải deduplicate/idempotent theo key outbox.
 
 Consumer/email của Notification chưa được triển khai trong phạm vi này. CLI consumer trong smoke test chỉ xác nhận producer thực sự giao tiếp Kafka, không thay thế deliverable consumer nghiệp vụ của thành viên Service 4. Shared KafkaEventPublisher/KafkaEventConsumer vẫn là skeleton của codebase; Service 1 dùng publisher riêng để không thay đổi hành vi của service khác.
 

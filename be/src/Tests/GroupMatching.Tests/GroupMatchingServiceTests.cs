@@ -18,7 +18,13 @@ public class GroupMatchingServiceTests
         var students = Enumerable.Range(1, 6).Select(i => new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), $"S{i}", $"Student {i}", "FA26", false)).ToArray();
 
         identity.Current = students[0];
-        var group = await service.CreateAsync(new CreateGroupRequest("Alpha", "FA26"), students[0].UserId);
+        var group = await service.CreateAsync(new CreateGroupRequest
+        {
+            GroupName = "Alpha", SemesterCode = "FA26", ProjectDescription = "A reliable distributed matching platform.",
+            RecruitmentNeeds = [new RecruitmentNeedRequest { RoleCode = "Backend", Slots = 1 }, new RecruitmentNeedRequest { RoleCode = "UIUX", Slots = 1 }]
+        }, students[0].UserId);
+        Assert.Equal("A reliable distributed matching platform.", group.ProjectDescription);
+        Assert.Equal(2, group.RecruitmentNeeds!.Count);
         for (var i = 1; i < 5; i++)
         {
             identity.Current = students[i];

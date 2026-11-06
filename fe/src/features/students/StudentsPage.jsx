@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Upload, Search, Users, FileSpreadsheet } from 'lucide-react'
+import { Upload, Search, Users, FileSpreadsheet, X } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
+
+const TEAM_ROLES = ['Frontend', 'Backend', 'Mobile', 'UIUX', 'BusinessAnalysis', 'QualityAssurance', 'DataAI']
 
 export default function StudentsPage() {
   const { request, isAdmin } = useAuth()
@@ -11,6 +13,8 @@ export default function StudentsPage() {
   const [studentTotal, setStudentTotal] = useState(0)
   const [busy, setBusy] = useState(false)
   const [search, setSearch] = useState('')
+  const [roleStudent, setRoleStudent] = useState(null)
+  const [selectedRoles, setSelectedRoles] = useState([])
   const [importForm, setImportForm] = useState({
     semesterCode: '',
     initialPassword: '',
@@ -58,8 +62,34 @@ export default function StudentsPage() {
       toast.success(`Đã thêm ${result?.importedCount || 0} sinh viên và cấp quyền Google Access.`)
       setImportForm({ semesterCode: '', initialPassword: '', file: null })
       await load()
-    } catch {
-      toast.error('Import danh sách sinh viên không thành công.')
+    } catch (error) {
+      toast.error(error.message || 'Import danh sách sinh viên không thành công.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const openStrengthRoles = (student) => {
+    setRoleStudent(student)
+    setSelectedRoles(student.strengthRoles || [])
+  }
+
+  const saveStrengthRoles = async () => {
+    if (!roleStudent || selectedRoles.length < 1) {
+      toast.error('Chọn ít nhất một role thế mạnh.')
+      return
+    }
+    try {
+      setBusy(true)
+      await request(`/api/students/${roleStudent.id}/strength-roles`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roleCodes: selectedRoles })
+      })
+      toast.success('Đã cập nhật role thế mạnh.')
+      setRoleStudent(null)
+      await load()
+    } catch (error) {
+      toast.error(error.message || 'Không thể cập nhật role thế mạnh.')
     } finally {
       setBusy(false)
     }
@@ -97,7 +127,7 @@ export default function StudentsPage() {
             Import danh sách Roster (.xlsx)
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-            File Excel cần có các cột: MSSV, Họ tên, Email/Gmail và Ngành đào tạo.
+            File Excel cần có các cột: MSSV, Họ tên, Email/Gmail, Ngành đào tạo và <strong>SemesterCode</strong>.
           </p>
 
           <form onSubmit={importRoster} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -124,8 +154,8 @@ export default function StudentsPage() {
                 className="input"
                 required
                 type="password"
-                minLength={12}
-                placeholder="Tối thiểu 12 ký tự"
+                minLength={6}
+                placeholder="Tối thiểu 6 ký tự"
                 value={importForm.initialPassword}
                 onChange={(e) => setImportForm({ ...importForm, initialPassword: e.target.value })}
               />
@@ -197,6 +227,9 @@ export default function StudentsPage() {
                   <span className="badge badge-neutral" style={{ fontSize: 11 }}>
                     {item.major || 'Kỹ thuật PM'}
                   </span>
+                  <button className="btn btn-ghost btn-sm" style={{ display: 'block', marginTop: 6, marginLeft: 'auto' }} onClick={() => openStrengthRoles(item)}>
+                    Role thế mạnh
+                  </button>
                 </div>
               </div>
             ))}
@@ -210,6 +243,24 @@ export default function StudentsPage() {
           </div>
         </div>
       </div>
+
+      {roleStudent && (
+        <div className="modal-backdrop" onClick={() => setRoleStudent(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div><h2 style={{ fontSize: 18, margin: 0 }}>Role thế mạnh</h2><p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{roleStudent.fullName}</p></div>
+              <button className="btn btn-ghost btn-sm" aria-label="Đóng" onClick={() => setRoleStudent(null)}><X size={18} /></button>
+            </div>
+            <div role="group" aria-label="Chọn tối đa sáu role thế mạnh" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '16px 0' }}>
+              {TEAM_ROLES.map((role) => {
+                const selected = selectedRoles.includes(role)
+                return <button key={role} type="button" aria-pressed={selected} className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSelectedRoles((items) => selected ? items.filter((item) => item !== role) : items.length < 6 ? [...items, role] : items)}>{role}</button>
+              })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button className="btn btn-secondary" onClick={() => setRoleStudent(null)}>Hủy</button><button className="btn btn-primary" onClick={saveStrengthRoles} disabled={busy}>Lưu role</button></div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

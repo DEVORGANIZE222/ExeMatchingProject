@@ -2,6 +2,8 @@ using System.ComponentModel.DataAnnotations;
 using EXETeamMatching.IdentitySemester.Application.DTOs;
 using EXETeamMatching.IdentitySemester.Application.Interfaces;
 using EXETeamMatching.IdentitySemester.Domain.Entities;
+using EXETeamMatching.Contracts.Events;
+using EXETeamMatching.Contracts.TeamRoles;
 
 namespace EXETeamMatching.IdentitySemester.Application.Services;
 
@@ -153,6 +155,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         {
             if (row is null || !codes.Add(Required(row.StudentCode)) || !emails.Add(Required(row.Email)))
                 throw new IdentityException(400, "Duplicate student code or email in import.");
+            if (!string.IsNullOrWhiteSpace(row.SemesterCode) && !row.SemesterCode.Trim().Equals(semester.Code, StringComparison.OrdinalIgnoreCase))
+                throw new IdentityException(400, "Every Excel SemesterCode must match the selected semester.");
             students.Add(await BuildStudent(row, semester, initialPassword, ct));
         }
         // Validate the entire file before tracking inserts. SaveChanges is atomic.
@@ -170,6 +174,20 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         student.Major = Required(request.Major);
         student.UpdatedAt = DateTime.UtcNow;
         await store.Save(ct);
+        return Map(student);
+    }
+    public async Task<StudentResponse> UpdateStudentStrengthRoles(Guid id, UpdateStudentStrengthRolesRequest request,
+        Guid actor, bool isAdmin, CancellationToken ct)
+    {
+        var student = await store.StudentById(id, ct) ?? throw new IdentityException(404, "Student not found.");
+        if (!isAdmin && student.UserId != actor) throw new IdentityException(403, "You can only update your own strengths.");
+        var normalized = NormalizeStrengthRoles(request.RoleCodes);
+        var existing = await store.StudentStrengthRoles(id, ct);
+        foreach (var role in existing) store.RemoveStudentStrengthRole(role);
+        foreach (var role in normalized) store.AddStudentStrengthRole(new StudentStrengthRole { StudentId = id, RoleCode = role });
+        student.UpdatedAt = DateTime.UtcNow;
+        await store.Save(ct);
+        student.StrengthRoles = normalized.Select(role => new StudentStrengthRole { StudentId = id, RoleCode = role }).ToList();
         return Map(student);
     }
     public async Task DeleteStudent(Guid id, CancellationToken ct)
@@ -196,10 +214,19 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     {
         ValidateDates(request.StartDate, request.EndDate, request.RegistrationDeadline, request.TopicDeadline, request.MentorDeadline);
         var semester = await store.SemesterById(id, ct) ?? throw new IdentityException(404, "Semester not found.");
+        var oldCode = semester.Code;
+        var newCode = Required(request.Code).ToUpperInvariant();
+        var sameCode = oldCode.Equals(newCode, StringComparison.OrdinalIgnoreCase);
+        var existing = await store.SemesterByCode(newCode, ct);
+        if (!sameCode && existing is not null && existing.Id != id)
+            throw new IdentityException(409, "Semester code already exists.");
+        semester.Code = newCode;
         semester.Name = Required(request.Name); semester.StartDate = request.StartDate; semester.EndDate = request.EndDate;
         semester.IsActive = request.IsActive; semester.RegistrationDeadline = request.RegistrationDeadline;
         semester.TopicDeadline = request.TopicDeadline; semester.MentorDeadline = request.MentorDeadline;
         semester.UpdatedAt = DateTime.UtcNow;
+        if (!sameCode)
+            store.AddOutboxEvent("semester-code-changed", new SemesterCodeChangedEvent(semester.Id, oldCode, newCode, DateTime.UtcNow));
         await store.Save(ct);
         return Map(semester);
     }
@@ -225,8 +252,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     }
     public static void ValidatePassword(string password)
     {
-        if (string.IsNullOrWhiteSpace(password) || password.Length is < 12 or > 128)
-            throw new IdentityException(400, "Password must contain 12 to 128 characters.");
+        if (string.IsNullOrWhiteSpace(password) || password.Length is < 6 or > 128)
+            throw new IdentityException(400, "Password must contain 6 to 128 characters.");
     }
     private async Task<Semester> FindSemester(string code, CancellationToken ct)
     {
@@ -280,6 +307,16 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         return new(token.Token, null, token.Expiration, student is null ? null : Map(student));
     }
     private static string Required(string value) => string.IsNullOrWhiteSpace(value) ? throw new IdentityException(400, "Required value cannot be blank.") : value.Trim();
-    public static StudentResponse Map(Student s) => new(s.Id, s.UserId, s.StudentCode, s.FullName, s.User.Email, s.Major, s.Semester.Code, s.HasGroup);
+    private static List<string> NormalizeStrengthRoles(IEnumerable<string>? roles)
+    {
+        var normalized = (roles ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList();
+        if (normalized.Count is < 1 or > 6 || normalized.Any(x => !TeamRoleCatalog.IsValid(x)))
+            throw new IdentityException(400, "Choose between 1 and 6 supported strength roles.");
+        var result = normalized.Select(TeamRoleCatalog.Normalize).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (result.Count != normalized.Count) throw new IdentityException(400, "Strength roles must not contain duplicates.");
+        return result;
+    }
+    public static StudentResponse Map(Student s) => new(s.Id, s.UserId, s.StudentCode, s.FullName, s.User.Email, s.Major, s.Semester.Code, s.HasGroup,
+        s.StrengthRoles.OrderBy(x => x.RoleCode).Select(x => x.RoleCode).ToList());
     public static SemesterDto Map(Semester s) => new(s.Id, s.Code, s.Name, s.StartDate, s.EndDate, s.IsActive, s.RegistrationDeadline, s.TopicDeadline, s.MentorDeadline);
 }
