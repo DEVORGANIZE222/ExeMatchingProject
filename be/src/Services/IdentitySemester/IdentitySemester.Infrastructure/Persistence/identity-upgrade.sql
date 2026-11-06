@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS "StudentEventOutbox" (
     "Payload" text NOT NULL,
     "PublishedAt" timestamptz NULL
 );
+ALTER TABLE "StudentEventOutbox" ADD COLUMN IF NOT EXISTS "Topic" varchar(80) NOT NULL DEFAULT 'student-imported';
 CREATE TABLE IF NOT EXISTS "GoogleAllowedEmails" (
     "Id" uuid PRIMARY KEY,
     "CreatedAt" timestamptz NOT NULL,
@@ -28,6 +29,14 @@ CREATE TABLE IF NOT EXISTS "GoogleAllowedEmails" (
     "Email" text NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "UX_GoogleAllowedEmails_Email_Normalized" ON "GoogleAllowedEmails" (lower(trim("Email")));
+CREATE TABLE IF NOT EXISTS "StudentStrengthRoles" (
+    "Id" uuid PRIMARY KEY,
+    "CreatedAt" timestamptz NOT NULL,
+    "UpdatedAt" timestamptz NULL,
+    "StudentId" uuid NOT NULL REFERENCES "Students" ("Id") ON DELETE CASCADE,
+    "RoleCode" varchar(40) NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "UX_StudentStrengthRoles_Student_Role" ON "StudentStrengthRoles" ("StudentId", "RoleCode");
 
 -- Remove only the immutable scaffold sample account.  Do not touch real roster
 -- entries or semesters: existing installations may already use FALL2026.

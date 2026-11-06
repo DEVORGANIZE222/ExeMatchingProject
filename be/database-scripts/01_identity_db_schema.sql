@@ -66,12 +66,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS "IX_GoogleAllowedEmails_Email" ON "GoogleAllow
 
 CREATE TABLE IF NOT EXISTS "StudentEventOutbox" (
     "Id" uuid NOT NULL PRIMARY KEY,
+    "Topic" character varying(80) NOT NULL DEFAULT 'student-imported',
     "Payload" text NOT NULL,
     "PublishedAt" timestamp with time zone NULL,
     "CreatedAt" timestamp with time zone NOT NULL,
     "UpdatedAt" timestamp with time zone NULL
 );
 CREATE INDEX IF NOT EXISTS "IX_StudentEventOutbox_PublishedAt" ON "StudentEventOutbox" ("PublishedAt");
+
+CREATE TABLE IF NOT EXISTS "StudentStrengthRoles" (
+    "Id" uuid NOT NULL PRIMARY KEY,
+    "StudentId" uuid NOT NULL REFERENCES "Students" ("Id") ON DELETE CASCADE,
+    "RoleCode" character varying(40) NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_StudentStrengthRoles_StudentId_RoleCode" ON "StudentStrengthRoles" ("StudentId", "RoleCode");
 
 INSERT INTO "Roles" ("Id", "Name", "Description", "CreatedAt") VALUES
   ('11111111-1111-1111-1111-111111111111', 'Admin', 'System Administrator', NOW()),

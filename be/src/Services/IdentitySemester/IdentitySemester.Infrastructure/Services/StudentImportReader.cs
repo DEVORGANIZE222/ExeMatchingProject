@@ -60,29 +60,29 @@ public class StudentImportReader : IStudentImportReader
             {
                 var candidate = Cells(rows[index]);
                 var found = candidate.Values.Select(HeaderField).Where(x => x is not null).Cast<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-                if (new[] { "StudentCode", "FullName", "Email", "Major" }.All(found.Contains))
+                if (new[] { "StudentCode", "FullName", "Email", "Major", "SemesterCode" }.All(found.Contains))
                 {
                     headerRowIndex = index;
                     header = candidate;
                     break;
                 }
             }
-            if (header is null) throw new IdentityException(400, "Could not find a roster header with StudentCode/MSSV, FullName/Họ tên, Email/Gmail, and Major/Ngành.");
+            if (header is null) throw new IdentityException(400, "Could not find a roster header with StudentCode/MSSV, FullName/Họ tên, Email/Gmail, Major/Ngành, and SemesterCode.");
             var columns = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             foreach (var (column, label) in header)
             {
                 var field = HeaderField(label);
                 if (field is not null && !columns.ContainsKey(field)) columns[field] = column;
             }
-            var required = new[] { "StudentCode", "FullName", "Email", "Major" };
+            var required = new[] { "StudentCode", "FullName", "Email", "Major", "SemesterCode" };
             if (required.Any(field => !columns.ContainsKey(field)))
-                throw new IdentityException(400, "Could not find all required columns: StudentCode (or MSSV), FullName (or Họ tên), Email (or Gmail), Major (or Ngành).");
+                throw new IdentityException(400, "Could not find all required columns: StudentCode (or MSSV), FullName (or Họ tên), Email (or Gmail), Major/Ngành, SemesterCode.");
             string Value(Dictionary<int, string> row, string field) => row.GetValueOrDefault(columns[field], "");
             // Group/project rows and incomplete roster lines cannot create an
-            // account. Keep only complete rows from the four Service 1 fields.
+            // account. Keep only complete rows from the Service 1 fields.
             var result = rows.Skip(headerRowIndex + 1).Select(Cells)
                 .Where(r => required.All(field => Value(r, field).Length > 0))
-                .Select(r => new StudentImportDto(Value(r, "StudentCode"), Value(r, "FullName"), Value(r, "Email"), Value(r, "Major"))).ToList();
+                .Select(r => new StudentImportDto(Value(r, "StudentCode"), Value(r, "FullName"), Value(r, "Email"), Value(r, "Major"), Value(r, "SemesterCode"))).ToList();
             if (result.Count is < 1 or > 2000) throw new IdentityException(400, "Import requires 1 to 2000 students.");
             return result;
         }
@@ -102,6 +102,7 @@ public class StudentImportReader : IStudentImportReader
         if (header is "fullname" or "hoten" or "name" or "studentname" || header.StartsWith("hoten")) return "FullName";
         if (header is "email" or "gmail" or "fptemail" or "studentemail" || header.StartsWith("email") || header.Contains("gmail")) return "Email";
         if (header is "major" or "nganh" or "specialization" or "program" || header.StartsWith("nganh")) return "Major";
+        if (header is "semestercode" or "semester" or "hockycode" or "mahocky" || header.StartsWith("hocky")) return "SemesterCode";
         return null;
     }
     private static string Normalize(string value)

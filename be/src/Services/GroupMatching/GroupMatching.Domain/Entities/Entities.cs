@@ -7,6 +7,7 @@ public class Group : BaseEntity
 {
     public string GroupCode { get; set; } = string.Empty;
     public string GroupName { get; set; } = string.Empty;
+    public string ProjectDescription { get; set; } = string.Empty;
     public string? TopicTitle { get; set; }
     public string SemesterCode { get; set; } = string.Empty;
     public GroupStatus Status { get; set; } = GroupStatus.Open;
@@ -17,6 +18,16 @@ public class Group : BaseEntity
     public DateTime? TopicRegisteredAt { get; set; }
     public List<GroupMember> Members { get; set; } = new();
     public List<LeaderVote> Votes { get; set; } = new();
+    public List<GroupRecruitmentNeed> RecruitmentNeeds { get; set; } = new();
+}
+
+/// <summary>Open positions stated by a group. RoleCode uses Contracts.TeamRoles vocabulary.</summary>
+public class GroupRecruitmentNeed : BaseEntity
+{
+    public Guid GroupId { get; set; }
+    public Group Group { get; set; } = null!;
+    public string RoleCode { get; set; } = string.Empty;
+    public int Slots { get; set; }
 }
 
 public class GroupMember : BaseEntity

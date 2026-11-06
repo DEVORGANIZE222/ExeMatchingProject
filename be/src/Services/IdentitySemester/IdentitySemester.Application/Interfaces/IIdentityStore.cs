@@ -18,6 +18,7 @@ public interface IIdentityStore
     Task<bool> StudentExists(string code, Guid semesterId, CancellationToken ct);
     Task<bool> EnrollmentExists(Guid userId, Guid semesterId, CancellationToken ct);
     Task<bool> SemesterHasStudents(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<StudentStrengthRole>> StudentStrengthRoles(Guid studentId, CancellationToken ct);
     Task<Role> RoleByName(string name, CancellationToken ct);
     Task<bool> GoogleEmailAllowed(string email, CancellationToken ct);
     Task<IReadOnlyList<GoogleAllowedEmail>> GoogleAllowedEmails(CancellationToken ct);
@@ -28,6 +29,9 @@ public interface IIdentityStore
     void RemoveSemester(Semester semester);
     void AddGoogleAllowedEmail(GoogleAllowedEmail email);
     void RemoveGoogleAllowedEmail(GoogleAllowedEmail email);
+    void AddStudentStrengthRole(StudentStrengthRole role);
+    void RemoveStudentStrengthRole(StudentStrengthRole role);
+    void AddOutboxEvent(string topic, object payload);
     Task Save(CancellationToken ct);
 }
 public interface IPasswordService
