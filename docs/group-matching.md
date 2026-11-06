@@ -19,6 +19,7 @@ All endpoints require an IdentitySemester JWT. `POST /api/matching/random` requi
 | POST | `/api/groups/{id}/vote-leader` | Vote or change a vote |
 | POST | `/api/groups/{id}/lock` | Leader locks a 4–5 member group |
 | POST | `/api/groups/{id}/topic` | Leader registers a topic after lock |
+| GET | `/api/groups/{id}/mentor-recommendations` | Locked group with a topic reads mentors with remaining quota via Mentor gRPC |
 | POST | `/api/matching/random?semesterCode=...` | Admin random matching |
 
 `CreateGroupRequest` intentionally has no `CreatorStudentId`; `VoteLeaderRequest` intentionally has no voter id. The API derives actors from the validated JWT and asks IdentitySemester for the caller's enrollment for the requested semester.
@@ -31,6 +32,9 @@ All endpoints require an IdentitySemester JWT. `POST /api/matching/random` requi
 - The additive `group-matching-upgrade.sql` runs after `EnsureCreated`; it does not delete old rows or Docker volumes.
 - Service 2 forwards the caller's JWT to two narrow, read-only IdentitySemester endpoints: current enrollment and semester workflow. Admin random matching uses the existing Admin student list filtered by `HasGroup=false`.
 - Service 2 writes Kafka events into its outbox in the same transaction, then retries publication every five seconds. IdentitySemester consumes `student-group-membership-changed` and is the only service that changes `Students.HasGroup`.
+- `GroupOutboxCleanupWorker` runs on a configurable interval and removes only published outbox events older than the configured retention. It does not make workflow decisions (no automatic locking or random matching).
+- `MentorGrpcRecommendationClient` calls `GetMentors` from `proto/mentor.proto` at `MentorGrpc:Address`. It filters mentors with no remaining quota and returns 503 if Service 3's HTTP/2 gRPC endpoint is unavailable. GroupMatching never reads `mentor_db`.
+- Full baseline DDL is in `be/database-scripts/02_group_matching_db_schema.sql`; existing database volumes continue to use the additive startup upgrade script.
 
 ## Rules
 

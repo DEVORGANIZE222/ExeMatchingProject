@@ -52,6 +52,8 @@ public record GroupDto(Guid Id, string GroupCode, string GroupName, string Semes
     Guid? LeaderStudentId, string? TopicTitle, DateTime? TopicRegisteredAt, int MemberCount, List<GroupMemberDto> Members);
 public record PageResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
 public record RandomMatchingResult(int AddedToExistingGroups, int CreatedGroups, int MatchedStudents);
+public record MentorRecommendationDto(Guid Id, string FullName, string Email, string Department,
+    int MaxQuota, int CurrentAssigned, int AvailableQuota);
 public record EnrollmentContext(Guid StudentId, Guid UserId, string StudentCode, string FullName, string SemesterCode, bool HasGroup);
 public record SemesterWorkflowContext(string SemesterCode, bool IsActive, DateTime StartDate, DateTime EndDate,
     DateTime? RegistrationDeadline, DateTime? TopicDeadline, DateTime? MentorDeadline);

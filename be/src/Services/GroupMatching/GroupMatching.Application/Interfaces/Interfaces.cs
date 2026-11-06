@@ -49,3 +49,15 @@ public interface IMatchingService
 {
     Task<RandomMatchingResult> RandomMatchingAsync(string semesterCode, CancellationToken cancellationToken = default);
 }
+
+/// <summary>Port owned by GroupMatching; its implementation calls Mentor's independent gRPC service.</summary>
+public interface IMentorRecommendationClient
+{
+    Task<IReadOnlyList<MentorRecommendationDto>> GetAvailableAsync(CancellationToken ct = default);
+}
+
+public interface IMentorRecommendationService
+{
+    Task<IReadOnlyList<MentorRecommendationDto>> GetForGroupAsync(Guid groupId, Guid actorUserId, bool isAdmin,
+        CancellationToken ct = default);
+}

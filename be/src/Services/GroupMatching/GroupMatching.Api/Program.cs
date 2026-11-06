@@ -1,6 +1,7 @@
 using EXETeamMatching.GroupMatching.Infrastructure.Persistence;
 using EXETeamMatching.GroupMatching.Api;
 using EXETeamMatching.GroupMatching.Infrastructure.Services;
+using EXETeamMatching.GroupMatching.Api.Clients;
 using EXETeamMatching.GroupMatching.Application.Interfaces;
 using EXETeamMatching.GroupMatching.Application.Services;
 using EXETeamMatching.Messaging.Abstractions;
@@ -12,6 +13,8 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+
+AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,10 +50,14 @@ builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
 builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IMatchingService, MatchingService>();
+builder.Services.AddScoped<IMentorRecommendationService, MentorRecommendationService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IRequestAccessToken, RequestAccessToken>();
 builder.Services.AddHttpClient<IIdentitySemesterClient, IdentitySemesterClient>(client =>
     client.BaseAddress = new Uri(builder.Configuration["IdentitySemester:BaseUrl"] ?? "http://identity-semester:8080/"));
+builder.Services.AddGrpcClient<EXETeamMatching.Mentor.Grpc.MentorGrpcService.MentorGrpcServiceClient>(client =>
+    client.Address = new Uri(builder.Configuration["MentorGrpc:Address"] ?? "http://mentor:50051"));
+builder.Services.AddScoped<IMentorRecommendationClient, MentorGrpcRecommendationClient>();
 var jwt = builder.Configuration.GetSection("JwtSettings");
 var secret = jwt["Secret"] ?? throw new InvalidOperationException("JwtSettings:Secret is required.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
@@ -66,6 +73,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 builder.Services.AddAuthorization();
 builder.Services.AddHostedService<GroupOutboxPublisher>();
+builder.Services.AddHostedService<GroupOutboxCleanupWorker>();
 
 var app = builder.Build();
 

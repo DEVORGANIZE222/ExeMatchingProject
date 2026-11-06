@@ -36,48 +36,5 @@ public class IdentitySemesterDbContext : DbContext
             new Role { Id = studentRoleId, Name = "Student", Description = "Student User", CreatedAt = DateTime.UtcNow }
         );
 
-        // Seed Active Semester
-        var semesterId = Guid.Parse("33333333-3333-3333-3333-333333333333");
-        modelBuilder.Entity<Semester>().HasData(
-            new Semester
-            {
-                Id = semesterId,
-                Code = "FALL2026",
-                Name = "Fall Semester 2026",
-                StartDate = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc),
-                EndDate = new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            }
-        );
-
-        // Seed Demo Users
-        var studentUserId = Guid.Parse("44444444-4444-4444-4444-444444444444");
-        modelBuilder.Entity<User>().HasData(
-            new User
-            {
-                Id = studentUserId,
-                Username = "student01",
-                Email = "student01@fpt.edu.vn",
-                PasswordHash = "AQAAAAEAACcQAAAAEHhashedpassword...",
-                RoleId = studentRoleId,
-                CreatedAt = DateTime.UtcNow
-            }
-        );
-
-        // Seed Demo Student
-        modelBuilder.Entity<Student>().HasData(
-            new Student
-            {
-                Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
-                UserId = studentUserId,
-                StudentCode = "SE160001",
-                FullName = "Nguyen Van A",
-                Major = "Software Engineering",
-                SemesterId = semesterId,
-                HasGroup = false,
-                CreatedAt = DateTime.UtcNow
-            }
-        );
     }
 }

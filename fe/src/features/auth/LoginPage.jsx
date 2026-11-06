@@ -52,7 +52,7 @@ function GoogleAuthButton({ onCredential }) {
 }
 
 export default function LoginPage() {
-  const { googleLogin, loginAsDemo, loginError, token, account } = useAuth()
+  const { googleLogin, loginError, token, account } = useAuth()
 
   if (token && account) {
     return <Navigate to="/" replace />
@@ -148,7 +148,7 @@ export default function LoginPage() {
 
             {/* Error Message if any */}
             {loginError && (
-              <div className="alert alert-error" style={{ marginBottom: 14 }}>
+              <div className="alert alert-error" role="alert" aria-live="assertive" style={{ marginBottom: 14 }}>
                 <span>{loginError}</span>
               </div>
             )}
@@ -164,33 +164,6 @@ export default function LoginPage() {
               <span>Chỉ email sinh viên và giảng viên có trong whitelist mới có quyền truy cập.</span>
             </div>
 
-            {/* Demo Mode: 3 pills horizontal */}
-            <div className="demo-mode-footer">
-              <span className="demo-mode-label">Trải nghiệm nhanh:</span>
-              <div className="demo-pills-row">
-                <button
-                  type="button"
-                  className="demo-pill-btn"
-                  onClick={() => loginAsDemo('Admin')}
-                >
-                  Quản trị viên
-                </button>
-                <button
-                  type="button"
-                  className="demo-pill-btn"
-                  onClick={() => loginAsDemo('Mentor')}
-                >
-                  Giảng viên Mentor
-                </button>
-                <button
-                  type="button"
-                  className="demo-pill-btn"
-                  onClick={() => loginAsDemo('Student')}
-                >
-                  Sinh viên
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </main>
