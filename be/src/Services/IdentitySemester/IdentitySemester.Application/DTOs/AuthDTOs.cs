@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace EXETeamMatching.IdentitySemester.Application.DTOs;
 
 public record LoginRequest([Required, EmailAddress] string Email, [Required, StringLength(128)] string Password);
-public record GoogleLoginRequest([Required, MinLength(20)] string Credential);
+public record GoogleLoginRequest([Required, MinLength(5)] string Credential);
 public record GoogleAllowedEmailResponse(Guid Id, string Email, DateTime CreatedAt);
 public record GoogleEmailImportResult(int ImportedCount, int ExistingCount);
 public record LoginResponse(string Token, string? RefreshToken, DateTime Expiration, StudentResponse? Student);

@@ -39,6 +39,12 @@ public class StudentsController(IdentityService service, IStudentImportReader re
         await service.DeleteStudent(id, ct);
         return NoContent();
     }
+    [HttpDelete("semester/{semesterCode}"), Authorize(Roles = "Admin")]
+    public async Task<ActionResult<ApiResponse<int>>> DeleteBySemester(string semesterCode, CancellationToken ct)
+    {
+        var count = await service.DeleteStudentsBySemester(semesterCode, ct);
+        return Ok(ApiResponse<int>.Ok(count, $"Đã xóa thành công {count} sinh viên trong học kỳ {semesterCode}."));
+    }
     [HttpPost("import"), Authorize(Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<ImportResult>>> Import(ImportStudentsRequest request, CancellationToken ct)
         => Ok(ApiResponse<ImportResult>.Ok(await service.Import(request, request.InitialPassword, ct)));
@@ -51,16 +57,38 @@ public class StudentsController(IdentityService service, IStudentImportReader re
         using var stream = request.File.OpenReadStream();
         var students = reader.Read(stream);
         var fileCodes = students.Select(x => x.SemesterCode?.Trim().ToUpperInvariant()).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
-        if (fileCodes.Count != 1) throw new IdentityException(400, "Excel must contain exactly one SemesterCode value.");
-        if (!string.IsNullOrWhiteSpace(request.SemesterCode) && !request.SemesterCode.Trim().Equals(fileCodes[0], StringComparison.OrdinalIgnoreCase))
-            throw new IdentityException(400, "SemesterCode in Excel does not match the selected semester.");
+        
+        string targetSemesterCode;
+        if (!string.IsNullOrWhiteSpace(request.SemesterCode))
+        {
+            targetSemesterCode = request.SemesterCode.Trim().ToUpperInvariant();
+            if (fileCodes.Count == 1 && !fileCodes[0].Equals(targetSemesterCode, StringComparison.OrdinalIgnoreCase))
+                throw new IdentityException(400, "SemesterCode in Excel does not match the selected semester.");
+        }
+        else if (fileCodes.Count == 1)
+        {
+            targetSemesterCode = fileCodes[0];
+        }
+        else
+        {
+            throw new IdentityException(400, "Vui lòng chọn hoặc nhập mã học kỳ (SemesterCode) khi import.");
+        }
+
+        var normalizedStudents = students.Select(s => s with
+        {
+            SemesterCode = targetSemesterCode
+        }).ToList();
+
+        var password = string.IsNullOrWhiteSpace(request.InitialPassword)
+            ? "Student@12345678"
+            : request.InitialPassword.Trim();
         return Ok(ApiResponse<ImportResult>.Ok(await service.Import(
-            new ImportStudentsRequest(fileCodes[0]!, students, request.InitialPassword), request.InitialPassword, ct)));
+            new ImportStudentsRequest(targetSemesterCode, normalizedStudents, password), password, ct)));
     }
 }
 public class ExcelImportRequest
 {
     [Required] public IFormFile File { get; set; } = null!;
     public string? SemesterCode { get; set; }
-    [Required, StringLength(128, MinimumLength = 6)] public string InitialPassword { get; set; } = "";
+    public string? InitialPassword { get; set; }
 }

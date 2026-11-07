@@ -45,5 +45,24 @@ public class IdentitySemesterDbContext : DbContext
             new Role { Id = mentorRoleId, Name = "Mentor", Description = "Mentor User", CreatedAt = DateTime.UtcNow }
         );
 
+        // Seed Google Allowed Emails
+        var allowedEmailId1 = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var allowedEmailId2 = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
+        modelBuilder.Entity<GoogleAllowedEmail>().HasData(
+            new GoogleAllowedEmail
+            {
+                Id = allowedEmailId1,
+                Email = "danghung25022005@gmail.com",
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new GoogleAllowedEmail
+            {
+                Id = allowedEmailId2,
+                Email = "thithinh714@gmail.com",
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
+        );
+
     }
 }

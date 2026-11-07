@@ -125,7 +125,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         var emails = rawEmails.Select(Required).Select(x => x.ToLowerInvariant()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // A department roster can cover several classes; keep this independent
         // from the roster enrollment batch limit.
-        if (emails.Count is < 1 or > 2000) throw new IdentityException(400, "Import requires 1 to 2000 unique email addresses.");
+        if (emails.Count is < 1 or > 5000) throw new IdentityException(400, "Import requires 1 to 5000 unique email addresses.");
         // The department roster is the authority for this import. Preserve every
         // non-empty value under its Email/Gmail column; Google authentication still
         // accepts only the verified email claim from a valid Google ID token.
@@ -172,8 +172,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     public async Task<ImportResult> Import(ImportStudentsRequest request, string initialPassword, CancellationToken ct)
     {
         ValidatePassword(initialPassword);
-        if (request.Students is null || request.Students.Count is < 1 or > 2000)
-            throw new IdentityException(400, "Import requires 1 to 2000 students.");
+        if (request.Students is null || request.Students.Count is < 1 or > 5000)
+            throw new IdentityException(400, "Import requires 1 to 5000 students.");
         var semester = await FindSemester(request.SemesterCode, ct);
         var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -223,6 +223,12 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         if (student.HasGroup) throw new IdentityException(409, "Remove group membership through GroupMatching before deleting this student.");
         store.RemoveStudent(student);
         await store.Save(ct);
+    }
+    public async Task<int> DeleteStudentsBySemester(string semesterCode, CancellationToken ct)
+    {
+        var code = Required(semesterCode).ToUpperInvariant();
+        var semester = await store.SemesterByCode(code, ct) ?? throw new IdentityException(404, "Semester not found.");
+        return await store.DeleteStudentsBySemester(semester.Id, ct);
     }
     public Task<PageResult<SemesterDto>> Semesters(ListQuery query, CancellationToken ct) => store.Semesters(query, ct);
     public async Task<SemesterDto> Semester(Guid id, CancellationToken ct) => Map(await store.SemesterById(id, ct) ?? throw new IdentityException(404, "Semester not found."));
@@ -334,9 +340,15 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         return new(token.Token, null, token.Expiration, student is null ? null : Map(student));
     }
     private static string? GooglePicture(string? value)
-        => Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps &&
-           (uri.Host.Equals("googleusercontent.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".googleusercontent.com", StringComparison.OrdinalIgnoreCase))
-            ? uri.AbsoluteUri : null;
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            return null;
+        var host = uri.Host.ToLowerInvariant();
+        if (host.EndsWith("googleusercontent.com") || host.EndsWith("ggpht.com") || host.EndsWith("google.com") || host.EndsWith("gstatic.com"))
+            return uri.AbsoluteUri;
+        return null;
+    }
     private static string Required(string value) => string.IsNullOrWhiteSpace(value) ? throw new IdentityException(400, "Required value cannot be blank.") : value.Trim();
     private static List<string> NormalizeStrengthRoles(IEnumerable<string>? roles)
     {

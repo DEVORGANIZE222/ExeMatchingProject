@@ -13,14 +13,12 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
     public async Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
     {
         query.SemesterCode = Code(query.SemesterCode);
-        if (!isAdmin) await Enrollment(actorUserId, query.SemesterCode, ct);
         return await repository.ListAsync(query, ct);
     }
 
     public async Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
     {
         var group = await Group(id, ct);
-        if (!isAdmin) await Enrollment(actorUserId, group.SemesterCode, ct);
         return Map(group);
     }
 
