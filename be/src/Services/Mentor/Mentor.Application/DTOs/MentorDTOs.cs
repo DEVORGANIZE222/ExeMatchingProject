@@ -24,8 +24,17 @@ public record MentorRequestDto(
     DateTime CreatedAt,
     string GroupName,
     string Topic,
+    string RequesterName,
     string? DecisionReason,
     DateTime? DecidedAt
+);
+
+public record GroupMentorStatusResponse(
+    bool HasActiveRequest,
+    RequestStatus? Status,
+    string? MentorName,
+    string? Message,
+    DateTime? CreatedAt
 );
 
 public record MentorDecisionDto(
@@ -65,6 +74,29 @@ public record MentorProgressResponse(
     int Progress,
     string Feedback,
     DateTime UpdatedAt
+);
+
+public record MentorTeamDetailsResponse(
+    Guid GroupId,
+    string GroupCode,
+    string GroupName,
+    string SemesterCode,
+    int Status,
+    Guid? LeaderStudentId,
+    string Topic,
+    int MemberCount,
+    int Capacity,
+    IReadOnlyList<MentorTeamMemberResponse> Members
+);
+
+public record MentorTeamMemberResponse(
+    Guid StudentId,
+    string StudentCode,
+    string FullName,
+    int Role,
+    DateTime JoinedAt,
+    bool IsDemo,
+    string ContactEmail
 );
 
 public record MentorAppointmentRequest(

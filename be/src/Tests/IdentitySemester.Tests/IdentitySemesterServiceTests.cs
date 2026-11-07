@@ -268,6 +268,9 @@ public class IdentitySemesterServiceTests(IdentityApiFixture fixture) : IClassFi
         Assert.Throws<IdentityException>(() => IdentityService.ValidateDates(Utc(1), Utc(6), Utc(2), null, null));
         Assert.Throws<IdentityException>(() => IdentityService.ValidateDates(Utc(1), Utc(6), Utc(3), Utc(2), Utc(4)));
         Assert.Throws<IdentityException>(() => IdentityService.ValidateDates(Utc(1), Utc(6), Utc(2), Utc(3), Utc(7)));
+        Assert.Throws<IdentityException>(() => IdentityService.ValidateDates(Utc(1), Utc(6), Utc(1), Utc(3), Utc(4)));
+        Assert.Throws<IdentityException>(() => IdentityService.ValidateDates(Utc(1), Utc(6), Utc(2), Utc(2), Utc(4)));
+        IdentityService.ValidateDates(Utc(1), Utc(6), Utc(2), Utc(4), Utc(6));
         Assert.Throws<IdentityException>(() => IdentityService.ValidateDates(DateTime.SpecifyKind(Utc(1), DateTimeKind.Unspecified), Utc(6)));
     }
 

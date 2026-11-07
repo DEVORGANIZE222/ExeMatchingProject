@@ -15,5 +15,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Mentor.Application\Mentor.Application.csproj" />
+    <ProjectReference Include="..\Mentor.Infrastructure\Mentor.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

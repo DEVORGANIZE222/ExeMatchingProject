@@ -10,6 +10,11 @@ import '../../components/ServicePages.css'
 import { useAuth } from '../../hooks/useAuth'
 
 const TEAM_ROLES = ['Frontend', 'Backend', 'Mobile', 'UIUX', 'BusinessAnalysis', 'QualityAssurance', 'DataAI']
+const normalizeSearchText = (value) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLocaleLowerCase()
+  .replace(/đ/g, 'd')
 
 export default function GroupsPage() {
   const { account, request, isAdmin, isMentor, isStudent } = useAuth()
@@ -20,6 +25,8 @@ export default function GroupsPage() {
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const [enrollmentError, setEnrollmentError] = useState(null)
+  const [demoSeedEnabled, setDemoSeedEnabled] = useState(false)
+  const [seedingDemoMembers, setSeedingDemoMembers] = useState(false)
 
   // Modals state
   const [selectedGroup, setSelectedGroup] = useState(null)
@@ -30,16 +37,28 @@ export default function GroupsPage() {
   const [mentors, setMentors] = useState([])
   const [mentorRequestGroup, setMentorRequestGroup] = useState(null)
   const [mentorRequestId, setMentorRequestId] = useState('')
+  const [mentorSearch, setMentorSearch] = useState('')
   const [mentorRequestMessage, setMentorRequestMessage] = useState('')
+  const [loadingMentors, setLoadingMentors] = useState(false)
   const [sendingMentorRequest, setSendingMentorRequest] = useState(false)
+  const [mentorStatus, setMentorStatus] = useState(null)
+  const [loadingMentorStatus, setLoadingMentorStatus] = useState(false)
+  const [mentorStatusError, setMentorStatusError] = useState('')
 
   // Edit Topic / Name Modal
   const [editGroupModal, setEditGroupModal] = useState(false)
   const [editGroupName, setEditGroupName] = useState('')
   const [editGroupTopic, setEditGroupTopic] = useState('')
+  const [editGroupDescription, setEditGroupDescription] = useState('')
 
   // Student's fixed semester from Admin roster
   const studentSemesterCode = account?.student?.semesterCode
+  const targetSemesterCode = isStudent ? studentSemesterCode : semesterCode
+  const filteredMentors = mentors.filter((mentor) => {
+    const query = normalizeSearchText(mentorSearch.trim())
+    return [mentor.fullName, mentor.department, mentor.expertise, mentor.email]
+      .some((value) => normalizeSearchText(value || '').includes(query))
+  })
 
   const mapGroup = useCallback((group) => {
     const leader = group.members?.find((member) => member.role === 1 || member.role === 'Leader')
@@ -57,6 +76,7 @@ export default function GroupsPage() {
       members: (group.members || []).map((member) => ({
         ...member,
         name: member.fullName,
+        isDemo: Boolean(member.isDemo),
         isLeader: member.role === 1 || member.role === 'Leader',
         role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
         major: member.studentCode
@@ -112,10 +132,9 @@ export default function GroupsPage() {
       setGroups(mapped)
 
       // Refresh currently selected group modal if open
-      if (selectedGroup) {
-        const updated = mapped.find((g) => g.id === selectedGroup.id)
-        if (updated) setSelectedGroup(updated)
-      }
+      setSelectedGroup((current) => current
+        ? mapped.find((group) => group.id === current.id) || current
+        : null)
     } catch (error) {
       if (error.message?.includes('No enrollment') || error.status === 409 || error.status === 404) {
         setEnrollmentError('Tài khoản của bạn chưa có danh sách đăng ký học phần (Enrollment) trong học kỳ này.')
@@ -126,17 +145,70 @@ export default function GroupsPage() {
     } finally {
       setBusy(false)
     }
-  }, [isStudent, mapGroup, request, selectedGroup, semesterCode, studentSemesterCode])
+  }, [isStudent, mapGroup, request, semesterCode, studentSemesterCode])
 
   useEffect(() => {
-    if (!isStudent) return
-    const timer = setTimeout(() => {
-      request('/api/mentors')
-        .then((items) => setMentors(items.filter((mentor) => mentor.currentAssigned < mentor.maxQuota)))
-        .catch((error) => toast.error(error.message || 'Không thể tải danh sách mentor.'))
-    }, 0)
-    return () => clearTimeout(timer)
-  }, [isStudent, request])
+    if (!isAdmin && !isStudent) return
+
+    request('/api/groups/demo-seed-status')
+      .then(setDemoSeedEnabled)
+      .catch((error) => toast.error(error.message || 'Không thể kiểm tra chế độ demo.'))
+  }, [isAdmin, isStudent, request])
+
+  const handleSeedDemoMembers = async (group) => {
+    const emptySlots = 5 - group.members.length
+    if (emptySlots <= 0) {
+      toast.error('Nhóm đã đủ 5 thành viên.')
+      return
+    }
+    if (!window.confirm(`Thêm ${emptySlots} thành viên demo vào nhóm "${group.name}"? Khi bỏ phiếu, các thành viên demo sẽ vote theo ứng viên bạn chọn.`)) return
+
+    setSeedingDemoMembers(true)
+    try {
+      const updatedGroup = await request(`/api/groups/${group.id}/demo-members`, { method: 'POST' })
+      setSelectedGroup(mapGroup(updatedGroup))
+      toast.success(`Đã thêm ${emptySlots} thành viên demo.`)
+      await loadGroups()
+    } catch (error) {
+      toast.error(error.message || 'Không thể seed thành viên demo.')
+    } finally {
+      setSeedingDemoMembers(false)
+    }
+  }
+
+  const openMentorRequest = async (group) => {
+    setLoadingMentors(true)
+    try {
+      const availableMentors = await request(`/api/groups/${group.id}/mentor-recommendations`)
+      setMentors(availableMentors)
+      setMentorRequestGroup(group)
+      setMentorRequestId(availableMentors[0]?.id || '')
+      setMentorSearch('')
+      setMentorRequestMessage('')
+      setSelectedGroup(null)
+    } catch (error) {
+      toast.error(error.message || 'Không thể tải danh sách mentor.')
+    } finally {
+      setLoadingMentors(false)
+    }
+  }
+
+  const openGroupDetails = async (group) => {
+    setSelectedGroup(group)
+    setMentorStatus(null)
+    setMentorStatusError('')
+    if (!isStudent || !group.isCurrentLeader || !group.canRequestMentor) return
+
+    setLoadingMentorStatus(true)
+    try {
+      const status = await request(`/api/mentor-requests/groups/${group.id}/status`)
+      setMentorStatus({ groupId: group.id, data: status })
+    } catch (error) {
+      setMentorStatusError(error.message || 'Không thể kiểm tra trạng thái mentor của nhóm.')
+    } finally {
+      setLoadingMentorStatus(false)
+    }
+  }
 
   const handleRequestMentor = async (event) => {
     event.preventDefault()
@@ -175,32 +247,28 @@ export default function GroupsPage() {
   // 1. Create Group
   const handleCreateGroup = async (e) => {
     e.preventDefault()
-    const targetCode = isStudent ? studentSemesterCode : semesterCode
-    if (!newGroupName.trim() || !targetCode) return
+    if (!targetSemesterCode) {
+      toast.error(isStudent
+        ? 'Tài khoản chưa được xếp vào học kỳ. Vui lòng liên hệ Admin để được thêm vào danh sách sinh viên.'
+        : 'Chưa có học kỳ áp dụng. Vui lòng tạo hoặc mở một học kỳ trước.')
+      return
+    }
+    if (!newGroupName.trim()) {
+      toast.error('Vui lòng nhập tên nhóm.')
+      return
+    }
     try {
       setBusy(true)
-      const group = await request('/api/groups', {
+      await request('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           groupName: newGroupName.trim(),
-          semesterCode: targetCode,
-          projectDescription: newGroupTopic.trim(),
+          semesterCode: targetSemesterCode,
+          projectDescription: newGroupTopic.trim() || newGroupName.trim(),
           recruitmentNeeds: newRecruitmentNeeds.map((roleCode) => ({ roleCode, slots: 1 }))
         })
       })
-
-      if (newGroupTopic.trim() && group?.id) {
-        try {
-          await request(`/api/groups/${group.id}/topic`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topicTitle: newGroupTopic.trim() })
-          })
-        } catch {
-          // ignore
-        }
-      }
 
       toast.success(`Đã khởi tạo nhóm "${newGroupName}".`)
       setShowCreateModal(false)
@@ -255,7 +323,10 @@ export default function GroupsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nominatedStudentId: studentId })
       })
-      toast.success(`Đã bỏ phiếu bầu ${studentName} làm Trưởng nhóm!`)
+      const hasDemoMembers = groups.find((group) => group.id === groupId)?.members.some((member) => member.isDemo)
+      toast.success(hasDemoMembers && demoSeedEnabled
+        ? `Bạn và thành viên demo đã bỏ phiếu cho ${studentName}.`
+        : `Đã bỏ phiếu bầu ${studentName} làm Trưởng nhóm!`)
       await loadGroups()
     } catch (error) {
       toast.error(error.message || 'Không thể bỏ phiếu.')
@@ -279,27 +350,30 @@ export default function GroupsPage() {
     }
   }
 
-  // 6. Update Group Topic & Name
+  // 6. Update group details or register its official topic after locking.
   const handleSaveEdit = async (e) => {
     e.preventDefault()
     if (!selectedGroup) return
     try {
       setBusy(true)
-      if (editGroupName.trim() && editGroupName.trim() !== selectedGroup.name) {
-        await request(`/api/groups/${selectedGroup.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groupName: editGroupName.trim() })
-        })
-      }
-      if (editGroupTopic.trim() && editGroupTopic.trim() !== selectedGroup.topicTitle) {
+      if (selectedGroup.isLocked) {
         await request(`/api/groups/${selectedGroup.id}/topic`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ topicTitle: editGroupTopic.trim() })
         })
+      } else {
+        await request(`/api/groups/${selectedGroup.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            groupName: editGroupName.trim(),
+            projectDescription: editGroupDescription.trim(),
+            recruitmentNeeds: selectedGroup.recruitmentNeeds
+          })
+        })
       }
-      toast.success('Đã cập nhật thông tin nhóm & đề tài!')
+      toast.success(selectedGroup.isLocked ? 'Đã đăng ký đề tài cho nhóm.' : 'Đã cập nhật thông tin nhóm.')
       setEditGroupModal(false)
       await loadGroups()
     } catch (error) {
@@ -561,7 +635,7 @@ export default function GroupsPage() {
                 <button
                   className="btn btn-outline btn-sm"
                   style={{ flex: 1 }}
-                  onClick={() => setSelectedGroup(group)}
+                  onClick={() => openGroupDetails(group)}
                 >
                   Chi tiết & Quản lý
                 </button>
@@ -574,20 +648,6 @@ export default function GroupsPage() {
                     onClick={() => handleJoin(group)}
                   >
                     Xin gia nhập
-                  </button>
-                )}
-                {account?.role === 'Student' && group.isCurrentLeader && group.canRequestMentor && (
-                  <button
-                    className="btn btn-outline btn-sm"
-                    style={{ flex: 1 }}
-                    onClick={() => {
-                      setMentorRequestGroup(group)
-                      setMentorRequestId(mentors[0]?.id || '')
-                    }}
-                    disabled={mentors.length === 0}
-                    title={mentors.length === 0 ? 'Hiện chưa có mentor còn hạn ngạch' : undefined}
-                  >
-                    <GraduationCap size={14} /> Xin mentor hướng dẫn
                   </button>
                 )}
               </div>
@@ -638,17 +698,29 @@ export default function GroupsPage() {
             <div style={{ backgroundColor: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>ĐỀ TÀI KHỞI NGHIỆP:</span>
-                {(isAdmin || selectedGroup.leaderStudentId === currentStudentId) && !selectedGroup.isLocked && (
+                {(isAdmin || selectedGroup.isCurrentLeader) && !selectedGroup.isLocked && (
                   <button
                     className="btn btn-ghost btn-sm"
                     style={{ fontSize: 11, padding: '2px 8px' }}
                     onClick={() => {
                       setEditGroupName(selectedGroup.name)
-                      setEditGroupTopic(selectedGroup.topicTitle || '')
+                      setEditGroupDescription(selectedGroup.projectDescription || '')
                       setEditGroupModal(true)
                     }}
                   >
-                    <Edit3 size={12} /> Chỉnh sửa
+                    <Edit3 size={12} /> Chỉnh sửa nhóm
+                  </button>
+                )}
+                {account?.role === 'Student' && selectedGroup.isCurrentLeader && selectedGroup.isLocked && !selectedGroup.topicTitle && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ fontSize: 11, padding: '2px 8px' }}
+                    onClick={() => {
+                      setEditGroupTopic('')
+                      setEditGroupModal(true)
+                    }}
+                  >
+                    <Edit3 size={12} /> Đăng ký đề tài
                   </button>
                 )}
               </div>
@@ -670,13 +742,66 @@ export default function GroupsPage() {
                   ))}
                 </div>
               )}
+              {account?.role === 'Student' && selectedGroup.members.some((member) => member.studentId === currentStudentId) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderTop: '1px solid var(--border-default)', marginTop: 12, paddingTop: 12 }}>
+                  <div>
+                    <strong style={{ display: 'block', fontSize: 12.5, color: 'var(--text-main)' }}>
+                      <GraduationCap size={14} style={{ verticalAlign: 'middle', marginRight: 5 }} />
+                      Mentor hướng dẫn
+                    </strong>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {mentorStatus?.groupId === selectedGroup.id && mentorStatus.data.hasActiveRequest
+                        ? mentorStatus.data.status === 1
+                          ? `${mentorStatus.data.mentorName} đang hướng dẫn nhóm.`
+                          : `Lời mời ${mentorStatus.data.mentorName} đang chờ giảng viên phản hồi.`
+                        : mentorStatusError
+                          ? mentorStatusError
+                          : loadingMentorStatus
+                            ? 'Đang kiểm tra trạng thái mentor...'
+                            : selectedGroup.canRequestMentor
+                              ? selectedGroup.isCurrentLeader
+                                ? 'Tìm mentor còn hạn ngạch và gửi lời mời; mentor cần chấp nhận.'
+                                : 'Chỉ trưởng nhóm mới có thể gửi lời mời mentor.'
+                              : selectedGroup.isLocked
+                                ? 'Trưởng nhóm cần đăng ký đề tài chính thức trước khi mời mentor.'
+                                : `Cần đủ 4–5 thành viên${selectedGroup.leaderStudentId ? '' : ', bầu trưởng nhóm'}, sau đó trưởng nhóm khóa nhóm và đăng ký đề tài.`}
+                    </span>
+                  </div>
+                  {selectedGroup.canRequestMentor && selectedGroup.isCurrentLeader &&
+                    !loadingMentorStatus && !mentorStatusError &&
+                    !(mentorStatus?.groupId === selectedGroup.id && mentorStatus.data.hasActiveRequest) && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled={loadingMentors}
+                      onClick={() => openMentorRequest(selectedGroup)}
+                    >
+                      <Search size={14} /> {loadingMentors ? 'Đang tải mentor...' : 'Tìm mentor'}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Members List with Vote & Kick Actions */}
             <div style={{ marginBottom: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
                 <span>Thành viên nhóm ({selectedGroup.members.length}/5)</span>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Bỏ phiếu bầu Nhóm trưởng</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Bỏ phiếu bầu Nhóm trưởng</span>
+                  {(isAdmin || (isStudent && selectedGroup.members.some((member) => member.studentId === currentStudentId))) &&
+                    demoSeedEnabled && !selectedGroup.isLocked && selectedGroup.members.length < 5 && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled={seedingDemoMembers}
+                      onClick={() => handleSeedDemoMembers(selectedGroup)}
+                      title="Thêm thành viên demo; chỉ hoạt động khi Demo Mode được bật"
+                    >
+                      <Plus size={13} /> {seedingDemoMembers ? 'Đang seed...' : `Seed member (+${5 - selectedGroup.members.length})`}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -705,6 +830,7 @@ export default function GroupsPage() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <strong style={{ fontSize: 13, color: 'var(--text-main)' }}>{m.name}</strong>
                             {isThisMemberMe && <span className="badge badge-neutral" style={{ fontSize: 10 }}>Bạn</span>}
+                            {m.isDemo && <span className="badge badge-neutral" style={{ fontSize: 10 }}>DEMO</span>}
                             {m.isLeader && (
                               <span className="badge badge-warning" style={{ fontSize: 10 }}>
                                 <Crown size={11} /> Leader
@@ -806,20 +932,6 @@ export default function GroupsPage() {
                       Xin gia nhập
                     </button>
                   )}
-                {account?.role === 'Student' && selectedGroup.isCurrentLeader && selectedGroup.canRequestMentor && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    disabled={mentors.length === 0}
-                    onClick={() => {
-                      setMentorRequestGroup(selectedGroup)
-                      setMentorRequestId(mentors[0]?.id || '')
-                      setSelectedGroup(null)
-                    }}
-                  >
-                    <GraduationCap size={14} /> Mời Mentor
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -832,7 +944,7 @@ export default function GroupsPage() {
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>
-                Chỉnh sửa thông tin nhóm & Đề tài
+                {selectedGroup?.isLocked ? 'Đăng ký đề tài chính thức' : 'Chỉnh sửa thông tin nhóm'}
               </h2>
               <button className="btn btn-ghost btn-sm" onClick={() => setEditGroupModal(false)} style={{ padding: 4 }}>
                 <X size={18} />
@@ -840,26 +952,44 @@ export default function GroupsPage() {
             </div>
 
             <form onSubmit={handleSaveEdit}>
-              <div style={{ marginBottom: 14 }}>
-                <label className="input-label">Tên nhóm *</label>
-                <input
-                  required
-                  className="input"
-                  value={editGroupName}
-                  onChange={(e) => setEditGroupName(e.target.value)}
-                />
-              </div>
-
-              <div style={{ marginBottom: 18 }}>
-                <label className="input-label">Tên đề tài khởi nghiệp chính thức *</label>
-                <textarea
-                  required
-                  rows={3}
-                  className="textarea"
-                  value={editGroupTopic}
-                  onChange={(e) => setEditGroupTopic(e.target.value)}
-                />
-              </div>
+              {selectedGroup?.isLocked ? (
+                <div style={{ marginBottom: 18 }}>
+                  <label className="input-label">Tên đề tài khởi nghiệp chính thức *</label>
+                  <textarea
+                    required
+                    minLength={3}
+                    maxLength={300}
+                    rows={3}
+                    className="textarea"
+                    value={editGroupTopic}
+                    onChange={(e) => setEditGroupTopic(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 14 }}>
+                    <label className="input-label">Tên nhóm *</label>
+                    <input
+                      required
+                      className="input"
+                      value={editGroupName}
+                      onChange={(e) => setEditGroupName(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 18 }}>
+                    <label className="input-label">Mô tả dự án *</label>
+                    <textarea
+                      required
+                      minLength={3}
+                      maxLength={1200}
+                      rows={3}
+                      className="textarea"
+                      value={editGroupDescription}
+                      onChange={(e) => setEditGroupDescription(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button
@@ -870,7 +1000,7 @@ export default function GroupsPage() {
                   Hủy
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  Lưu thay đổi
+                  {selectedGroup?.isLocked ? 'Đăng ký đề tài' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>
@@ -894,8 +1024,15 @@ export default function GroupsPage() {
             <form onSubmit={handleCreateGroup}>
               <div style={{ marginBottom: 14 }}>
                 <label className="input-label">Học kỳ áp dụng</label>
-                <input className="input" disabled value={isAdmin ? semesterCode : studentSemesterCode} />
+                <input className="input" disabled value={targetSemesterCode || 'Chưa được gán học kỳ'} />
               </div>
+              {!targetSemesterCode && (
+                <div className="alert alert-warning" role="alert" style={{ marginBottom: 14 }}>
+                  {isStudent
+                    ? 'Tài khoản của bạn chưa được Admin xếp vào học kỳ. Hãy nhờ Admin thêm email vào danh sách sinh viên và gán học kỳ trước khi tạo nhóm.'
+                    : 'Chưa có học kỳ áp dụng. Hãy tạo hoặc mở một học kỳ trước khi tạo nhóm.'}
+                </div>
+              )}
 
               <div style={{ marginBottom: 14 }}>
                 <label className="input-label">Tên nhóm / Tên dự án *</label>
@@ -937,7 +1074,7 @@ export default function GroupsPage() {
                 >
                   Hủy
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={busy}>
+                <button type="submit" className="btn btn-primary" disabled={busy || !targetSemesterCode}>
                   Tạo nhóm & Mở tuyển
                 </button>
               </div>
@@ -952,15 +1089,32 @@ export default function GroupsPage() {
             <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Mời mentor hướng dẫn</h2>
             <p className="page-subtitle" style={{ marginBottom: 16 }}>{mentorRequestGroup.name}</p>
             <label className="input-label">Chọn mentor *
+              <input
+                className="input"
+                type="search"
+                value={mentorSearch}
+                onChange={(event) => {
+                  setMentorSearch(event.target.value)
+                  setMentorRequestId('')
+                }}
+                placeholder="Tìm theo tên, email hoặc khoa..."
+                aria-label="Tìm mentor"
+                style={{ marginTop: 6, marginBottom: 8 }}
+              />
               <select className="select" required value={mentorRequestId} onChange={(event) => setMentorRequestId(event.target.value)}>
                 <option value="" disabled>Chọn mentor còn nhận nhóm</option>
-                {mentors.map((mentor) => (
+                {filteredMentors.map((mentor) => (
                   <option key={mentor.id} value={mentor.id}>
-                    {mentor.fullName} · {mentor.department} · còn {mentor.maxQuota - mentor.currentAssigned} suất
+                    {mentor.fullName} · {mentor.department} · còn {mentor.availableQuota ?? mentor.maxQuota - mentor.currentAssigned} suất
                   </option>
                 ))}
               </select>
             </label>
+            {filteredMentors.length === 0 && (
+              <p className="page-subtitle" role="status" style={{ marginTop: 6 }}>
+                {mentors.length === 0 ? 'Hiện không có mentor còn hạn ngạch.' : 'Không tìm thấy mentor phù hợp.'}
+              </p>
+            )}
             <label className="input-label" style={{ display: 'block', marginTop: 14 }}>Lời mời *
               <textarea className="textarea" required minLength={10} maxLength={2000} rows={4} value={mentorRequestMessage} onChange={(event) => setMentorRequestMessage(event.target.value)} placeholder="Giới thiệu đề tài và mong muốn được mentor hỗ trợ..." />
             </label>

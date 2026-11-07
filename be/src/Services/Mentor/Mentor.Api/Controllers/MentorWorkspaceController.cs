@@ -1,4 +1,9 @@
 using System.Security.Claims;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
 using EXETeamMatching.Mentor.Application.DTOs;
 using EXETeamMatching.Mentor.Domain.Entities;
 using EXETeamMatching.Mentor.Infrastructure.Persistence;
@@ -6,13 +11,14 @@ using EXETeamMatching.SharedKernel.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 namespace EXETeamMatching.Mentor.Api.Controllers;
 
 [ApiController]
 [Route("api/mentors/me")]
 [Authorize(Roles = "Mentor")]
-public class MentorWorkspaceController(MentorDbContext db) : ControllerBase
+public class MentorWorkspaceController(MentorDbContext db, IHttpClientFactory clients, IConfiguration configuration) : ControllerBase
 {
     private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
 
@@ -25,6 +31,51 @@ public class MentorWorkspaceController(MentorDbContext db) : ControllerBase
             .Select(x => new MentorProgressResponse(x.GroupId, x.GroupName, x.Topic, x.Milestone, x.Progress, x.Feedback, x.UpdatedAt ?? x.CreatedAt))
             .ToListAsync(ct);
         return Ok(ApiResponse<List<MentorProgressResponse>>.Ok(groups));
+    }
+
+    [HttpGet("groups/{groupId:guid}/details")]
+    public async Task<ActionResult<ApiResponse<MentorTeamDetailsResponse>>> GroupDetails(Guid groupId, CancellationToken ct)
+    {
+        var mentorId = await MentorId(ct);
+        var isAssigned = await db.MentorGroupProgress.AsNoTracking()
+            .AnyAsync(x => x.MentorId == mentorId && x.GroupId == groupId, ct);
+        if (!isAssigned)
+            throw new KeyNotFoundException("Assigned group not found.");
+
+        var client = clients.CreateClient("groups");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/groups/{groupId}");
+        if (Request.Headers.Authorization.Count > 0)
+            request.Headers.Authorization = AuthenticationHeaderValue.Parse(Request.Headers.Authorization!);
+
+        using var response = await client.SendAsync(request, ct);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return NotFound(ApiResponse<MentorTeamDetailsResponse>.Fail("Assigned group no longer exists."));
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Group matching service returned {(int)response.StatusCode} while loading mentor team details.");
+
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<GroupDetailsPayload>>(cancellationToken: ct)
+            ?? throw new InvalidOperationException("The group service returned an empty response.");
+        var group = result.Data ?? throw new InvalidOperationException("The group service returned no group details.");
+        var contacts = await LoadTeamContacts(groupId, group.Members.Select(member => member.StudentId), ct);
+        var details = new MentorTeamDetailsResponse(
+            group.Id,
+            group.GroupCode,
+            group.GroupName,
+            group.SemesterCode,
+            group.Status,
+            group.LeaderStudentId,
+            group.TopicTitle ?? group.ProjectDescription,
+            group.MemberCount,
+            5,
+            group.Members.Select(member => new MentorTeamMemberResponse(
+                member.StudentId,
+                member.StudentCode,
+                member.FullName,
+                member.Role,
+                member.JoinedAt,
+                member.IsDemo,
+                contacts.GetValueOrDefault(member.StudentId, string.Empty))).ToList());
+        return Ok(ApiResponse<MentorTeamDetailsResponse>.Ok(details));
     }
 
     [HttpPut("groups/{groupId:guid}/progress")]
@@ -138,6 +189,46 @@ public class MentorWorkspaceController(MentorDbContext db) : ControllerBase
         => await db.Mentors.Where(x => x.UserId == ActorId).Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Mentor profile not found. Ask an administrator to activate your mentor account.");
 
+    private async Task<Dictionary<Guid, string>> LoadTeamContacts(Guid groupId, IEnumerable<Guid> studentIds, CancellationToken ct)
+    {
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new("sub", User.FindFirstValue("sub") ?? throw new InvalidOperationException("Authenticated mentor subject is missing.")),
+            new("role", "Mentor"),
+            new("ver", User.FindFirstValue("ver") ?? throw new InvalidOperationException("Authenticated token version is missing.")),
+            new("scope", "mentor-team-contacts"),
+            new("group_id", groupId.ToString())
+        };
+        claims.AddRange(studentIds.Distinct().Select(id => new System.Security.Claims.Claim("student_id", id.ToString())));
+        var secret = configuration["JwtSettings:Secret"]
+            ?? throw new InvalidOperationException("JWT signing secret is not configured.");
+        var issuer = configuration["JwtSettings:Issuer"] ?? "EXETeamMatching";
+        var audience = configuration["JwtSettings:Audience"] ?? "EXETeamMatchingClients";
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
+            SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(
+            issuer,
+            audience,
+            claims,
+            notBefore: DateTime.UtcNow,
+            expires: DateTime.UtcNow.AddMinutes(1),
+            signingCredentials: credentials);
+        var scopedToken = new JwtSecurityTokenHandler().WriteToken(token);
+
+        var client = clients.CreateClient("identity");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/internal/mentor-team-contacts?groupId={groupId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", scopedToken);
+        using var response = await client.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Identity service returned {(int)response.StatusCode} while loading assigned team contacts.");
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<List<MentorTeamContactPayload>>>(cancellationToken: ct)
+            ?? throw new InvalidOperationException("Identity service returned an empty team contacts response.");
+        return (result.Data ?? throw new InvalidOperationException("Identity service returned no team contacts."))
+            .Where(contact => contact.Email.Contains('@'))
+            .ToDictionary(contact => contact.StudentId, contact => contact.Email);
+    }
+
     private async Task ValidateGroup(Guid mentorId, Guid? groupId, CancellationToken ct)
     {
         if (groupId.HasValue && !await db.MentorGroupProgress.AnyAsync(
@@ -156,4 +247,26 @@ public class MentorWorkspaceController(MentorDbContext db) : ControllerBase
 
     private static MentorAppointmentResponse ToResponse(MentorAppointment appointment)
         => new(appointment.Id, appointment.GroupId, appointment.Title, appointment.StartsAt, appointment.Notes);
+
+    private sealed record GroupDetailsPayload(
+        Guid Id,
+        string GroupCode,
+        string GroupName,
+        string SemesterCode,
+        int Status,
+        Guid? LeaderStudentId,
+        string? TopicTitle,
+        int MemberCount,
+        List<GroupMemberPayload> Members,
+        string ProjectDescription);
+
+    private sealed record GroupMemberPayload(
+        Guid StudentId,
+        string StudentCode,
+        string FullName,
+        int Role,
+        DateTime JoinedAt,
+        bool IsDemo);
+
+    private sealed record MentorTeamContactPayload(Guid StudentId, string Email);
 }

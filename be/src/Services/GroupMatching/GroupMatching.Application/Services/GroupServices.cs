@@ -22,6 +22,43 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         return Map(group);
     }
 
+    public async Task<GroupDto> SeedDemoMembersAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
+    {
+        await using var tx = await repository.BeginSerializableTransactionAsync(ct);
+        var group = await Group(id, ct);
+        if (!isAdmin)
+        {
+            var actor = await Enrollment(actorUserId, group.SemesterCode, ct);
+            if (!group.Members.Any(member => member.StudentId == actor.StudentId))
+                throw Forbidden("Only a member of this group can seed demo members.");
+        }
+        if (group.Status != GroupStatus.Open)
+            throw Conflict("Demo members can only be seeded into an open group.");
+        if (group.Members.Count >= 5)
+            throw Conflict("This group already has the maximum of 5 members.");
+
+        var missingMembers = 5 - group.Members.Count;
+        for (var index = 1; index <= missingMembers; index++)
+        {
+            var member = new GroupMember
+            {
+                GroupId = group.Id,
+                StudentId = Guid.NewGuid(),
+                StudentCode = $"DEMO-{Guid.NewGuid():N}"[..13].ToUpperInvariant(),
+                FullName = $"Demo Member {index}",
+                IsDemo = true,
+                JoinedAt = DateTime.UtcNow
+            };
+            group.Members.Add(member);
+            repository.AddMember(member);
+        }
+
+        group.UpdatedAt = DateTime.UtcNow;
+        await repository.SaveAsync(ct);
+        await tx.CommitAsync(ct);
+        return Map(group);
+    }
+
     public async Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default)
     {
         var group = await Group(id, ct);
@@ -127,7 +164,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         await repository.SaveAsync(ct);
     }
 
-    public async Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default)
+    public async Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default, bool allowDemoVotes = false)
     {
         var group = await Group(id, ct); var actor = await Enrollment(actorUserId, group.SemesterCode, ct);
         await RegistrationOpen(group.SemesterCode, ct);
@@ -142,6 +179,30 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
             repository.AddVote(vote);
         }
         else { vote.NominatedStudentId = request.NominatedStudentId; vote.VotedAt = DateTime.UtcNow; vote.UpdatedAt = DateTime.UtcNow; }
+        if (allowDemoVotes)
+        {
+            foreach (var demoMember in group.Members.Where(member => member.IsDemo))
+            {
+                var demoVote = group.Votes.SingleOrDefault(item => item.VoterStudentId == demoMember.StudentId);
+                if (demoVote is null)
+                {
+                    demoVote = new LeaderVote
+                    {
+                        GroupId = group.Id,
+                        VoterStudentId = demoMember.StudentId,
+                        NominatedStudentId = request.NominatedStudentId
+                    };
+                    group.Votes.Add(demoVote);
+                    repository.AddVote(demoVote);
+                }
+                else
+                {
+                    demoVote.NominatedStudentId = request.NominatedStudentId;
+                    demoVote.VotedAt = DateTime.UtcNow;
+                    demoVote.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+        }
         var winner = group.Votes.GroupBy(x => x.NominatedStudentId).OrderByDescending(x => x.Count()).FirstOrDefault();
         if (winner is not null && winner.Count() > group.Members.Count / 2 && group.LeaderStudentId != winner.Key)
         {
@@ -200,7 +261,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
     private static GroupMember Member(EnrollmentContext item) => new() { StudentId = item.StudentId, StudentCode = item.StudentCode, FullName = item.FullName, JoinedAt = DateTime.UtcNow };
     private static GroupDto Map(Group group) => new(group.Id, group.GroupCode, group.GroupName, group.SemesterCode, group.Status,
         group.LeaderStudentId, group.TopicTitle, group.TopicRegisteredAt, group.Members.Count,
-        group.Members.OrderBy(x => x.JoinedAt).Select(x => new GroupMemberDto(x.StudentId, x.StudentCode, x.FullName, x.Role, x.JoinedAt)).ToList(),
+        group.Members.OrderBy(x => x.JoinedAt).Select(x => new GroupMemberDto(x.StudentId, x.StudentCode, x.FullName, x.Role, x.JoinedAt, x.IsDemo)).ToList(),
         group.ProjectDescription,
         group.RecruitmentNeeds.OrderBy(x => x.RoleCode).Select(x => new RecruitmentNeedDto(x.RoleCode, x.Slots)).ToList());
     private static void ApplyRecruitmentNeeds(Group group, IEnumerable<RecruitmentNeedRequest>? source)

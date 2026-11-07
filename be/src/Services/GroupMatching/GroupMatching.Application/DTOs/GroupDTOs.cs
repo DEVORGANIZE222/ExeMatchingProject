@@ -60,7 +60,7 @@ public class GroupListQuery
     [Range(1, 100)] public int PageSize { get; set; } = 20;
 }
 
-public record GroupMemberDto(Guid StudentId, string StudentCode, string FullName, MemberRole Role, DateTime JoinedAt);
+public record GroupMemberDto(Guid StudentId, string StudentCode, string FullName, MemberRole Role, DateTime JoinedAt, bool IsDemo = false);
 public record GroupDto(Guid Id, string GroupCode, string GroupName, string SemesterCode, GroupStatus Status,
     Guid? LeaderStudentId, string? TopicTitle, DateTime? TopicRegisteredAt, int MemberCount, List<GroupMemberDto> Members,
     string ProjectDescription = "", IReadOnlyList<RecruitmentNeedDto>? RecruitmentNeeds = null);

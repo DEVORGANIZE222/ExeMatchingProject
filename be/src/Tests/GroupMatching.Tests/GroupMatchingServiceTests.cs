@@ -63,6 +63,51 @@ public class GroupMatchingServiceTests
         await Assert.ThrowsAsync<GroupException>(() => new MatchingService(new MemoryStore(), identity).RandomMatchingAsync("FA27"));
     }
 
+    [Fact]
+    public async Task Demo_members_fill_group_and_follow_the_current_vote_when_demo_mode_is_enabled()
+    {
+        var store = new MemoryStore();
+        var identity = new FakeIdentity();
+        var service = new GroupService(store, identity);
+        var students = Enumerable.Range(1, 2)
+            .Select(i => new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), $"D{i}", $"Demo {i}", "FA26", false))
+            .ToArray();
+
+        identity.Current = students[0];
+        var group = await service.CreateAsync(new CreateGroupRequest
+        {
+            GroupName = "Demo group",
+            SemesterCode = "FA26",
+            ProjectDescription = "A group used to test the demo flow."
+        }, students[0].UserId);
+        identity.Current = students[1];
+        group = await service.JoinAsync(group.Id, students[1].UserId);
+
+        identity.Current = students[0];
+        group = await service.SeedDemoMembersAsync(group.Id, students[0].UserId, false);
+        Assert.Equal(5, group.MemberCount);
+        Assert.Equal(3, group.Members.Count(member => member.IsDemo));
+
+        identity.Current = students[0];
+        group = await service.VoteAsync(
+            group.Id,
+            new VoteLeaderRequest(students[0].StudentId),
+            students[0].UserId);
+        Assert.Null(group.LeaderStudentId);
+        Assert.Single(store.Groups.Single().Votes);
+
+        group = await service.VoteAsync(
+            group.Id,
+            new VoteLeaderRequest(students[0].StudentId),
+            students[0].UserId,
+            allowDemoVotes: true);
+
+        Assert.Equal(students[0].StudentId, group.LeaderStudentId);
+        Assert.Equal(4, store.Groups.Single().Votes.Count);
+        Assert.All(store.Groups.Single().Votes.Where(vote => group.Members.Single(member => member.StudentId == vote.VoterStudentId).IsDemo),
+            vote => Assert.Equal(students[0].StudentId, vote.NominatedStudentId));
+    }
+
     private sealed class FakeIdentity : IIdentitySemesterClient
     {
         public EnrollmentContext Current { get; set; } = null!;

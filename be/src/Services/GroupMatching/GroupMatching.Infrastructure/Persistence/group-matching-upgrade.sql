@@ -2,6 +2,7 @@
 ALTER TABLE "Groups" ADD COLUMN IF NOT EXISTS "CreatedByStudentId" uuid NULL;
 ALTER TABLE "Groups" ADD COLUMN IF NOT EXISTS "TopicRegisteredAt" timestamptz NULL;
 ALTER TABLE "Groups" ADD COLUMN IF NOT EXISTS "ProjectDescription" varchar(1200) NOT NULL DEFAULT '';
+ALTER TABLE "GroupMembers" ADD COLUMN IF NOT EXISTS "IsDemo" boolean NOT NULL DEFAULT false;
 -- A group is created before its members elect a leader.
 ALTER TABLE "Groups" ALTER COLUMN "LeaderStudentId" DROP NOT NULL;
 ALTER TABLE "Groups" ALTER COLUMN "TopicTitle" DROP NOT NULL;
