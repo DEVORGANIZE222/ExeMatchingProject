@@ -424,15 +424,17 @@ export default function SemestersPage() {
               </div>
 
               {/* Visual Timeline Progress Preview */}
-              <div style={{ marginTop: 4 }}>
-                <SemesterTimelineProgress
-                  startDate={form.startDate}
-                  endDate={form.endDate}
-                  registrationDeadline={form.registrationDeadline}
-                  topicDeadline={form.topicDeadline}
-                  mentorDeadline={form.mentorDeadline}
-                />
-              </div>
+              {form.startDate && form.endDate && (
+                <div style={{ marginTop: 4 }}>
+                  <SemesterTimelineProgress
+                    startDate={form.startDate}
+                    endDate={form.endDate}
+                    registrationDeadline={form.registrationDeadline}
+                    topicDeadline={form.topicDeadline}
+                    mentorDeadline={form.mentorDeadline}
+                  />
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
                 <button
@@ -561,16 +563,18 @@ export default function SemestersPage() {
               </div>
 
               {/* Visual Timeline Progress Preview */}
-              <div style={{ marginTop: 4 }}>
-                <SemesterTimelineProgress
-                  startDate={editForm.startDate}
-                  endDate={editForm.endDate}
-                  registrationDeadline={editForm.registrationDeadline}
-                  topicDeadline={editForm.topicDeadline}
-                  mentorDeadline={editForm.mentorDeadline}
-                  showTodayMarker={editForm.isActive}
-                />
-              </div>
+              {editForm.startDate && editForm.endDate && (
+                <div style={{ marginTop: 4 }}>
+                  <SemesterTimelineProgress
+                    startDate={editForm.startDate}
+                    endDate={editForm.endDate}
+                    registrationDeadline={editForm.registrationDeadline}
+                    topicDeadline={editForm.topicDeadline}
+                    mentorDeadline={editForm.mentorDeadline}
+                    showTodayMarker={editForm.isActive}
+                  />
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
                 <button

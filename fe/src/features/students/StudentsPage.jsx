@@ -771,7 +771,7 @@ export default function StudentsPage() {
                 color: '#be123c',
                 fontSize: 12
               }}>
-                ⚠️ <strong>Cảnh báo:</strong> Thao tác này sẽ xóa vĩnh viễn hồ sơ sinh viên và phân quyền role thế mạnh của kỳ này trong hệ thống. Hành động này <strong>không thể hoàn tác</strong>!
+                ⚠️ <strong>Cảnh báo:</strong> Thao tác này sẽ xóa vĩnh viễn hồ sơ sinh viên <strong>không thể hoàn tác</strong>!
               </div>
             </div>
 

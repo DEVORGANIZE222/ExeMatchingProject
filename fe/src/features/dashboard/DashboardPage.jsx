@@ -5,7 +5,46 @@ import {
   ChevronRight, ArrowRight, CheckCircle2, AlertCircle
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import SemesterTimelineProgress from '../../components/SemesterTimelineProgress'
 import './DashboardPage.css'
+
+function getMilestoneCountdown(dateStr) {
+  if (!dateStr) return { text: 'Chưa thiết lập', subtext: 'Chưa cài đặt thời hạn', status: 'none', badge: 'Chưa đặt', badgeClass: 'badge-neutral', days: null }
+  const deadline = new Date(dateStr)
+  const now = new Date()
+  const diffMs = deadline - now
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  const formatted = deadline.toLocaleDateString('vi-VN')
+
+  if (diffDays > 0) {
+    return {
+      text: `Còn ${diffDays} ngày`,
+      subtext: `Hạn chót: ${formatted}`,
+      status: diffDays <= 3 ? 'urgent' : 'active',
+      badge: diffDays <= 3 ? 'Sắp hết hạn' : 'Đang diễn ra',
+      badgeClass: diffDays <= 3 ? 'badge-warning' : 'badge-green',
+      days: diffDays
+    }
+  } else if (diffDays === 0) {
+    return {
+      text: 'Hạn là hôm nay',
+      subtext: `Hạn chót: ${formatted}`,
+      status: 'urgent',
+      badge: 'Hôm nay',
+      badgeClass: 'badge-warning',
+      days: 0
+    }
+  } else {
+    return {
+      text: 'Đã hết hạn',
+      subtext: `Đã đóng ngày ${formatted}`,
+      status: 'ended',
+      badge: 'Đã đóng',
+      badgeClass: 'badge-neutral',
+      days: diffDays
+    }
+  }
+}
 
 export default function DashboardPage() {
   const { account, request, isAdmin, isMentor, isStudent } = useAuth()
@@ -43,8 +82,9 @@ export default function DashboardPage() {
             setSelectedSemesterCode(defaultSem.code)
           }
         } else {
-          // Student is strictly tied to their own semester set by Admin
-          setSelectedSemesterCode(studentSemesterCode || '')
+          // Student is strictly tied to their own semester set by Admin, fallback to active
+          const semCode = studentSemesterCode || (items.find((s) => s.isActive)?.code || items[0]?.code || '')
+          setSelectedSemesterCode(semCode)
         }
       } catch {
         // ignore
@@ -55,7 +95,7 @@ export default function DashboardPage() {
 
   // 2. Load Realtime Metrics when Semester Changes
   const loadMetrics = useCallback(async () => {
-    const targetCode = isStudent ? studentSemesterCode : selectedSemesterCode
+    const targetCode = isStudent && studentSemesterCode ? studentSemesterCode : selectedSemesterCode
     if (!targetCode) return
 
     setLoading(true)
@@ -130,7 +170,10 @@ export default function DashboardPage() {
     loadMetrics()
   }, [loadMetrics])
 
-  const activeCode = isAdmin ? selectedSemesterCode : studentSemesterCode
+  const activeCode = isStudent ? (studentSemesterCode || selectedSemesterCode) : selectedSemesterCode
+  const regCountdown = getMilestoneCountdown(currentSemester?.registrationDeadline)
+  const topicCountdown = getMilestoneCountdown(currentSemester?.topicDeadline)
+  const mentorCountdown = getMilestoneCountdown(currentSemester?.mentorDeadline)
 
   return (
     <div>
@@ -228,15 +271,128 @@ export default function DashboardPage() {
           </div>
           <div className="metric-info">
             <span className="metric-label">Hạn ghép tự do</span>
-            <span className="metric-number">{metrics.registrationDeadlineText}</span>
+            <span className="metric-number">{regCountdown.text}</span>
             <span className="metric-subtext">
-              {currentSemester?.registrationDeadline
-                ? `Hạn chót: ${new Date(currentSemester.registrationDeadline).toLocaleDateString('vi-VN')}`
-                : 'Chưa cài đặt thời hạn'}
+              {regCountdown.subtext}
             </span>
           </div>
         </div>
       </div>
+
+      {/* ── 3 Key Milestone Countdowns & Timeline Progress (Unified for Admin, Student, Mentor) ── */}
+      {currentSemester && (
+        <div className="card" style={{ marginBottom: 'var(--space-6)', padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="badge badge-teal" style={{ fontWeight: 700 }}>{currentSemester.code}</span>
+                <h2 style={{ fontSize: 16.5, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                  3 Mốc Thời Hạn & Đếm Ngược Học Kỳ Khởi Nghiệp
+                </h2>
+              </div>
+              <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+                Đồng bộ thời gian đếm ngược thời gian thực cho cả 3 vai trò: Quản trị viên, Sinh viên và Giảng viên Mentor
+              </p>
+            </div>
+            {currentSemester.isActive ? (
+              <span className="badge badge-green">Học kỳ đang kích hoạt</span>
+            ) : (
+              <span className="badge badge-neutral">Học kỳ đã đóng</span>
+            )}
+          </div>
+
+          {/* 3 Milestone Countdown Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 18 }}>
+            {/* Milestone 1: Ghép nhóm */}
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              backgroundColor: '#ECFDF5',
+              border: '1px solid #A7F3D0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#065F46' }}>
+                  1. Hạn ghép nhóm tự do
+                </span>
+                <span className={`badge ${regCountdown.badgeClass}`} style={{ fontSize: 9.5 }}>
+                  {regCountdown.badge}
+                </span>
+              </div>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#047857' }}>
+                {regCountdown.text}
+              </span>
+              <span style={{ fontSize: 11.5, color: '#059669' }}>
+                {regCountdown.subtext}
+              </span>
+            </div>
+
+            {/* Milestone 2: Đăng ký đề tài */}
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#92400E' }}>
+                  2. Hạn chốt nộp đề tài
+                </span>
+                <span className={`badge ${topicCountdown.badgeClass}`} style={{ fontSize: 9.5 }}>
+                  {topicCountdown.badge}
+                </span>
+              </div>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#B45309' }}>
+                {topicCountdown.text}
+              </span>
+              <span style={{ fontSize: 11.5, color: '#D97706' }}>
+                {topicCountdown.subtext}
+              </span>
+            </div>
+
+            {/* Milestone 3: Khớp Mentor */}
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF' }}>
+                  3. Hạn chốt khớp Mentor
+                </span>
+                <span className={`badge ${mentorCountdown.badgeClass}`} style={{ fontSize: 9.5 }}>
+                  {mentorCountdown.badge}
+                </span>
+              </div>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#1D4ED8' }}>
+                {mentorCountdown.text}
+              </span>
+              <span style={{ fontSize: 11.5, color: '#2563EB' }}>
+                {mentorCountdown.subtext}
+              </span>
+            </div>
+          </div>
+
+          {/* Visual Progress Bar with Today Marker */}
+          <SemesterTimelineProgress
+            startDate={currentSemester.startDate}
+            endDate={currentSemester.endDate}
+            registrationDeadline={currentSemester.registrationDeadline}
+            topicDeadline={currentSemester.topicDeadline}
+            mentorDeadline={currentSemester.mentorDeadline}
+            showTodayMarker={currentSemester.isActive}
+          />
+        </div>
+      )}
 
       {/* ── Main Content Grid ── */}
       <div className="dashboard-main-grid">
@@ -273,28 +429,31 @@ export default function DashboardPage() {
               </div>
 
               <div className="timeline-step-item">
-                <div className="timeline-step-badge active">
+                <div className={`timeline-step-badge ${regCountdown.days !== null && regCountdown.days >= 0 ? 'active' : 'completed'}`}>
                   <Users size={16} />
                 </div>
                 <div className="timeline-step-content">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="timeline-step-title">Ghép nhóm tự do & Bầu trưởng nhóm</span>
-                    <span className="badge badge-green">Đang diễn ra</span>
+                    <span className={`badge ${regCountdown.badgeClass}`}>{regCountdown.badge}</span>
                   </div>
                   <p className="timeline-step-meta">
-                    Sinh viên tìm nhóm bù trừ kỹ năng, chốt danh sách tối đa 5 thành viên.
+                    Sinh viên tìm nhóm bù trừ kỹ năng, chốt tối đa 5 thành viên. ({regCountdown.text} · {regCountdown.subtext})
                   </p>
                 </div>
               </div>
 
               <div className="timeline-step-item">
-                <div className="timeline-step-badge pending">
+                <div className={`timeline-step-badge ${topicCountdown.days !== null && topicCountdown.days >= 0 ? 'active' : 'pending'}`}>
                   <FileText size={16} />
                 </div>
                 <div className="timeline-step-content">
-                  <span className="timeline-step-title">Đăng ký đề tài & Khớp Mentor hướng dẫn</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="timeline-step-title">Đăng ký đề tài & Khớp Mentor hướng dẫn</span>
+                    <span className={`badge ${topicCountdown.badgeClass}`}>{topicCountdown.badge}</span>
+                  </div>
                   <p className="timeline-step-meta">
-                    Nhóm trưởng đăng ký bài toán thị trường và gửi yêu cầu ghép Giảng viên Mentor.
+                    Đăng ký bài toán thị trường và ghép Giảng viên Mentor. (Đề tài: {topicCountdown.text} | Mentor: {mentorCountdown.text})
                   </p>
                 </div>
               </div>
@@ -304,7 +463,12 @@ export default function DashboardPage() {
                   <Calendar size={16} />
                 </div>
                 <div className="timeline-step-content">
-                  <span className="timeline-step-title">Thẩm định Hội đồng & Bảo vệ cuối kỳ</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="timeline-step-title">Thẩm định Hội đồng & Bảo vệ cuối kỳ</span>
+                    <span className="badge badge-neutral">
+                      {currentSemester?.endDate ? `Hạn: ${new Date(currentSemester.endDate).toLocaleDateString('vi-VN')}` : 'Chưa xếp ngày'}
+                    </span>
+                  </div>
                   <p className="timeline-step-meta">
                     Bảo vệ sản phẩm MVP và chiến lược gọi vốn hạt giống trước Hội đồng Khởi nghiệp FPT.
                   </p>

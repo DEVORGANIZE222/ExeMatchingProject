@@ -39,17 +39,18 @@ export default function SemesterTimelineProgress({
   const dMentor = parseDate(mentorDeadline)
 
   if (!start || !end) {
+    if (compact) return null
     return (
       <div style={{
-        padding: '12px 14px',
-        borderRadius: '10px',
+        padding: '8px 12px',
+        borderRadius: '8px',
         backgroundColor: '#F8FAFC',
         border: '1px dashed #CBD5E1',
-        fontSize: '12.5px',
+        fontSize: '11.5px',
         color: '#64748B',
         textAlign: 'center'
       }}>
-        Chọn <strong>Ngày bắt đầu</strong> và <strong>Ngày kết thúc</strong> để xem thanh tiến độ lộ trình học kỳ.
+        💡 Điền <strong>Ngày bắt đầu</strong> và <strong>Ngày kết thúc</strong> để xem trước thanh tiến độ.
       </div>
     )
   }
@@ -228,19 +229,33 @@ export default function SemesterTimelineProgress({
 
       {/* Date Milestones Footprint */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        fontSize: '11.5px',
-        color: '#64748B',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+        gap: '4px',
         borderTop: '1px solid #EDF2F7',
-        paddingTop: 6,
-        marginTop: 2
+        paddingTop: '8px',
+        marginTop: '2px'
       }}>
-        <span>Bắt đầu: <strong style={{ color: '#1E293B' }}>{formatVnDate(startDate)}</strong></span>
-        <span>Hạn 1: <strong style={{ color: '#10B981' }}>{formatVnDate(registrationDeadline)}</strong></span>
-        <span>Hạn 2: <strong style={{ color: '#D97706' }}>{formatVnDate(topicDeadline)}</strong></span>
-        <span>Hạn 3: <strong style={{ color: '#2563EB' }}>{formatVnDate(mentorDeadline)}</strong></span>
-        <span>Kết thúc: <strong style={{ color: '#1E293B' }}>{formatVnDate(endDate)}</strong></span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', backgroundColor: '#F8FAFC', padding: '4px 2px', borderRadius: '6px', border: '1px solid #E2E8F0', minWidth: 0 }}>
+          <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600, whiteSpace: 'nowrap' }}>Bắt đầu</span>
+          <strong style={{ fontSize: '10.5px', color: '#1E293B', whiteSpace: 'nowrap' }}>{formatVnDate(startDate)}</strong>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', backgroundColor: '#ECFDF5', padding: '4px 2px', borderRadius: '6px', border: '1px solid #A7F3D0', minWidth: 0 }}>
+          <span style={{ fontSize: '10px', color: '#047857', fontWeight: 600, whiteSpace: 'nowrap' }}>Ghép nhóm</span>
+          <strong style={{ fontSize: '10.5px', color: '#065F46', whiteSpace: 'nowrap' }}>{formatVnDate(registrationDeadline)}</strong>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', backgroundColor: '#FFFBEB', padding: '4px 2px', borderRadius: '6px', border: '1px solid #FDE68A', minWidth: 0 }}>
+          <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 600, whiteSpace: 'nowrap' }}>Đề tài</span>
+          <strong style={{ fontSize: '10.5px', color: '#92400E', whiteSpace: 'nowrap' }}>{formatVnDate(topicDeadline)}</strong>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', backgroundColor: '#EFF6FF', padding: '4px 2px', borderRadius: '6px', border: '1px solid #BFDBFE', minWidth: 0 }}>
+          <span style={{ fontSize: '10px', color: '#1D4ED8', fontWeight: 600, whiteSpace: 'nowrap' }}>Khớp Mentor</span>
+          <strong style={{ fontSize: '10.5px', color: '#1E40AF', whiteSpace: 'nowrap' }}>{formatVnDate(mentorDeadline)}</strong>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', backgroundColor: '#F8FAFC', padding: '4px 2px', borderRadius: '6px', border: '1px solid #E2E8F0', minWidth: 0 }}>
+          <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600, whiteSpace: 'nowrap' }}>Kết thúc</span>
+          <strong style={{ fontSize: '10.5px', color: '#1E293B', whiteSpace: 'nowrap' }}>{formatVnDate(endDate)}</strong>
+        </div>
       </div>
     </div>
   )

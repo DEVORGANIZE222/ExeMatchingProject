@@ -60,8 +60,40 @@ export default function DatePicker({
   maxDate
 }) {
   const [open, setOpen] = useState(false)
+  const [openUpward, setOpenUpward] = useState(false)
   const [text, setText] = useState(() => toDisplayString(value))
   const containerRef = useRef(null)
+
+  // Detect available space and decide whether to open upward or downward
+  const updatePosition = useCallback(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+      // Popover needs ~280px. If space below is not enough and space above is larger, flip upward
+      if (spaceBelow < 290 && spaceAbove > 280) {
+        setOpenUpward(true)
+      } else {
+        setOpenUpward(false)
+      }
+    }
+  }, [])
+
+  const handleOpen = () => {
+    if (disabled) return
+    updatePosition()
+    setOpen(true)
+  }
+
+  const handleToggle = () => {
+    if (disabled) return
+    if (!open) {
+      updatePosition()
+      setOpen(true)
+    } else {
+      setOpen(false)
+    }
+  }
 
   // Current view year & month for calendar popover
   const initialDate = parseIso(value) || new Date()
@@ -78,18 +110,28 @@ export default function DatePicker({
     }
   }, [value])
 
-  // Close calendar popover on outside click
+  // Close calendar popover on outside click or reposition on window scroll/resize
   useEffect(() => {
     const handleOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
         setOpen(false)
       }
     }
+    const handleScrollOrResize = () => {
+      if (open) updatePosition()
+    }
+
     if (open) {
       document.addEventListener('mousedown', handleOutside)
+      window.addEventListener('scroll', handleScrollOrResize, true)
+      window.addEventListener('resize', handleScrollOrResize)
     }
-    return () => document.removeEventListener('mousedown', handleOutside)
-  }, [open])
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
+      window.removeEventListener('resize', handleScrollOrResize)
+    }
+  }, [open, updatePosition])
 
   // Handle direct text editing (auto-insert slash and validate)
   const handleTextChange = (e) => {
@@ -226,14 +268,14 @@ export default function DatePicker({
           disabled={disabled}
           onChange={handleTextChange}
           onBlur={handleTextBlur}
-          onClick={() => !disabled && setOpen(true)}
+          onClick={handleOpen}
         />
         <button
           type="button"
           tabIndex={-1}
           className="custom-datepicker-icon-btn"
           disabled={disabled}
-          onClick={() => !disabled && setOpen((prev) => !prev)}
+          onClick={handleToggle}
           title="Chọn ngày"
         >
           <CalendarIcon size={16} />
@@ -241,7 +283,7 @@ export default function DatePicker({
       </div>
 
       {open && (
-        <div className="custom-datepicker-popover">
+        <div className={`custom-datepicker-popover ${openUpward ? 'open-upward' : ''}`}>
           {/* Header Month / Year Navigation */}
           <div className="datepicker-header">
             <button

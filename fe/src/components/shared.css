@@ -45,10 +45,12 @@
   color: var(--text-inverse);
   border: 1px solid transparent;
 }
+
 .btn-primary:hover {
   background-color: var(--primary-hover);
   color: var(--text-inverse);
 }
+
 .btn-primary:active {
   background-color: var(--primary-active);
 }
@@ -59,6 +61,7 @@
   color: var(--text-main);
   border: 1px solid var(--border-default);
 }
+
 .btn-secondary:hover,
 .btn-outline:hover {
   background-color: var(--bg-subtle);
@@ -70,6 +73,7 @@
   color: var(--text-secondary);
   border: 1px solid transparent;
 }
+
 .btn-ghost:hover {
   background-color: var(--bg-subtle);
   color: var(--text-main);
@@ -262,9 +266,23 @@
   border-color: var(--primary-border);
 }
 
-.avatar-sm { width: 28px; height: 28px; font-size: 11px; }
-.avatar-md { width: 36px; height: 36px; font-size: 13px; }
-.avatar-lg { width: 44px; height: 44px; font-size: 15px; }
+.avatar-sm {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.avatar-md {
+  width: 36px;
+  height: 36px;
+  font-size: 13px;
+}
+
+.avatar-lg {
+  width: 44px;
+  height: 44px;
+  font-size: 15px;
+}
 
 /* ── Alerts ──────────────────────────────────────────────── */
 .alert {
@@ -314,7 +332,10 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 520px;
+  max-width: 540px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overflow-x: visible;
   padding: var(--space-6);
   position: relative;
 }
@@ -340,7 +361,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Metric Cards Grid (Standard across Dashboard, Mentors, etc.) ── */
@@ -436,4 +459,3 @@
     grid-template-columns: 1fr;
   }
 }
-
