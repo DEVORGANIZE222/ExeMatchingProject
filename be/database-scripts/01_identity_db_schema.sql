@@ -85,5 +85,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS "IX_StudentStrengthRoles_StudentId_RoleCode" O
 
 INSERT INTO "Roles" ("Id", "Name", "Description", "CreatedAt") VALUES
   ('11111111-1111-1111-1111-111111111111', 'Admin', 'System Administrator', NOW()),
-  ('22222222-2222-2222-2222-222222222222', 'Student', 'Student User', NOW())
+  ('22222222-2222-2222-2222-222222222222', 'Student', 'Student User', NOW()),
+  ('33333333-3333-3333-3333-333333333333', 'Mentor', 'Mentor User', NOW())
 ON CONFLICT ("Id") DO NOTHING;
+
+INSERT INTO "GoogleAllowedEmails" ("Id", "Email", "CreatedAt") VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'danghung25022005@gmail.com', NOW()),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'thithinh714@gmail.com', NOW())
+ON CONFLICT ("Email") DO NOTHING;

@@ -54,13 +54,16 @@ public class StudentsController(IdentityService service, IStudentImportReader re
         if (fileCodes.Count != 1) throw new IdentityException(400, "Excel must contain exactly one SemesterCode value.");
         if (!string.IsNullOrWhiteSpace(request.SemesterCode) && !request.SemesterCode.Trim().Equals(fileCodes[0], StringComparison.OrdinalIgnoreCase))
             throw new IdentityException(400, "SemesterCode in Excel does not match the selected semester.");
+        var password = string.IsNullOrWhiteSpace(request.InitialPassword)
+            ? "Student@12345678"
+            : request.InitialPassword.Trim();
         return Ok(ApiResponse<ImportResult>.Ok(await service.Import(
-            new ImportStudentsRequest(fileCodes[0]!, students, request.InitialPassword), request.InitialPassword, ct)));
+            new ImportStudentsRequest(fileCodes[0]!, students, password), password, ct)));
     }
 }
 public class ExcelImportRequest
 {
     [Required] public IFormFile File { get; set; } = null!;
     public string? SemesterCode { get; set; }
-    [Required, StringLength(128, MinimumLength = 6)] public string InitialPassword { get; set; } = "";
+    public string? InitialPassword { get; set; }
 }

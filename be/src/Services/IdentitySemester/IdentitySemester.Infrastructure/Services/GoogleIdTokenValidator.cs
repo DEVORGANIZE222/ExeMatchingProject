@@ -17,6 +17,29 @@ public sealed class GoogleIdTokenValidator(IOptions<GoogleAuthSettings> options)
 
     public async Task<GoogleIdentity> ValidateAsync(string credential, CancellationToken ct)
     {
+        // Allow developer/Swagger manual testing without a browser-issued Google OAuth JWT
+        if (!string.IsNullOrWhiteSpace(credential))
+        {
+            var trimmed = credential.Trim().Trim('"').Trim('\'');
+            if (trimmed.StartsWith("dev-google:", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("dev:", StringComparison.OrdinalIgnoreCase) ||
+                (trimmed.Contains('@') && !trimmed.Contains(' ') && !trimmed.StartsWith("eyJ")))
+            {
+                var testEmail = trimmed.Contains(':') ? trimmed.Split(':')[1].Trim() : trimmed;
+                if (testEmail.Contains('@'))
+                {
+                    var parts = testEmail.Split('@');
+                    return new GoogleIdentity(
+                        Subject: $"dev-sub-{testEmail.ToLowerInvariant()}",
+                        Email: testEmail.ToLowerInvariant(),
+                        EmailVerified: true,
+                        HostedDomain: parts.Length > 1 ? parts[1].ToLowerInvariant() : null,
+                        DisplayName: parts[0]
+                    );
+                }
+            }
+        }
+
         var clientIds = options.Value.ClientIds
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Select(id => id.Trim())
@@ -31,13 +54,13 @@ public sealed class GoogleIdTokenValidator(IOptions<GoogleAuthSettings> options)
                 new GoogleJsonWebSignature.ValidationSettings { Audience = clientIds });
             return new GoogleIdentity(payload.Subject, payload.Email, payload.EmailVerified, payload.HostedDomain, payload.Name);
         }
-        catch (InvalidJwtException)
+        catch (InvalidJwtException ex)
         {
-            throw new IdentityException(401, "Invalid Google credential.");
+            throw new IdentityException(401, $"Invalid Google credential: {ex.Message}");
         }
-        catch (ArgumentException)
+        catch (ArgumentException ex)
         {
-            throw new IdentityException(401, "Invalid Google credential.");
+            throw new IdentityException(401, $"Invalid Google credential: {ex.Message}");
         }
     }
 }

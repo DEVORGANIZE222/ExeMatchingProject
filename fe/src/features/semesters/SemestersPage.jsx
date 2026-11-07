@@ -48,6 +48,7 @@ export default function SemestersPage() {
   })
 
   const [editForm, setEditForm] = useState({
+    code: '',
     name: '',
     startDate: '',
     endDate: '',
@@ -117,6 +118,7 @@ export default function SemestersPage() {
   const handleOpenEdit = (item) => {
     setEditingItem(item)
     setEditForm({
+      code: item.code || '',
       name: item.name || '',
       startDate: toInputDate(item.startDate),
       endDate: toInputDate(item.endDate),
@@ -138,6 +140,7 @@ export default function SemestersPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          code: editForm.code.trim().toUpperCase(),
           name: editForm.name.trim(),
           startDate: toUtc(editForm.startDate),
           endDate: toUtc(editForm.endDate),
@@ -147,7 +150,7 @@ export default function SemestersPage() {
           mentorDeadline: toUtc(editForm.mentorDeadline)
         })
       })
-      toast.success(`Đã cập nhật học kỳ ${editingItem.code} thành công.`)
+      toast.success(`Đã cập nhật học kỳ ${editForm.code} thành công.`)
       setEditModal(false)
       setEditingItem(null)
       await load()
@@ -448,14 +451,25 @@ export default function SemestersPage() {
             </div>
 
             <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label className="input-label">Tên học kỳ *</label>
-                <input
-                  required
-                  className="input"
-                  value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 12 }}>
+                <div>
+                  <label className="input-label">Mã học kỳ *</label>
+                  <input
+                    required
+                    className="input"
+                    value={editForm.code}
+                    onChange={(e) => setEditForm({ ...editForm, code: e.target.value.toUpperCase() })}
+                  />
+                </div>
+                <div>
+                  <label className="input-label">Tên học kỳ *</label>
+                  <input
+                    required
+                    className="input"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

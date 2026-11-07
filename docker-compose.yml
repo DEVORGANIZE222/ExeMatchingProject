@@ -106,6 +106,8 @@ services:
       - BootstrapAdmin__Email=${BOOTSTRAP_ADMIN_EMAIL:-}
       - BootstrapAdmin__Password=${BOOTSTRAP_ADMIN_PASSWORD:-}
       - GoogleAuth__ClientIds__0=${GOOGLE_CLIENT_ID:-}
+      - GoogleAuth__AllowedEmails__0=danghung25022005@gmail.com
+      - GoogleAuth__AllowedEmails__1=thithinh714@gmail.com
     depends_on:
       - postgres
       - kafka

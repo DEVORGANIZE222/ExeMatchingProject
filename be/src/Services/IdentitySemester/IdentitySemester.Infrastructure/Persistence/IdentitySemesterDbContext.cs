@@ -37,10 +37,31 @@ public class IdentitySemesterDbContext : DbContext
         // Seed Roles
         var adminRoleId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var studentRoleId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var mentorRoleId = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
         modelBuilder.Entity<Role>().HasData(
             new Role { Id = adminRoleId, Name = "Admin", Description = "System Administrator", CreatedAt = DateTime.UtcNow },
-            new Role { Id = studentRoleId, Name = "Student", Description = "Student User", CreatedAt = DateTime.UtcNow }
+            new Role { Id = studentRoleId, Name = "Student", Description = "Student User", CreatedAt = DateTime.UtcNow },
+            new Role { Id = mentorRoleId, Name = "Mentor", Description = "Mentor User", CreatedAt = DateTime.UtcNow }
+        );
+
+        // Seed Google Allowed Emails
+        var allowedEmailId1 = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var allowedEmailId2 = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
+        modelBuilder.Entity<GoogleAllowedEmail>().HasData(
+            new GoogleAllowedEmail
+            {
+                Id = allowedEmailId1,
+                Email = "danghung25022005@gmail.com",
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new GoogleAllowedEmail
+            {
+                Id = allowedEmailId2,
+                Email = "thithinh714@gmail.com",
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
         );
 
     }

@@ -25,7 +25,6 @@ export default function StudentsPage() {
   // Excel Form
   const [importForm, setImportForm] = useState({
     semesterCode: '',
-    initialPassword: '',
     file: null
   })
 
@@ -108,12 +107,13 @@ export default function StudentsPage() {
       setBusy(true)
       const data = new FormData()
       data.append('file', importForm.file)
-      data.append('semesterCode', importForm.semesterCode)
-      data.append('initialPassword', importForm.initialPassword)
+      if (importForm.semesterCode) {
+        data.append('semesterCode', importForm.semesterCode)
+      }
 
       const result = await request('/api/students/import/excel', { method: 'POST', body: data })
       toast.success(`Đã thêm ${result?.importedCount || 0} sinh viên và cấp quyền Google Access.`)
-      setImportForm((prev) => ({ ...prev, file: null, initialPassword: '' }))
+      setImportForm((prev) => ({ ...prev, file: null }))
       await load()
     } catch (error) {
       toast.error(error.message || 'Import danh sách sinh viên không thành công.')
@@ -306,19 +306,6 @@ export default function StudentsPage() {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div>
-                  <label className="input-label">Mật khẩu khởi tạo ban đầu *</label>
-                  <input
-                    className="input"
-                    required
-                    type="password"
-                    minLength={12}
-                    placeholder="Tối thiểu 12 ký tự (VD: Student@12345678)"
-                    value={importForm.initialPassword}
-                    onChange={(e) => setImportForm({ ...importForm, initialPassword: e.target.value })}
-                  />
                 </div>
 
                 <div>
