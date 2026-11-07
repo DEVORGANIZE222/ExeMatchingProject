@@ -1,12 +1,20 @@
 import { useState, useCallback, useEffect } from 'react'
 import {
-  Calendar, Plus, Clock, Trash2, X
+  Calendar, Plus, Clock, Trash2, X, Edit3, CheckCircle2
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 
 const toUtc = (value) => (value ? new Date(value).toISOString() : null)
+const toInputDate = (dateStr) => {
+  if (!dateStr) return ''
+  try {
+    return new Date(dateStr).toISOString().slice(0, 10)
+  } catch {
+    return ''
+  }
+}
 const formatDate = (dateStr) => {
   if (!dateStr) return '—'
   try {
@@ -26,11 +34,24 @@ export default function SemestersPage() {
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState('all') // 'all' | 'active' | 'ended'
   const [showModal, setShowModal] = useState(false)
+  const [editModal, setEditModal] = useState(false)
+  const [editingItem, setEditingItem] = useState(null)
+
   const [form, setForm] = useState({
     code: '',
     name: '',
     startDate: '',
     endDate: '',
+    registrationDeadline: '',
+    topicDeadline: '',
+    mentorDeadline: ''
+  })
+
+  const [editForm, setEditForm] = useState({
+    name: '',
+    startDate: '',
+    endDate: '',
+    isActive: true,
     registrationDeadline: '',
     topicDeadline: '',
     mentorDeadline: ''
@@ -53,6 +74,7 @@ export default function SemestersPage() {
     return () => clearTimeout(id)
   }, [load])
 
+  // Create Semester
   const handleCreate = async (e) => {
     e.preventDefault()
     const milestones = [form.registrationDeadline, form.topicDeadline, form.mentorDeadline]
@@ -96,6 +118,52 @@ export default function SemestersPage() {
     }
   }
 
+  // Open Edit Modal
+  const handleOpenEdit = (item) => {
+    setEditingItem(item)
+    setEditForm({
+      name: item.name || '',
+      startDate: toInputDate(item.startDate),
+      endDate: toInputDate(item.endDate),
+      isActive: item.isActive,
+      registrationDeadline: toInputDate(item.registrationDeadline),
+      topicDeadline: toInputDate(item.topicDeadline),
+      mentorDeadline: toInputDate(item.mentorDeadline)
+    })
+    setEditModal(true)
+  }
+
+  // Update Semester (PUT API)
+  const handleUpdate = async (e) => {
+    e.preventDefault()
+    if (!editingItem) return
+    try {
+      setBusy(true)
+      await request(`/api/semesters/${editingItem.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editForm.name.trim(),
+          startDate: toUtc(editForm.startDate),
+          endDate: toUtc(editForm.endDate),
+          isActive: editForm.isActive,
+          registrationDeadline: toUtc(editForm.registrationDeadline),
+          topicDeadline: toUtc(editForm.topicDeadline),
+          mentorDeadline: toUtc(editForm.mentorDeadline)
+        })
+      })
+      toast.success(`Đã cập nhật học kỳ ${editingItem.code} thành công.`)
+      setEditModal(false)
+      setEditingItem(null)
+      await load()
+    } catch (err) {
+      toast.error(err.message || 'Lỗi khi cập nhật học kỳ.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Delete Semester
   const handleDelete = async (id, code) => {
     if (!window.confirm(`Xác nhận xóa học kỳ ${code}?`)) return
     try {
@@ -129,7 +197,7 @@ export default function SemestersPage() {
           <h1 className="page-title">{isAdmin ? 'Quản lý Học kỳ' : 'Lịch trình Học kỳ'}</h1>
           <p className="page-subtitle">
             {isAdmin
-              ? 'Khởi tạo các mốc thời gian ghép nhóm, duyệt đề tài và phân công mentor cho học kỳ.'
+              ? 'Khởi tạo các mốc thời gian ghép nhóm, gia hạn deadline và phân công mentor cho học kỳ.'
               : 'Theo dõi các mốc quan trọng trong học kỳ Khởi nghiệp của bạn.'}
           </p>
         </div>
@@ -184,18 +252,28 @@ export default function SemestersPage() {
                   ) : isEnded ? (
                     <span className="badge badge-neutral">Đã kết thúc</span>
                   ) : (
-                    <span className="badge badge-neutral">Sắp tới</span>
+                    <span className="badge badge-neutral">Đã đóng</span>
                   )}
 
                   {isAdmin && (
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ padding: 4, color: 'var(--text-muted)' }}
-                      onClick={() => handleDelete(item.id, item.code)}
-                      title="Xóa học kỳ"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: 4, color: 'var(--text-secondary)' }}
+                        onClick={() => handleOpenEdit(item)}
+                        title="Chỉnh sửa & Gia hạn deadline"
+                      >
+                        <Edit3 size={15} />
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: 4, color: 'var(--text-muted)' }}
+                        onClick={() => handleDelete(item.id, item.code)}
+                        title="Xóa học kỳ"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -251,8 +329,8 @@ export default function SemestersPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreate}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, marginBottom: 12 }}>
+            <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 12 }}>
                 <div>
                   <label className="input-label">Mã học kỳ *</label>
                   <input
@@ -260,7 +338,7 @@ export default function SemestersPage() {
                     className="input"
                     placeholder="VD: FA26"
                     value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value })}
+                    onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
                   />
                 </div>
                 <div>
@@ -268,19 +346,19 @@ export default function SemestersPage() {
                   <input
                     required
                     className="input"
-                    placeholder="VD: Fall 2026 - Dự án Khởi nghiệp EXE"
+                    placeholder="VD: Fall 2026 Capstone"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label className="input-label">Ngày bắt đầu *</label>
                   <input
                     required
-                    type="datetime-local"
+                    type="date"
                     className="input"
                     value={form.startDate}
                     onChange={(e) => setForm({ ...form, startDate: e.target.value })}
@@ -290,7 +368,7 @@ export default function SemestersPage() {
                   <label className="input-label">Ngày kết thúc *</label>
                   <input
                     required
-                    type="datetime-local"
+                    type="date"
                     className="input"
                     value={form.endDate}
                     onChange={(e) => setForm({ ...form, endDate: e.target.value })}
@@ -298,35 +376,38 @@ export default function SemestersPage() {
                 </div>
               </div>
 
-              <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 14, marginBottom: 16 }}>
-                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                  CÁC MỐC HẠN CHÓT (TÙY CHỌN)
+              <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 12 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  3 MỐC THỜI HẠN (DEADLINE) CỐ ĐỊNH
+                </span>
+                <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  Điền đủ cả 3 mốc để tự động điều phối giai đoạn hoặc để trống cả 3.
                 </p>
 
-                <div style={{ display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div>
-                    <label className="input-label">Hạn chốt Đăng ký ghép nhóm</label>
+                    <label className="input-label">1. Hạn chót ghép nhóm tự do</label>
                     <input
-                      type="datetime-local"
-                      className="input"
+                      type="date"
+                      className="input input-sm"
                       value={form.registrationDeadline}
                       onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="input-label">Hạn chốt Đề tài khởi nghiệp</label>
+                    <label className="input-label">2. Hạn chót đăng ký đề tài</label>
                     <input
-                      type="datetime-local"
-                      className="input"
+                      type="date"
+                      className="input input-sm"
                       value={form.topicDeadline}
                       onChange={(e) => setForm({ ...form, topicDeadline: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="input-label">Hạn chốt Ghép Mentor</label>
+                    <label className="input-label">3. Hạn chót ghép Mentor hướng dẫn</label>
                     <input
-                      type="datetime-local"
-                      className="input"
+                      type="date"
+                      className="input input-sm"
                       value={form.mentorDeadline}
                       onChange={(e) => setForm({ ...form, mentorDeadline: e.target.value })}
                     />
@@ -334,7 +415,7 @@ export default function SemestersPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -343,7 +424,127 @@ export default function SemestersPage() {
                   Hủy
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {busy ? 'Đang lưu...' : 'Lưu học kỳ'}
+                  Khởi tạo học kỳ
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Semester Modal (PUT API) ── */}
+      {editModal && editingItem && (
+        <div className="modal-backdrop" onClick={() => setEditModal(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <span className="badge badge-neutral" style={{ marginBottom: 4 }}>Cập nhật học kỳ</span>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                  {editingItem.code} · {editingItem.name}
+                </h2>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setEditModal(false)}
+                style={{ padding: 4 }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="input-label">Tên học kỳ *</label>
+                <input
+                  required
+                  className="input"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="input-label">Ngày bắt đầu *</label>
+                  <input
+                    required
+                    type="date"
+                    className="input"
+                    value={editForm.startDate}
+                    onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="input-label">Ngày kết thúc *</label>
+                  <input
+                    required
+                    type="date"
+                    className="input"
+                    value={editForm.endDate}
+                    onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+                <input
+                  type="checkbox"
+                  id="isActiveToggle"
+                  checked={editForm.isActive}
+                  onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })}
+                  style={{ width: 16, height: 16 }}
+                />
+                <label htmlFor="isActiveToggle" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
+                  Kích hoạt học kỳ này (Đang diễn ra)
+                </label>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 12 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  GIA HẠN CÁC MỐC THỜI HẠN (DEADLINE)
+                </span>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                  <div>
+                    <label className="input-label">1. Hạn ghép nhóm tự do</label>
+                    <input
+                      type="date"
+                      className="input input-sm"
+                      value={editForm.registrationDeadline}
+                      onChange={(e) => setEditForm({ ...editForm, registrationDeadline: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="input-label">2. Hạn chốt đề tài</label>
+                    <input
+                      type="date"
+                      className="input input-sm"
+                      value={editForm.topicDeadline}
+                      onChange={(e) => setEditForm({ ...editForm, topicDeadline: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="input-label">3. Hạn ghép Mentor hướng dẫn</label>
+                    <input
+                      type="date"
+                      className="input input-sm"
+                      value={editForm.mentorDeadline}
+                      onChange={(e) => setEditForm({ ...editForm, mentorDeadline: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditModal(false)}
+                >
+                  Hủy
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>
+                  Lưu thay đổi
                 </button>
               </div>
             </form>

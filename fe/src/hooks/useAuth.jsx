@@ -241,7 +241,14 @@ export function AuthProvider({ children }) {
     })
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.message || 'Phiên đăng nhập không hợp lệ.')
-    const next = { ...body.data, student }
+    const saved = localStorage.getItem('exe_account')
+    let savedStudent = null
+    try {
+      savedStudent = saved ? JSON.parse(saved)?.student : null
+    } catch {
+      // ignore
+    }
+    const next = { ...body.data, student: student || savedStudent }
     setAccount(next)
     localStorage.setItem('exe_account', JSON.stringify(next))
     return next
