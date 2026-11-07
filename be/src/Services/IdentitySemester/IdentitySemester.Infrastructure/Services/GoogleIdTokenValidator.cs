@@ -58,7 +58,7 @@ public sealed class GoogleIdTokenValidator(IOptions<GoogleAuthSettings> options)
                 ExpirationTimeClockTolerance = TimeSpan.FromMinutes(10)
             };
             var payload = await GoogleJsonWebSignature.ValidateAsync(credential, validationSettings);
-            return new GoogleIdentity(payload.Subject, payload.Email, payload.EmailVerified, payload.HostedDomain, payload.Name);
+            return new GoogleIdentity(payload.Subject, payload.Email, payload.EmailVerified, payload.HostedDomain, payload.Name, payload.Picture);
         }
         catch (InvalidJwtException ex)
         {
@@ -77,6 +77,7 @@ public sealed class GoogleIdTokenValidator(IOptions<GoogleAuthSettings> options)
                         var emailVerifiedStr = jwt.Claims.FirstOrDefault(c => c.Type == "email_verified")?.Value;
                         var name = jwt.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
                         var hd = jwt.Claims.FirstOrDefault(c => c.Type == "hd")?.Value;
+                        var picture = jwt.Claims.FirstOrDefault(c => c.Type is "picture" or "avatar")?.Value;
 
                         var aud = jwt.Audiences.FirstOrDefault() ?? jwt.Claims.FirstOrDefault(c => c.Type == "aud")?.Value;
                         var iss = jwt.Issuer;
@@ -87,7 +88,7 @@ public sealed class GoogleIdTokenValidator(IOptions<GoogleAuthSettings> options)
                         if (isGoogleIssuer && isMatchingAud && !string.IsNullOrWhiteSpace(sub) && !string.IsNullOrWhiteSpace(email))
                         {
                             var verified = bool.TryParse(emailVerifiedStr, out var v) && v;
-                            return new GoogleIdentity(sub, email, verified, hd, name);
+                            return new GoogleIdentity(sub, email, verified, hd, name, picture);
                         }
                     }
                 }

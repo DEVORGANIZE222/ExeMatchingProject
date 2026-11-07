@@ -44,7 +44,7 @@ public interface ITokenIssuer
 {
     (string Token, DateTime Expiration) Issue(User user);
 }
-public record GoogleIdentity(string Subject, string Email, bool EmailVerified, string? HostedDomain, string? DisplayName);
+public record GoogleIdentity(string Subject, string Email, bool EmailVerified, string? HostedDomain, string? DisplayName, string? PictureUrl = null);
 public interface IGoogleIdTokenValidator
 {
     Task<GoogleIdentity> ValidateAsync(string credential, CancellationToken ct);

@@ -85,7 +85,7 @@ public sealed class FakeGoogleIdTokenValidator : IGoogleIdTokenValidator
     public const string DeniedCredential = "valid-google-id-token-not-whitelisted";
     public Task<GoogleIdentity> ValidateAsync(string credential, CancellationToken ct) => credential switch
     {
-        AllowedCredential => Task.FromResult(new GoogleIdentity("google-subject-1", "nhanlhse184226@fpt.edu.vn", true, "fpt.edu.vn", "Nhan Le")),
+        AllowedCredential => Task.FromResult(new GoogleIdentity("google-subject-1", "nhanlhse184226@fpt.edu.vn", true, "fpt.edu.vn", "Nhan Le", "https://lh3.googleusercontent.com/test-avatar")),
         ExistingAccountCredential => Task.FromResult(new GoogleIdentity("google-subject-2", "existing@student.test", true, "fpt.edu.vn", "Existing Student")),
         UnverifiedCredential => Task.FromResult(new GoogleIdentity("google-subject-3", "nhanlhse184226@fpt.edu.vn", false, "fpt.edu.vn", "Unverified")),
         DeniedCredential => Task.FromResult(new GoogleIdentity("google-subject-4", "not-allowed@fpt.edu.vn", true, "fpt.edu.vn", "Denied")),

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS "Users" (
     "Username" text NOT NULL,
     "Email" text NOT NULL,
     "GoogleSubject" text NULL,
+    "GooglePictureUrl" text NULL,
     "PasswordHash" text NOT NULL,
     "TokenVersion" integer NOT NULL DEFAULT 0,
     "RoleId" uuid NOT NULL REFERENCES "Roles" ("Id") ON DELETE RESTRICT,

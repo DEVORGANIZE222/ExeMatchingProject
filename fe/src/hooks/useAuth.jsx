@@ -255,18 +255,19 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    if (!token || account) return
+    if (!token) return
     const timer = setTimeout(() => {
       loadAccount(token)
         .catch(() => {
           localStorage.removeItem('exe_access_token')
           localStorage.removeItem('exe_account')
           setToken('')
+          setAccount(null)
         })
         .finally(() => setLoading(false))
     }, 0)
     return () => clearTimeout(timer)
-  }, [account, loadAccount, token])
+  }, [loadAccount, token])
 
   const googleLogin = async ({ credential }) => {
     try {

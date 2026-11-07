@@ -12,6 +12,7 @@ import './layout.css'
 export default function AppLayout() {
   const { account, logout, isAdmin, isMentor, mentorRequests } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState(null)
 
   // Calculate pending requests count for mentor badge
   const pendingRequestsCount = mentorRequests?.filter((r) => r.status === 'Pending').length || 0
@@ -96,7 +97,9 @@ export default function AppLayout() {
           <div className="topbar-actions">
             <div className="user-profile-badge">
               <div className="avatar avatar-sm avatar-primary">
-                {userInitial}
+                {account?.avatarUrl && account.avatarUrl !== failedAvatarUrl ? (
+                  <img src={account.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarUrl(account.avatarUrl)} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : userInitial}
               </div>
               <div style={{ textAlign: 'left' }}>
                 <div className="user-name">{account?.username || 'Người dùng'}</div>
