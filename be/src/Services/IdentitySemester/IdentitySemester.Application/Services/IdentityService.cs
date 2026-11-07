@@ -28,6 +28,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         var user = await store.UserByGoogleSubject(identity.Subject, ct);
         if (user is not null)
         {
+            await EnsureStudentEnrolled(user, ct);
             if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
             {
                 var emailOwner = await store.UserByEmail(email, ct);
@@ -48,19 +49,11 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         user = await store.UserByEmail(email, ct);
         if (user is null)
         {
-            var studentRole = await store.RoleByName("Student", ct);
-            user = new User
-            {
-                Email = email,
-                Username = string.IsNullOrWhiteSpace(identity.DisplayName) ? email : identity.DisplayName.Trim(),
-                RoleId = studentRole.Id,
-                Role = studentRole,
-                GoogleSubject = identity.Subject
-            };
-            store.AddUser(user);
+            throw new IdentityException(403, "This account has no student enrollment or authorized staff account.");
         }
         else
         {
+            await EnsureStudentEnrolled(user, ct);
             if (!string.IsNullOrWhiteSpace(user.GoogleSubject) && user.GoogleSubject != identity.Subject)
                 throw new IdentityException(409, "This email is already linked to another Google account.");
             user.GoogleSubject = identity.Subject;
@@ -219,10 +212,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     }
     public async Task DeleteStudent(Guid id, CancellationToken ct)
     {
-        var student = await store.StudentById(id, ct) ?? throw new IdentityException(404, "Student not found.");
-        if (student.HasGroup) throw new IdentityException(409, "Remove group membership through GroupMatching before deleting this student.");
-        store.RemoveStudent(student);
-        await store.Save(ct);
+        await store.DeleteStudentEnrollment(id, ct);
     }
     public async Task<int> DeleteStudentsBySemester(string semesterCode, CancellationToken ct)
     {
@@ -335,9 +325,15 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     }
     private async Task<LoginResponse> IssueLoginAsync(User user, CancellationToken ct)
     {
+        await EnsureStudentEnrolled(user, ct);
         var token = tokens.Issue(user);
         var student = await store.StudentByUser(user.Id, ct);
         return new(token.Token, null, token.Expiration, student is null ? null : Map(student));
+    }
+    private async Task EnsureStudentEnrolled(User user, CancellationToken ct)
+    {
+        if (user.Role.Name.Equals("Student", StringComparison.OrdinalIgnoreCase) && await store.StudentByUser(user.Id, ct) is null)
+            throw new IdentityException(403, "Student account is not enrolled in any semester.");
     }
     private static string? GooglePicture(string? value)
     {

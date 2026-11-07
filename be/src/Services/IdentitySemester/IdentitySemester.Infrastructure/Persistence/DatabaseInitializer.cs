@@ -26,13 +26,14 @@ public class DatabaseInitializer(IdentitySemesterDbContext db, IPasswordService 
         if (!await db.Roles.AnyAsync(role => role.Name == "Mentor", ct))
             db.Roles.Add(new Role { Id = mentorRoleId, Name = "Mentor", Description = "Mentor User" });
         var bootstrapGoogleEmails = config.GetSection("GoogleAuth:AllowedEmails").Get<string[]>() ?? [];
-        foreach (var rawEmail in bootstrapGoogleEmails)
+        foreach (var rawEmail in bootstrapGoogleEmails.Where(email => !string.IsNullOrWhiteSpace(email))
+                     .Select(email => email.Trim().ToLowerInvariant()).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (string.IsNullOrWhiteSpace(rawEmail)) continue;
             var normalizedEmail = rawEmail.Trim().ToLowerInvariant();
             if (!new EmailAddressAttribute().IsValid(normalizedEmail))
                 throw new InvalidOperationException("A configured Google allowed email is invalid.");
-            if (!await db.GoogleAllowedEmails.AnyAsync(x => x.Email == normalizedEmail, ct))
+            if (!await db.GoogleAllowedEmails.AnyAsync(x => x.Email.Trim().ToLower() == normalizedEmail, ct))
                 db.GoogleAllowedEmails.Add(new GoogleAllowedEmail { Email = normalizedEmail });
         }
         if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync(ct);

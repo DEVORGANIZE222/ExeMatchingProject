@@ -63,6 +63,10 @@ public class IdentitySemesterServiceTests(IdentityApiFixture fixture) : IClassFi
     [Fact]
     public async Task Google_login_uses_verified_whitelist_and_issues_the_same_application_jwt()
     {
+        var semester = await Semester();
+        var enrollment = new CreateStudentRequest(semester.Code,
+            new("GOOGLETEST", "Google Student", "nhanlhse184226@fpt.edu.vn", "SE"), IdentityApiFixture.Password);
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Admin.PostAsJsonAsync("/api/students", enrollment)).StatusCode);
         using var client = fixture.CreateClient();
         var denied = await client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest(FakeGoogleIdTokenValidator.DeniedCredential));
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
@@ -88,6 +92,31 @@ public class IdentitySemesterServiceTests(IdentityApiFixture fixture) : IClassFi
         using var scope = fixture.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IdentitySemesterDbContext>();
         Assert.Equal(1, await db.Users.CountAsync(u => u.GoogleSubject == "google-subject-1"));
+    }
+
+    [Fact]
+    public async Task Deleting_last_enrollment_revokes_google_access_and_existing_identity_token()
+    {
+        var first = await Semester();
+        var second = await Semester();
+        var student = await Student(first);
+        var secondRequest = new CreateStudentRequest(second.Code,
+            new(student.StudentCode, student.FullName, student.Email, student.Major), IdentityApiFixture.Password);
+        var created = await fixture.Admin.PostAsJsonAsync("/api/students", secondRequest);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var other = (await created.Content.ReadFromJsonAsync<ApiResponse<StudentResponse>>())!.Data!;
+        using var client = fixture.CreateClient();
+        await IdentityApiFixture.SignIn(client, student.Email, IdentityApiFixture.Password);
+        Assert.Equal(HttpStatusCode.NoContent, (await fixture.Admin.DeleteAsync("/api/students/" + student.Id)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
+        using (var scope = fixture.Services.CreateScope())
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IdentitySemesterDbContext>().GoogleAllowedEmails.AnyAsync(x => x.Email == student.Email));
+        Assert.Equal(HttpStatusCode.NoContent, (await fixture.Admin.DeleteAsync("/api/students/" + other.Id)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+        using (var scope = fixture.Services.CreateScope())
+            Assert.False(await scope.ServiceProvider.GetRequiredService<IdentitySemesterDbContext>().GoogleAllowedEmails.AnyAsync(x => x.Email == student.Email));
+        using var anonymous = fixture.CreateClient();
+        Assert.Equal(HttpStatusCode.Forbidden, (await anonymous.PostAsJsonAsync("/api/auth/login", new LoginRequest(student.Email, IdentityApiFixture.Password))).StatusCode);
     }
 
     [Fact]
