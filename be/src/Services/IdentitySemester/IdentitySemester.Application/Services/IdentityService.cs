@@ -35,8 +35,13 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
                     throw new IdentityException(409, "Google email is already linked to a different account.");
                 user.Email = email;
                 user.UpdatedAt = DateTime.UtcNow;
-                await store.Save(ct);
             }
+            if (GooglePicture(identity.PictureUrl) is { } picture && user.GooglePictureUrl != picture)
+            {
+                user.GooglePictureUrl = picture;
+                user.UpdatedAt = DateTime.UtcNow;
+            }
+            await store.Save(ct);
             return await IssueLoginAsync(user, ct);
         }
 
@@ -62,6 +67,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
             user.UpdatedAt = DateTime.UtcNow;
         }
 
+        if (GooglePicture(identity.PictureUrl) is { } pictureUrl) user.GooglePictureUrl = pictureUrl;
         await store.Save(ct);
         return await IssueLoginAsync(user, ct);
     }
@@ -69,7 +75,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     public async Task<AccountResponse> Account(Guid id, CancellationToken ct)
     {
         var user = await store.UserById(id, ct) ?? throw new IdentityException(401, "Account unavailable.");
-        return new(user.Id, user.Username, user.Email, user.Role.Name);
+        return new(user.Id, user.Username, user.Email, user.Role.Name, user.GooglePictureUrl);
     }
 
     public async Task<AccountResponse> UpdateAccount(Guid id, UpdateAccountRequest request, CancellationToken ct)
@@ -78,7 +84,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         user.Username = Required(request.Username);
         user.UpdatedAt = DateTime.UtcNow;
         await store.Save(ct);
-        return new(user.Id, user.Username, user.Email, user.Role.Name);
+        return new(user.Id, user.Username, user.Email, user.Role.Name, user.GooglePictureUrl);
     }
 
     public async Task ChangePassword(Guid id, ChangePasswordRequest request, CancellationToken ct)
@@ -306,6 +312,10 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         var student = await store.StudentByUser(user.Id, ct);
         return new(token.Token, null, token.Expiration, student is null ? null : Map(student));
     }
+    private static string? GooglePicture(string? value)
+        => Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps &&
+           (uri.Host.Equals("googleusercontent.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".googleusercontent.com", StringComparison.OrdinalIgnoreCase))
+            ? uri.AbsoluteUri : null;
     private static string Required(string value) => string.IsNullOrWhiteSpace(value) ? throw new IdentityException(400, "Required value cannot be blank.") : value.Trim();
     private static List<string> NormalizeStrengthRoles(IEnumerable<string>? roles)
     {

@@ -79,6 +79,8 @@ public class IdentitySemesterServiceTests(IdentityApiFixture fixture) : IClassFi
         Assert.Equal("nhanlhse184226@fpt.edu.vn", token.Claims.Single(c => c.Type == "email").Value);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Token);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
+        var profile = (await client.GetFromJsonAsync<ApiResponse<AccountResponse>>("/api/auth/me"))!.Data!;
+        Assert.Equal("https://lh3.googleusercontent.com/test-avatar", profile.AvatarUrl);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/students")).StatusCode);
 
         var repeat = await client.PostAsJsonAsync("/api/auth/google", new GoogleLoginRequest(FakeGoogleIdTokenValidator.AllowedCredential));

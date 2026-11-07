@@ -27,7 +27,7 @@ Tài khoản demo `student01` từ skeleton chứa hash không hợp lệ nên k
 | GET `/api/google-access` | Admin | Danh sách email được phép Google Sign-In |
 | POST `/api/google-access/import/excel` | Admin | Import whitelist Excel có cột A: `Email` |
 | DELETE `/api/google-access/{id}` | Admin | Gỡ một email khỏi whitelist database |
-| GET `/api/auth/me` | Đã đăng nhập | id, username, email, role |
+| GET `/api/auth/me` | Đã đăng nhập | id, username, email, role và `avatarUrl` nếu Google cung cấp ảnh |
 | PUT `/api/auth/me` | Chủ tài khoản | Sửa username; không thay role/email |
 | PUT `/api/auth/password` | Chủ tài khoản | Xác nhận mật khẩu cũ, hash mật khẩu mới; token cũ hết hiệu lực |
 | PUT `/api/students/{id}/strength-roles` | Chủ hồ sơ hoặc Admin | Chọn 1–6 role chuyên môn; không thay đổi RBAC |

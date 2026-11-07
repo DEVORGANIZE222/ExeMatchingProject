@@ -13,6 +13,7 @@ public class User : BaseEntity
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? GoogleSubject { get; set; }
+    public string? GooglePictureUrl { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
     public int TokenVersion { get; set; }
     public Guid RoleId { get; set; }
