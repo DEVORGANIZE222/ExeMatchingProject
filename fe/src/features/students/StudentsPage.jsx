@@ -218,7 +218,8 @@ export default function StudentsPage() {
       const res = await request(`/api/students/semester/${encodeURIComponent(bulkDeleteSemester)}`, {
         method: 'DELETE'
       })
-      toast.success(res || `Đã xóa toàn bộ sinh viên trong học kỳ ${bulkDeleteSemester}!`)
+      const count = typeof res === 'number' ? res : (res?.data ?? '')
+      toast.success(`Đã xóa thành công ${count} sinh viên trong học kỳ ${bulkDeleteSemester}!`)
       setShowDeleteModal(false)
       setBulkDeleteSemester('')
       await load()
