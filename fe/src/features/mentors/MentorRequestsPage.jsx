@@ -46,7 +46,7 @@ export default function MentorRequestsPage() {
   const query = search.trim().toLocaleLowerCase()
   const filtered = requests.filter((item) => {
     const statusMatches = filter === 'all' || item.status === Number(filter)
-    const textMatches = `${item.groupName} ${item.topic} ${item.message}`.toLocaleLowerCase().includes(query)
+    const textMatches = `${item.groupName} ${item.topic} ${item.requesterName} ${item.message}`.toLocaleLowerCase().includes(query)
     return statusMatches && textMatches
   })
 
@@ -128,6 +128,7 @@ export default function MentorRequestsPage() {
               </div>
               <p className="team-pitch-quote">{item.message}</p>
               <div className="mentor-request-meta">
+                <span>Người gửi: {item.requesterName || 'Trưởng nhóm'}</span>
                 <span>Mã nhóm: {item.groupId}</span>
                 <span>Gửi ngày {new Date(item.createdAt).toLocaleDateString('vi-VN')}</span>
               </div>

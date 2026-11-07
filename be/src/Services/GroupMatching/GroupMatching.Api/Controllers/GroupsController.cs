@@ -9,10 +9,16 @@ namespace EXETeamMatching.GroupMatching.Api.Controllers;
 [ApiController]
 [Route("api/groups")]
 [Microsoft.AspNetCore.Authorization.Authorize]
-public class GroupsController(IGroupService service) : ControllerBase
+public class GroupsController(IGroupService service, IHostEnvironment environment, IConfiguration configuration) : ControllerBase
 {
     private Guid Actor => Guid.Parse(User.FindFirstValue("sub")!);
     private bool IsAdmin => User.IsInRole("Admin");
+    private bool DemoFeaturesEnabled => environment.IsDevelopment() || configuration.GetValue<bool>("DemoMode:Enabled");
+
+    [HttpGet("demo-seed-status")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public ActionResult<ApiResponse<bool>> GetDemoSeedStatus()
+        => Ok(ApiResponse<bool>.Ok(DemoFeaturesEnabled));
 
     [HttpGet] public async Task<ActionResult<ApiResponse<PageResult<GroupDto>>>> GetGroups([FromQuery] GroupListQuery query, CancellationToken ct)
         => Ok(ApiResponse<PageResult<GroupDto>>.Ok(await service.ListAsync(query, Actor, IsAdmin, ct)));
@@ -46,6 +52,15 @@ public class GroupsController(IGroupService service) : ControllerBase
     [HttpPost("{id:guid}/members")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> AddMember(Guid id, CancellationToken ct)
         => Ok(ApiResponse<GroupDto>.Ok(await service.JoinAsync(id, Actor, ct)));
+
+    [HttpPost("{id:guid}/demo-members")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public async Task<ActionResult<ApiResponse<GroupDto>>> SeedDemoMembers(Guid id, CancellationToken ct)
+    {
+        if (!DemoFeaturesEnabled)
+            return Conflict(ApiResponse<GroupDto>.Fail("Demo seeding is disabled. Start the service in Development or enable DemoMode:Enabled."));
+        return Ok(ApiResponse<GroupDto>.Ok(await service.SeedDemoMembersAsync(id, Actor, IsAdmin, ct)));
+    }
 
     [HttpDelete("{id:guid}/members/me")]
     public async Task<IActionResult> RemoveMember(Guid id, CancellationToken ct)

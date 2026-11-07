@@ -55,6 +55,7 @@ public class MentorRequestsController(MentorDbContext db, IHttpClientFactory cli
             RequesterUserId = ActorId,
             GroupName = group.GroupName,
             Topic = group.TopicTitle ?? group.ProjectDescription,
+            RequesterName = group.Members.FirstOrDefault(member => member.StudentId == group.LeaderStudentId)?.FullName ?? "Trưởng nhóm",
             Message = request.Message.Trim()
         });
         db.MentorNotifications.Add(new MentorNotification
@@ -68,7 +69,57 @@ public class MentorRequestsController(MentorDbContext db, IHttpClientFactory cli
         return Ok(ApiResponse<bool>.Ok(true));
     }
 
-    private sealed record GroupRequestContext(Guid Id, string GroupName, string? TopicTitle, string ProjectDescription);
+    private sealed record GroupRequestContext(
+        Guid Id,
+        string GroupName,
+        string? TopicTitle,
+        string ProjectDescription,
+        Guid? LeaderStudentId,
+        List<GroupRequestMember> Members);
+
+    private sealed record GroupRequestMember(Guid StudentId, string FullName);
+
+    [HttpGet("groups/{groupId:guid}/status")]
+    [Authorize(Roles = "Student")]
+    public async Task<ActionResult<ApiResponse<GroupMentorStatusResponse>>> GroupStatus(Guid groupId, CancellationToken ct)
+    {
+        var client = clients.CreateClient("groups");
+        using var groupRequest = new HttpRequestMessage(HttpMethod.Get, $"api/groups/{groupId}/mentor-request-context");
+        if (Request.Headers.Authorization.Count > 0)
+            groupRequest.Headers.Authorization = AuthenticationHeaderValue.Parse(Request.Headers.Authorization!);
+
+        using var groupResponse = await client.SendAsync(groupRequest, ct);
+        if (groupResponse.StatusCode == HttpStatusCode.Forbidden)
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<GroupMentorStatusResponse>.Fail("Only the elected group leader can view mentor request status."));
+        if (groupResponse.StatusCode == HttpStatusCode.NotFound)
+            return NotFound(ApiResponse<GroupMentorStatusResponse>.Fail("Group not found."));
+        if (groupResponse.StatusCode == HttpStatusCode.Conflict)
+            return Conflict(ApiResponse<GroupMentorStatusResponse>.Fail("A mentor can only be requested for a locked group with a registered topic."));
+        if (!groupResponse.IsSuccessStatusCode)
+            throw new HttpRequestException($"Group matching service returned {(int)groupResponse.StatusCode} while validating mentor request status.");
+
+        var groupResult = await groupResponse.Content.ReadFromJsonAsync<ApiResponse<GroupRequestContext>>(cancellationToken: ct)
+            ?? throw new InvalidOperationException("The group service returned an empty response.");
+        if (groupResult.Data is null)
+            throw new InvalidOperationException("The group service returned no group details.");
+
+        var request = await db.MentorRequests.AsNoTracking()
+            .Where(item => item.GroupId == groupId && item.Status != RequestStatus.Rejected)
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(item => new
+            {
+                item.Status,
+                MentorName = item.Mentor.FullName,
+                item.Message,
+                item.CreatedAt
+            })
+            .FirstOrDefaultAsync(ct);
+
+        var status = request is null
+            ? new GroupMentorStatusResponse(false, null, null, null, null)
+            : new GroupMentorStatusResponse(true, request.Status, request.MentorName, request.Message, request.CreatedAt);
+        return Ok(ApiResponse<GroupMentorStatusResponse>.Ok(status));
+    }
 
     [HttpPost("decision")]
     [Authorize(Roles = "Mentor")]
@@ -119,7 +170,7 @@ public class MentorRequestsController(MentorDbContext db, IHttpClientFactory cli
             ?? throw new KeyNotFoundException("Mentor profile not found.");
         var requests = await db.MentorRequests.AsNoTracking().Where(x => x.MentorId == mentorId)
             .OrderByDescending(x => x.CreatedAt).Select(x => new MentorRequestDto(
-                x.Id, x.GroupId, x.MentorId, x.Message, x.Status, x.CreatedAt, x.GroupName, x.Topic, x.DecisionReason, x.DecidedAt))
+                x.Id, x.GroupId, x.MentorId, x.Message, x.Status, x.CreatedAt, x.GroupName, x.Topic, x.RequesterName, x.DecisionReason, x.DecidedAt))
             .ToListAsync(ct);
         return Ok(ApiResponse<List<MentorRequestDto>>.Ok(requests));
     }

@@ -56,7 +56,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         }
     };
 });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("MentorTeamContacts", policy =>
+        policy.RequireRole("Mentor")
+            .RequireClaim("scope", "mentor-team-contacts")
+            .RequireClaim("group_id"));
+});
 builder.Services.AddDbContext<IdentitySemesterDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddScoped<IIdentityStore, IdentityRepository>();

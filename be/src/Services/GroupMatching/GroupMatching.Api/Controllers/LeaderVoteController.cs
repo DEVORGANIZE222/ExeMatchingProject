@@ -9,9 +9,11 @@ namespace EXETeamMatching.GroupMatching.Api.Controllers;
 [ApiController]
 [Route("api/groups")]
 [Microsoft.AspNetCore.Authorization.Authorize]
-public class LeaderVoteController(IGroupService service) : ControllerBase
+public class LeaderVoteController(IGroupService service, IHostEnvironment environment, IConfiguration configuration) : ControllerBase
 {
+    private bool DemoFeaturesEnabled => environment.IsDevelopment() || configuration.GetValue<bool>("DemoMode:Enabled");
+
     [HttpPost("{id:guid}/vote-leader")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> VoteLeader(Guid id, VoteLeaderRequest request, CancellationToken ct)
-        => Ok(ApiResponse<GroupDto>.Ok(await service.VoteAsync(id, request, Guid.Parse(User.FindFirstValue("sub")!), ct)));
+        => Ok(ApiResponse<GroupDto>.Ok(await service.VoteAsync(id, request, Guid.Parse(User.FindFirstValue("sub")!), ct, DemoFeaturesEnabled)));
 }

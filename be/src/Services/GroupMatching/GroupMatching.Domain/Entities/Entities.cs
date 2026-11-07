@@ -38,6 +38,7 @@ public class GroupMember : BaseEntity
     public string StudentCode { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public MemberRole Role { get; set; } = MemberRole.Member;
+    public bool IsDemo { get; set; }
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
 }
 

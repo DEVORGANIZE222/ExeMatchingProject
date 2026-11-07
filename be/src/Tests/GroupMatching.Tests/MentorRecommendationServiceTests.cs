@@ -42,6 +42,7 @@ public class MentorRecommendationServiceTests
     private sealed class FixedGroups(GroupDto group) : IGroupService
     {
         public Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => Task.FromResult(group);
+        public Task<GroupDto> SeedDemoMembersAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default) => Task.FromResult(group);
         public Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
@@ -50,7 +51,7 @@ public class MentorRecommendationServiceTests
         public Task<GroupDto> JoinAsync(Guid id, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task LeaveAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default, bool allowDemoVotes = false) => throw new NotSupportedException();
         public Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> RegisterTopicAsync(Guid id, RegisterTopicRequest request, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
     }

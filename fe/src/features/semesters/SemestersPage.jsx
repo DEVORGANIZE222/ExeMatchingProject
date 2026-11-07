@@ -8,7 +8,23 @@ import DatePicker from '../../components/DatePicker'
 import SemesterTimelineProgress from '../../components/SemesterTimelineProgress'
 import '../../components/ServicePages.css'
 
-const toUtc = (value) => (value ? new Date(value).toISOString() : null)
+const toUtc = (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null)
+const validateMilestones = ({ startDate, endDate, registrationDeadline, topicDeadline, mentorDeadline }) => {
+  if (!startDate || !endDate) return 'Vui lòng chọn ngày bắt đầu và ngày kết thúc.'
+  if (startDate >= endDate) return 'Ngày bắt đầu phải trước ngày kết thúc.'
+
+  const milestones = [registrationDeadline, topicDeadline, mentorDeadline]
+  const filledCount = milestones.filter(Boolean).length
+  if (filledCount > 0 && filledCount < milestones.length) {
+    return 'Vui lòng điền đủ 3 mốc deadline hoặc để trống cả 3.'
+  }
+  if (filledCount === 0) return null
+  if (registrationDeadline <= startDate) return 'Hạn đăng ký phải sau ngày bắt đầu.'
+  if (topicDeadline <= registrationDeadline) return 'Hạn đề tài phải sau hạn đăng ký.'
+  if (mentorDeadline <= topicDeadline) return 'Hạn ghép Mentor phải sau hạn đề tài.'
+  if (mentorDeadline > endDate) return 'Hạn ghép Mentor phải trước hoặc đúng ngày kết thúc.'
+  return null
+}
 const toInputDate = (dateStr) => {
   if (!dateStr) return ''
   try {
@@ -83,10 +99,9 @@ export default function SemestersPage() {
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    const milestones = [form.registrationDeadline, form.topicDeadline, form.mentorDeadline]
-    const filledCount = milestones.filter(Boolean).length
-    if (filledCount > 0 && filledCount < 3) {
-      toast.error('Vui lòng điền đủ 3 mốc deadline hoặc để trống cả 3.')
+    const validationError = validateMilestones(form)
+    if (validationError) {
+      toast.error(validationError)
       return
     }
 
@@ -136,6 +151,11 @@ export default function SemestersPage() {
   const handleUpdate = async (e) => {
     e.preventDefault()
     if (!editingItem) return
+    const validationError = validateMilestones(editForm)
+    if (validationError) {
+      toast.error(validationError)
+      return
+    }
     try {
       setBusy(true)
       await request(`/api/semesters/${editingItem.id}`, {
@@ -379,7 +399,7 @@ export default function SemestersPage() {
                   3 MỐC THỜI HẠN (DEADLINE) CỐ ĐỊNH
                 </span>
                 <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>
-                  Điền đủ cả 3 mốc để tự động điều phối giai đoạn hoặc để trống cả 3.
+                  Điền đủ cả 3 mốc hoặc để trống cả 3. Ngày được lưu theo UTC; thứ tự phải là bắt đầu &lt; đăng ký &lt; đề tài &lt; Mentor ≤ kết thúc.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -520,6 +540,9 @@ export default function SemestersPage() {
                 <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
                   GIA HẠN CÁC MỐC THỜI HẠN (DEADLINE)
                 </span>
+                <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  Điền đủ cả 3 mốc hoặc để trống cả 3. Ngày được lưu theo UTC; thứ tự phải là bắt đầu &lt; đăng ký &lt; đề tài &lt; Mentor ≤ kết thúc.
+                </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
                   <div>

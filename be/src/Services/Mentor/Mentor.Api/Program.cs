@@ -6,11 +6,18 @@ using EXETeamMatching.Mentor.Grpc.Services;
 using EXETeamMatching.Mentor.Infrastructure.Persistence;
 using EXETeamMatching.SharedKernel.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(8080, endpoint => endpoint.Protocols = HttpProtocols.Http1);
+    options.ListenAnyIP(50051, endpoint => endpoint.Protocols = HttpProtocols.Http2);
+});
 
 builder.Services.AddControllers();
 builder.Services.AddGrpc();
@@ -69,6 +76,10 @@ builder.Services.AddHttpClient("groups", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["GroupMatching:BaseUrl"] ?? "http://localhost:5002/");
 });
+builder.Services.AddHttpClient("identity", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["IdentitySemester:BaseUrl"] ?? "http://localhost:5001/");
+});
 
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
 
@@ -82,6 +93,7 @@ using (var scope = app.Services.CreateScope())
     {
         await dbContext.Database.ExecuteSqlRawAsync("""
             ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterUserId" uuid NULL;
+            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterName" character varying(200) NOT NULL DEFAULT '';
             ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "GroupName" character varying(200) NOT NULL DEFAULT '';
             ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "Topic" character varying(1000) NOT NULL DEFAULT '';
             ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "DecisionReason" character varying(2000) NULL;
