@@ -159,6 +159,14 @@ http {
             proxy_ssl_name $identity_host;
         }
 
+        location /api/admin/mentors {
+            auth_request /_identity_auth;
+            proxy_pass $identity_service$request_uri;
+            include /etc/nginx/proxy_params;
+            proxy_set_header Host $identity_host;
+            proxy_ssl_name $identity_host;
+        }
+
         # ─── Group & Matching Service ───
         location /api/groups {
             proxy_pass $group_matching_service$request_uri;

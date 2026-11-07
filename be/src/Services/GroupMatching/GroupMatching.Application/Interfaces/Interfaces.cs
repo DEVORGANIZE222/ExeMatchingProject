@@ -34,6 +34,7 @@ public interface IGroupService
 {
     Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
     Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default);
     Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);

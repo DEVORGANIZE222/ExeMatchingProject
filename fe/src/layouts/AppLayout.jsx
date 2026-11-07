@@ -1,20 +1,31 @@
-import { useState } from 'react'
-import { NavLink, Outlet, Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Calendar,
   Layers, ShieldCheck, LogOut, Menu, X,
   GraduationCap, Inbox
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import logoImg from '../assets/logo.png'
 import './layout.css'
 
 export default function AppLayout() {
-  const { account, logout, isAdmin, isMentor, mentorRequests } = useAuth()
+  const { account, logout, isAdmin, isMentor, request } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
+  const location = useLocation()
 
-  // Calculate pending requests count for mentor badge
-  const pendingRequestsCount = mentorRequests?.filter((r) => r.status === 'Pending').length || 0
+  useEffect(() => {
+    if (!isMentor) return
+    let active = true
+    request('/api/mentor-requests/mine')
+      .then((items) => {
+        if (active) setPendingRequestsCount(items.filter((item) => item.status === 0).length)
+      })
+      .catch((error) => toast.error(error.message || 'Không thể cập nhật số yêu cầu mentor.'))
+    return () => { active = false }
+  }, [isMentor, location.pathname, request])
 
   const adminNav = [
     { to: '/',          icon: LayoutDashboard, label: 'Tổng quan', end: true },
@@ -33,7 +44,6 @@ export default function AppLayout() {
       label: 'Duyệt nhóm & Đề tài',
       badge: pendingRequestsCount > 0 ? pendingRequestsCount : null
     },
-    { to: '/groups',           icon: Layers,          label: 'Tất cả Nhóm' },
     { to: '/semesters',        icon: Calendar,        label: 'Lịch trình Học kỳ' },
   ]
 

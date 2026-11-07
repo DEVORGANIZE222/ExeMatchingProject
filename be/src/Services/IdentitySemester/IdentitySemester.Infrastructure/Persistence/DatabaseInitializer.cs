@@ -22,6 +22,9 @@ public class DatabaseInitializer(IdentitySemesterDbContext db, IPasswordService 
             await db.Database.ExecuteSqlRawAsync(sql, ct);
             await transaction.CommitAsync(ct);
         }
+        var mentorRoleId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        if (!await db.Roles.AnyAsync(role => role.Name == "Mentor", ct))
+            db.Roles.Add(new Role { Id = mentorRoleId, Name = "Mentor", Description = "Mentor User" });
         var bootstrapGoogleEmails = config.GetSection("GoogleAuth:AllowedEmails").Get<string[]>() ?? [];
         foreach (var rawEmail in bootstrapGoogleEmails)
         {

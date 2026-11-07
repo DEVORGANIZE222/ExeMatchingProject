@@ -1,10 +1,13 @@
+using System.Text;
 using EXETeamMatching.Messaging.Abstractions;
 using EXETeamMatching.Messaging.Implementations;
 using EXETeamMatching.Messaging.Settings;
 using EXETeamMatching.Mentor.Grpc.Services;
 using EXETeamMatching.Mentor.Infrastructure.Persistence;
 using EXETeamMatching.SharedKernel.Middleware;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,11 +32,43 @@ builder.Services.AddCors(options =>
 
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection("KafkaSettings"));
 
+var jwtSecret = builder.Configuration["JwtSettings:Secret"] ?? string.Empty;
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "EXETeamMatching";
+var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "EXETeamMatchingClients";
+if (Encoding.UTF8.GetByteCount(jwtSecret) < 32)
+    throw new InvalidOperationException("JWT requires a secret of at least 32 bytes.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
+{
+    options.MapInboundClaims = false;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = jwtIssuer,
+        ValidateAudience = true,
+        ValidAudience = jwtAudience,
+        ValidateLifetime = true,
+        RequireExpirationTime = true,
+        ValidateIssuerSigningKey = true,
+        RequireSignedTokens = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+        NameClaimType = "sub",
+        RoleClaimType = "role",
+        ClockSkew = TimeSpan.FromSeconds(30)
+    };
+});
+builder.Services.AddAuthorization();
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
                        ?? builder.Configuration["DATABASE_CONNECTION_STRING"];
 
 builder.Services.AddDbContext<MentorDbContext>(options =>
     options.UseNpgsql(connectionString));
+builder.Services.AddHttpClient("groups", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["GroupMatching:BaseUrl"] ?? "http://localhost:5002/");
+});
 
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
 
@@ -42,7 +77,55 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<MentorDbContext>();
-    dbContext.Database.EnsureCreated();
+    await dbContext.Database.EnsureCreatedAsync();
+    if (dbContext.Database.IsNpgsql())
+    {
+        await dbContext.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterUserId" uuid NULL;
+            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "GroupName" character varying(200) NOT NULL DEFAULT '';
+            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "Topic" character varying(1000) NOT NULL DEFAULT '';
+            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "DecisionReason" character varying(2000) NULL;
+            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "DecidedAt" timestamp with time zone NULL;
+            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "UpdatedAt" timestamp with time zone NULL;
+            ALTER TABLE "Mentors" ADD COLUMN IF NOT EXISTS "Phone" character varying(40) NOT NULL DEFAULT '';
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_MentorRequests_GroupId"
+                ON "MentorRequests" ("GroupId") WHERE "Status" = 0;
+            CREATE TABLE IF NOT EXISTS "MentorGroupProgress" (
+                "Id" uuid PRIMARY KEY,
+                "MentorId" uuid NOT NULL,
+                "GroupId" uuid NOT NULL,
+                "GroupName" character varying(200) NOT NULL,
+                "Topic" character varying(1000) NOT NULL,
+                "Milestone" character varying(200) NOT NULL,
+                "Progress" integer NOT NULL,
+                "Feedback" character varying(2000) NOT NULL,
+                "CreatedAt" timestamp with time zone NOT NULL,
+                "UpdatedAt" timestamp with time zone NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_MentorGroupProgress_MentorId_GroupId"
+                ON "MentorGroupProgress" ("MentorId", "GroupId");
+            CREATE TABLE IF NOT EXISTS "MentorAppointments" (
+                "Id" uuid PRIMARY KEY,
+                "MentorId" uuid NOT NULL,
+                "GroupId" uuid NULL,
+                "Title" character varying(200) NOT NULL,
+                "StartsAt" timestamp with time zone NOT NULL,
+                "Notes" character varying(2000) NOT NULL,
+                "CreatedAt" timestamp with time zone NOT NULL,
+                "UpdatedAt" timestamp with time zone NULL
+            );
+            CREATE TABLE IF NOT EXISTS "MentorNotifications" (
+                "Id" uuid PRIMARY KEY,
+                "MentorId" uuid NOT NULL,
+                "Type" character varying(40) NOT NULL,
+                "Title" character varying(200) NOT NULL,
+                "Message" character varying(1000) NOT NULL,
+                "IsRead" boolean NOT NULL,
+                "CreatedAt" timestamp with time zone NOT NULL,
+                "UpdatedAt" timestamp with time zone NULL
+            );
+            """);
+    }
 }
 
 app.UseMiddleware<GlobalExceptionHandler>();
@@ -56,6 +139,7 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = string.Empty;
 });
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapGrpcService<MentorGrpcServiceImpl>();

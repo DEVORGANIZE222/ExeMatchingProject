@@ -81,6 +81,27 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         return new(user.Id, user.Username, user.Email, user.Role.Name);
     }
 
+    public async Task<AccountResponse> ActivateMentor(string email, CancellationToken ct)
+    {
+        email = Required(email).ToLowerInvariant();
+        if (!new EmailAddressAttribute().IsValid(email))
+            throw new IdentityException(400, "A valid email address is required.");
+        var user = await store.UserByEmail(email, ct)
+            ?? throw new IdentityException(404, "The user must sign in with Google before being activated as a mentor.");
+        if (user.Role.Name == "Admin")
+            throw new IdentityException(409, "Administrator accounts cannot be changed to mentor accounts.");
+        var mentorRole = await store.RoleByName("Mentor", ct);
+        if (user.RoleId != mentorRole.Id)
+        {
+            user.RoleId = mentorRole.Id;
+            user.Role = mentorRole;
+            user.TokenVersion++;
+            user.UpdatedAt = DateTime.UtcNow;
+            await store.Save(ct);
+        }
+        return new(user.Id, user.Username, user.Email, mentorRole.Name);
+    }
+
     public async Task ChangePassword(Guid id, ChangePasswordRequest request, CancellationToken ct)
     {
         var user = await store.UserById(id, ct) ?? throw new IdentityException(401, "Account unavailable.");

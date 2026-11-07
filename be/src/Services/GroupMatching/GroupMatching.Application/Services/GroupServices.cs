@@ -24,6 +24,17 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         return Map(group);
     }
 
+    public async Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default)
+    {
+        var group = await Group(id, ct);
+        var actor = await Enrollment(actorUserId, group.SemesterCode, ct);
+        if (group.LeaderStudentId != actor.StudentId)
+            throw Forbidden("Only the elected group leader can request a mentor.");
+        if (group.Status != GroupStatus.Locked || string.IsNullOrWhiteSpace(group.TopicTitle))
+            throw Conflict("A mentor can only be requested for a locked group with a registered topic.");
+        return Map(group);
+    }
+
     public async Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default)
     {
         var semester = Code(request.SemesterCode);

@@ -37,10 +37,12 @@ public class IdentitySemesterDbContext : DbContext
         // Seed Roles
         var adminRoleId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var studentRoleId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var mentorRoleId = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
         modelBuilder.Entity<Role>().HasData(
             new Role { Id = adminRoleId, Name = "Admin", Description = "System Administrator", CreatedAt = DateTime.UtcNow },
-            new Role { Id = studentRoleId, Name = "Student", Description = "Student User", CreatedAt = DateTime.UtcNow }
+            new Role { Id = studentRoleId, Name = "Student", Description = "Student User", CreatedAt = DateTime.UtcNow },
+            new Role { Id = mentorRoleId, Name = "Mentor", Description = "Mentor User", CreatedAt = DateTime.UtcNow }
         );
 
     }

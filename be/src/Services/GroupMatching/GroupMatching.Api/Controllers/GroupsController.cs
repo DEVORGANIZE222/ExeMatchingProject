@@ -21,6 +21,10 @@ public class GroupsController(IGroupService service) : ControllerBase
     public async Task<ActionResult<ApiResponse<GroupDto>>> GetGroupById(Guid id, CancellationToken ct)
         => Ok(ApiResponse<GroupDto>.Ok(await service.GetAsync(id, Actor, IsAdmin, ct)));
 
+    [HttpGet("{id:guid}/mentor-request-context")]
+    public async Task<ActionResult<ApiResponse<GroupDto>>> GetMentorRequestContext(Guid id, CancellationToken ct)
+        => Ok(ApiResponse<GroupDto>.Ok(await service.GetMentorRequestContextAsync(id, Actor, ct)));
+
     [HttpPost]
     public async Task<ActionResult<ApiResponse<GroupDto>>> CreateGroup(CreateGroupRequest request, CancellationToken ct)
     {

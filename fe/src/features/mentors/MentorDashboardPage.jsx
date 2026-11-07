@@ -1,537 +1,371 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Layers, Inbox, CheckCircle2, XCircle, ArrowRight, FileText,
-  Clock, ShieldAlert, Sparkles
+  Bell, CalendarDays, Check, Clock3, Layers,
+  Pencil, Plus, Save, Users, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../hooks/useAuth'
 import './MentorPages.css'
 
+const emptyProfile = { fullName: '', department: '', expertise: '', phone: '' }
+const emptyAppointment = { title: '', groupId: '', startsAt: '', notes: '' }
+
+function localDateTime(value) {
+  const date = new Date(value)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
+function displayDate(value) {
+  return new Date(value).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
 export default function MentorDashboardPage() {
-  const {
-    account,
-    mentorProfile,
-    mentorRequests,
-    assignedGroups,
-    acceptMentorRequest,
-    rejectMentorRequest
-  } = useAuth()
-  const navigate = useNavigate()
+  const { account, request } = useAuth()
+  const [profile, setProfile] = useState(null)
+  const [profileDraft, setProfileDraft] = useState(emptyProfile)
+  const [groups, setGroups] = useState([])
+  const [groupDrafts, setGroupDrafts] = useState({})
+  const [requests, setRequests] = useState([])
+  const [appointments, setAppointments] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [appointmentDraft, setAppointmentDraft] = useState(emptyAppointment)
+  const [editingAppointmentId, setEditingAppointmentId] = useState(null)
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // Modals state
-  const [selectedRequest, setSelectedRequest] = useState(null)
-  const [decisionModalType, setDecisionModalType] = useState(null) // 'accept' | 'reject' | 'view'
-  const [decisionNote, setDecisionNote] = useState('')
+  const loadWorkspace = useCallback(async () => {
+    const [mentor, assignedGroups, mentorRequests, meetings, alerts] = await Promise.all([
+      request('/api/mentors/me'),
+      request('/api/mentors/me/groups'),
+      request('/api/mentor-requests/mine'),
+      request('/api/mentors/me/appointments'),
+      request('/api/mentors/me/notifications')
+    ])
+    setProfile(mentor)
+    setProfileDraft({ fullName: mentor.fullName, department: mentor.department, expertise: mentor.expertise, phone: mentor.phone || '' })
+    setGroups(assignedGroups)
+    setGroupDrafts(Object.fromEntries(assignedGroups.map((group) => [group.groupId, {
+      milestone: group.milestone,
+      progress: group.progress,
+      feedback: group.feedback
+    }])))
+    setRequests(mentorRequests)
+    setAppointments(meetings)
+    setNotifications(alerts)
+  }, [request])
 
-  const currentCount = mentorProfile?.currentAssigned || assignedGroups.length
-  const maxQuota = mentorProfile?.maxQuota || 4
-  const remainingQuota = Math.max(0, maxQuota - currentCount)
-  const quotaPercent = Math.min(100, Math.round((currentCount / maxQuota) * 100))
-  const isQuotaFull = currentCount >= maxQuota
+  useEffect(() => {
+    let active = true
+    const timer = setTimeout(() => {
+      loadWorkspace()
+        .catch((error) => toast.error(error.message || 'Không thể tải không gian mentor.'))
+        .finally(() => { if (active) setLoading(false) })
+    }, 0)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [loadWorkspace])
 
-  const pendingRequests = mentorRequests.filter((r) => r.status === 'Pending')
+  const pendingCount = requests.filter((item) => item.status === 0).length
+  const unreadCount = notifications.filter((item) => !item.isRead).length
+  const quota = profile?.maxQuota || 0
+  const assigned = profile?.currentAssigned || 0
+  const availableSlots = Math.max(0, quota - assigned)
+  const quotaPercent = quota ? Math.min(100, Math.round(assigned / quota * 100)) : 0
 
-  const handleOpenDecision = (req, type) => {
-    setSelectedRequest(req)
-    setDecisionModalType(type)
-    setDecisionNote('')
+  const saveProfile = async (event) => {
+    event.preventDefault()
+    setSaving(true)
+    try {
+      const updated = await request('/api/mentors/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileDraft)
+      })
+      setProfile(updated)
+      setEditingProfile(false)
+      toast.success('Đã cập nhật hồ sơ mentor.')
+    } catch (error) {
+      toast.error(error.message || 'Không thể lưu hồ sơ.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleConfirmDecision = () => {
-    if (!selectedRequest) return
-
+  const saveProgress = async (groupId, draft) => {
     try {
-      if (decisionModalType === 'accept') {
-        acceptMentorRequest(selectedRequest.id, decisionNote.trim())
-        toast.success(`Đã chấp nhận hướng dẫn nhóm "${selectedRequest.groupName}"!`)
-      } else if (decisionModalType === 'reject') {
-        rejectMentorRequest(selectedRequest.id, decisionNote.trim())
-        toast.success(`Đã từ chối yêu cầu từ nhóm "${selectedRequest.groupName}".`)
-      }
-      setDecisionModalType(null)
-      setSelectedRequest(null)
-    } catch (err) {
-      toast.error(err.message || 'Không thể thực hiện thao tác.')
+      const updated = await request(`/api/mentors/me/groups/${groupId}/progress`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft)
+      })
+      setGroups((current) => current.map((group) => group.groupId === groupId ? updated : group))
+      setGroupDrafts((current) => ({ ...current, [groupId]: {
+        milestone: updated.milestone,
+        progress: updated.progress,
+        feedback: updated.feedback
+      } }))
+      toast.success('Đã cập nhật tiến độ và nhận xét.')
+    } catch (error) {
+      toast.error(error.message || 'Không thể cập nhật tiến độ.')
     }
+  }
+
+  const createAppointment = async (event) => {
+    event.preventDefault()
+    try {
+      const saved = await request(`/api/mentors/me/appointments${editingAppointmentId ? `/${editingAppointmentId}` : ''}`, {
+        method: editingAppointmentId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...appointmentDraft,
+          groupId: appointmentDraft.groupId || null,
+          startsAt: new Date(appointmentDraft.startsAt).toISOString()
+        })
+      })
+      setAppointments((current) => [
+        ...current.filter((item) => item.id !== saved.id),
+        saved
+      ].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt)))
+      setAppointmentDraft(emptyAppointment)
+      setEditingAppointmentId(null)
+      toast.success(editingAppointmentId ? 'Đã cập nhật lịch tư vấn.' : 'Đã tạo lịch tư vấn.')
+    } catch (error) {
+      toast.error(error.message || 'Không thể tạo lịch tư vấn.')
+    }
+  }
+
+  const deleteAppointment = async (id) => {
+    try {
+      await request(`/api/mentors/me/appointments/${id}`, { method: 'DELETE' })
+      setAppointments((current) => current.filter((item) => item.id !== id))
+      if (editingAppointmentId === id) {
+        setEditingAppointmentId(null)
+        setAppointmentDraft(emptyAppointment)
+      }
+      toast.success('Đã xóa lịch tư vấn.')
+    } catch (error) {
+      toast.error(error.message || 'Không thể xóa lịch.')
+    }
+  }
+
+  const markAllRead = async () => {
+    try {
+      await request('/api/mentors/me/notifications/read-all', { method: 'PUT' })
+      setNotifications((current) => current.map((item) => ({ ...item, isRead: true })))
+    } catch (error) {
+      toast.error(error.message || 'Không thể cập nhật thông báo.')
+    }
+  }
+
+  const markRead = async (id) => {
+    try {
+      await request(`/api/mentors/me/notifications/${id}/read`, { method: 'PUT' })
+      setNotifications((current) => current.map((item) => item.id === id ? { ...item, isRead: true } : item))
+    } catch (error) {
+      toast.error(error.message || 'Không thể cập nhật thông báo.')
+    }
+  }
+
+  if (loading) {
+    return <div className="card" role="status">Đang tải không gian mentor...</div>
+  }
+
+  if (!profile) {
+    return (
+      <div className="card">
+        <h1 className="page-title">Chưa có hồ sơ mentor</h1>
+        <p className="page-subtitle">Vui lòng đăng nhập bằng tài khoản mentor đã được Admin kích hoạt.</p>
+      </div>
+    )
   }
 
   return (
     <div>
-      {/* ── Page Header ── */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Không gian Cố vấn Khởi nghiệp</h1>
-          <p className="page-subtitle">
-            Kính chào {account?.username || 'Thầy/Cô'}, quản lý hạn ngạch cố vấn, xem xét đề tài khởi nghiệp và đồng hành cùng các đội ngũ sinh viên.
-          </p>
+          <h1 className="page-title">Không gian Mentor</h1>
+          <p className="page-subtitle">Xin chào {profile.fullName || account?.username}. Theo dõi nhóm, lịch tư vấn và cập nhật hồ sơ tại đây.</p>
         </div>
+        <Link to="/mentor/requests" className="btn btn-primary">
+          <Users size={16} />
+          <span>{pendingCount} yêu cầu đang chờ</span>
+        </Link>
+      </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
-            className="btn btn-primary"
-            onClick={() => navigate('/mentor/requests')}
-          >
-            <Inbox size={16} />
-            <span>Xem tất cả yêu cầu ({pendingRequests.length} chờ duyệt)</span>
+      <section className="quota-hero-card">
+        <div className="quota-hero-left">
+          <span className="badge badge-teal" style={{ width: 'fit-content' }}>Giảng viên Mentor</span>
+          <h2 className="quota-hero-title">{profile.fullName}</h2>
+          <p className="quota-hero-subtitle">{profile.department} · {profile.email}</p>
+          {profile.phone && <p className="quota-hero-subtitle">{profile.phone}</p>}
+          <p className="quota-hero-subtitle">{profile.expertise || 'Chưa cập nhật chuyên môn.'}</p>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingProfile((value) => !value)}>
+            {editingProfile ? <X size={14} /> : <Pencil size={14} />}
+            <span>{editingProfile ? 'Đóng chỉnh sửa' : 'Cập nhật hồ sơ'}</span>
           </button>
         </div>
-      </div>
-
-      {/* ── Quota Hero Banner ── */}
-      <div className="quota-hero-card">
-        <div className="quota-hero-left">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="badge badge-teal" style={{ fontSize: 11, padding: '3px 10px' }}>
-              Giảng viên Mentor Chính thức
-            </span>
-            <span className="badge badge-neutral" style={{ fontSize: 11, padding: '3px 10px' }}>
-              {mentorProfile?.department || 'Khoa Công nghệ thông tin'}
-            </span>
-          </div>
-
-          <h2 className="quota-hero-title">
-            {mentorProfile?.fullName || account?.username || 'TS. Hoàng Văn Thông'}
-          </h2>
-
-          <p className="quota-hero-subtitle">
-            Phụ trách định hướng công nghệ, mô hình giải pháp và thẩm định tính khả thi cho các dự án khởi nghiệp sinh viên học kỳ Fall 2026.
-          </p>
-
-          <div className="quota-expertise-tags">
-            <span className="expertise-pill">Trí tuệ nhân tạo (AI)</span>
-            <span className="expertise-pill">DeepTech & Big Data</span>
-            <span className="expertise-pill">Kiến trúc hệ thống</span>
-            <span className="expertise-pill">Mô hình Lean Startup</span>
-          </div>
-        </div>
-
-        {/* Quota Gauge Box */}
         <div className="quota-gauge-box">
           <div className="quota-gauge-header">
-            <span className="quota-gauge-label">Hạn ngạch nhận nhóm (Quota)</span>
-            <span className={`badge ${isQuotaFull ? 'badge-neutral' : 'badge-green'}`}>
-              {isQuotaFull ? 'Đã đủ hạn ngạch' : `Còn ${remainingQuota} suất trống`}
-            </span>
+            <span className="quota-gauge-label">Hạn ngạch hướng dẫn</span>
+            <span className="badge badge-green">Còn {availableSlots} suất</span>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <div className="quota-gauge-numbers">
-              <span className="highlight">{currentCount}</span> / {maxQuota} <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>nhóm</span>
-            </div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: isQuotaFull ? 'var(--text-muted)' : 'var(--primary)' }}>
-              {quotaPercent}% công suất
-            </span>
-          </div>
-
+          <div className="quota-gauge-numbers"><span className="highlight">{assigned}</span> / {quota} nhóm</div>
           <div className="quota-progress-track">
-            <div
-              className={`quota-progress-fill ${isQuotaFull ? 'full' : quotaPercent >= 75 ? 'amber' : 'green'}`}
-              style={{ width: `${quotaPercent}%` }}
-            />
+            <div className={`quota-progress-fill ${quotaPercent >= 100 ? 'full' : quotaPercent >= 75 ? 'amber' : 'green'}`} style={{ width: `${quotaPercent}%` }} />
           </div>
+          <div className="quota-gauge-footer"><span>Đang hướng dẫn</span><span>{quotaPercent}% công suất</span></div>
+        </div>
+      </section>
 
-          <div className="quota-gauge-footer">
-            <span>Đang hướng dẫn: {currentCount} nhóm</span>
-            <span>Hạn mức tối đa: {maxQuota} nhóm</span>
+      {editingProfile && (
+        <form className="card" onSubmit={saveProfile} style={{ marginBottom: 24 }}>
+          <h2 style={{ marginBottom: 16 }}>Hồ sơ chuyên môn</h2>
+          <div className="mentor-workspace-form-grid">
+            <label className="mentor-field">Họ tên
+              <input className="input" required maxLength={200} value={profileDraft.fullName} onChange={(e) => setProfileDraft({ ...profileDraft, fullName: e.target.value })} />
+            </label>
+            <label className="mentor-field">Khoa / đơn vị
+              <input className="input" required maxLength={200} value={profileDraft.department} onChange={(e) => setProfileDraft({ ...profileDraft, department: e.target.value })} />
+            </label>
+            <label className="mentor-field">Điện thoại liên hệ
+              <input className="input" maxLength={40} value={profileDraft.phone} onChange={(e) => setProfileDraft({ ...profileDraft, phone: e.target.value })} />
+            </label>
+            <label className="mentor-field mentor-field-wide">Chuyên môn
+              <textarea className="textarea" rows={3} maxLength={1000} value={profileDraft.expertise} onChange={(e) => setProfileDraft({ ...profileDraft, expertise: e.target.value })} />
+            </label>
           </div>
+          <button type="submit" className="btn btn-primary" disabled={saving} style={{ marginTop: 14 }}>
+            <Save size={15} /><span>{saving ? 'Đang lưu...' : 'Lưu hồ sơ'}</span>
+          </button>
+        </form>
+      )}
+
+      <div className="dashboard-metrics-grid" style={{ marginBottom: 24 }}>
+        <div className="metric-card-clean">
+          <div className="metric-icon-box"><Layers size={20} /></div>
+          <div className="metric-info"><span className="metric-label">Nhóm đang hướng dẫn</span><span className="metric-number">{groups.length}</span></div>
+        </div>
+        <div className="metric-card-clean">
+          <div className="metric-icon-box"><CalendarDays size={20} /></div>
+          <div className="metric-info"><span className="metric-label">Lịch tư vấn sắp tới</span><span className="metric-number">{appointments.filter((item) => new Date(item.startsAt) >= new Date()).length}</span></div>
+        </div>
+        <div className="metric-card-clean">
+          <div className="metric-icon-box"><Bell size={20} /></div>
+          <div className="metric-info"><span className="metric-label">Thông báo chưa đọc</span><span className="metric-number">{unreadCount}</span></div>
         </div>
       </div>
 
-      {/* ── 4 Key KPI Metrics ── */}
-      <div className="dashboard-metrics-grid">
-        <div className="metric-card-clean">
-          <div className="metric-icon-box" style={{ color: 'var(--primary)', backgroundColor: 'var(--primary-light)' }}>
-            <Layers size={20} />
+      <div className="mentor-workspace-grid">
+        <section className="card">
+          <div className="mentor-section-heading">
+            <div><h2>Nhóm hướng dẫn</h2><p>Cập nhật mốc hiện tại, phần trăm tiến độ và nhận xét.</p></div>
           </div>
-          <div className="metric-info">
-            <span className="metric-label">Hạn ngạch tối đa</span>
-            <span className="metric-number">{maxQuota} nhóm</span>
-            <span className="metric-subtext">Quy định học kỳ EXE</span>
-          </div>
-        </div>
-
-        <div className="metric-card-clean">
-          <div className="metric-icon-box" style={{ color: '#0F766E', backgroundColor: '#CCFBF1' }}>
-            <CheckCircle2 size={20} />
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Đang hướng dẫn</span>
-            <span className="metric-number">{currentCount} nhóm</span>
-            <span className="metric-subtext">Đã khóa danh sách đồng hành</span>
-          </div>
-        </div>
-
-        <div className="metric-card-clean">
-          <div className="metric-icon-box" style={{ color: '#B26A00', backgroundColor: '#FEF3C7' }}>
-            <Inbox size={20} />
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Yêu cầu chờ duyệt</span>
-            <span className="metric-number">{pendingRequests.length} nhóm</span>
-            <span className="metric-subtext">{pendingRequests.length > 0 ? 'Cần phản hồi sớm' : 'Đã duyệt hết'}</span>
-          </div>
-        </div>
-
-        <div className="metric-card-clean">
-          <div className="metric-icon-box" style={{ color: '#475569', backgroundColor: '#F1F5F9' }}>
-            <Sparkles size={20} />
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Suất còn trống</span>
-            <span className="metric-number">{remainingQuota} suất</span>
-            <span className="metric-subtext">{isQuotaFull ? 'Không thể nhận thêm' : 'Sẵn sàng nhận thêm'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Main Two-Column Layout ── */}
-      <div className="dashboard-main-grid" style={{ marginTop: 'var(--space-6)' }}>
-        {/* Left Column: Incoming Pending Requests */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div>
-                <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>Yêu cầu mời hướng dẫn mới</span>
-                  {pendingRequests.length > 0 && (
-                    <span className="badge badge-warning" style={{ fontSize: 11 }}>
-                      {pendingRequests.length} chờ xử lý
-                    </span>
-                  )}
-                </h2>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                  Các nhóm sinh viên đã hoàn thành đề cương dự án và gửi thư mời Thầy làm Mentor
-                </p>
-              </div>
-
-              <Link to="/mentor/requests" className="btn btn-ghost btn-sm">
-                Xem tất cả ({mentorRequests.length}) <ArrowRight size={14} />
-              </Link>
+          {groups.length === 0 ? <p className="mentor-empty-state">Chưa có nhóm được phân công.</p> : (
+            <div className="mentor-workspace-list">
+              {groups.map((group) => {
+                const draft = groupDrafts[group.groupId] || group
+                const setDraft = (key, value) => setGroupDrafts((current) => ({
+                  ...current,
+                  [group.groupId]: { ...draft, [key]: value }
+                }))
+                return (
+                  <article className="mentor-workspace-item" key={group.groupId}>
+                    <h3>{group.groupName}</h3>
+                    <p>{group.topic || 'Chưa có mô tả đề tài.'}</p>
+                  <div className="mentor-progress-edit">
+                    <label className="mentor-field">Mốc hiện tại
+                      <input className="input" maxLength={200} value={draft.milestone} onChange={(event) => setDraft('milestone', event.target.value)} />
+                    </label>
+                    <label className="mentor-field">Tiến độ: {draft.progress}%
+                      <input type="range" min="0" max="100" value={draft.progress} onChange={(event) => setDraft('progress', Number(event.target.value))} />
+                    </label>
+                  </div>
+                  <label className="mentor-field">Nhận xét / việc cần làm tiếp theo
+                    <textarea className="textarea" rows={2} maxLength={2000} value={draft.feedback} onChange={(event) => setDraft('feedback', event.target.value)} />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => saveProgress(group.groupId, draft)}
+                    style={{ marginTop: 10 }}
+                  >
+                    <Save size={14} /><span>Lưu tiến độ</span>
+                  </button>
+                  </article>
+                )
+              })}
             </div>
+          )}
+        </section>
 
-            {pendingRequests.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-secondary)' }}>
-                <CheckCircle2 size={36} color="var(--primary)" style={{ margin: '0 auto 10px' }} />
-                <div style={{ fontWeight: 600, fontSize: 14 }}>Không còn yêu cầu nào chờ duyệt</div>
-                <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4 }}>
-                  Tất cả hồ sơ gửi đến đã được phản hồi đầy đủ.
-                </p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {pendingRequests.slice(0, 2).map((req) => (
-                  <div key={req.id} className="proposal-card" style={{ padding: 18 }}>
-                    <div className="proposal-card-top">
-                      <div>
-                        <div className="proposal-group-name">
-                          <span>{req.groupName}</span>
-                          <span className="badge badge-teal" style={{ fontSize: 11 }}>{req.industry}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                          Nhóm trưởng: <strong style={{ color: 'var(--text-main)' }}>{req.leader}</strong> · Gửi lúc {new Date(req.createdAt).toLocaleDateString('vi-VN')}
-                        </div>
-                      </div>
-                      <span className="badge badge-warning">Chờ Thầy duyệt</span>
-                    </div>
-
-                    <div className="proposal-topic-title" style={{ fontSize: 13.5, marginBottom: 10 }}>
-                      💡 {req.topic}
-                    </div>
-
-                    {/* Team letter */}
-                    <div className="team-pitch-quote" style={{ margin: '8px 0 12px', fontSize: 12 }}>
-                      "{req.message.slice(0, 160)}..."
-                    </div>
-
-                    {/* Actions */}
-                    <div className="proposal-actions-bar" style={{ paddingTop: 10 }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleOpenDecision(req, 'view')}
-                        style={{ padding: '4px 8px' }}
-                      >
-                        <FileText size={14} />
-                        <span>Xem toàn bộ đề cương</span>
-                      </button>
-
-                      <div className="decision-buttons-group">
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => handleOpenDecision(req, 'reject')}
-                          style={{ color: 'var(--error)' }}
-                        >
-                          <XCircle size={14} />
-                          <span>Từ chối</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          disabled={isQuotaFull}
-                          title={isQuotaFull ? 'Hạn ngạch đã đầy' : 'Chấp nhận hướng dẫn nhóm'}
-                          onClick={() => handleOpenDecision(req, 'accept')}
-                        >
-                          <CheckCircle2 size={14} />
-                          <span>Chấp nhận hướng dẫn</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Active Mentored Groups */}
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div>
-                <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>
-                  Nhóm đang đồng hành hướng dẫn ({assignedGroups.length})
-                </h2>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                  Theo dõi mốc triển khai MVP và lịch họp cố vấn định kỳ
-                </p>
-              </div>
+        <div className="mentor-workspace-side">
+          <section className="card">
+            <div className="mentor-section-heading">
+              <div><h2>Lịch tư vấn</h2><p>Tạo và quản lý lịch hẹn với nhóm.</p></div>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {assignedGroups.map((grp) => (
-                <div
-                  key={grp.id}
-                  style={{
-                    border: '1px solid var(--border-default)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '16px 18px',
-                    backgroundColor: '#FFFFFF'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-main)' }}>
-                        {grp.name}
-                      </div>
-                      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>
-                        {grp.topic}
-                      </div>
-                    </div>
-                    <span className="badge badge-green" style={{ fontSize: 11 }}>
-                      Đang hướng dẫn
-                    </span>
-                  </div>
-
-                  <div style={{ margin: '10px 0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>{grp.milestone}</span>
-                      <span style={{ color: 'var(--primary)' }}>{grp.milestoneProgress}%</span>
-                    </div>
-                    <div style={{ height: 6, width: '100%', backgroundColor: '#E2E8F0', borderRadius: 9999, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${grp.milestoneProgress}%`, backgroundColor: 'var(--primary)', borderRadius: 9999 }} />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-muted)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Clock size={13} color="var(--primary)" />
-                      <strong style={{ color: 'var(--text-main)' }}>Lịch họp tới:</strong> {grp.nextMeeting}
-                    </span>
-                    <span>Trưởng nhóm: {grp.leader}</span>
+            <form onSubmit={createAppointment} className="mentor-workspace-form">
+              <label className="mentor-field">Tên buổi tư vấn
+                <input className="input" required maxLength={200} value={appointmentDraft.title} onChange={(e) => setAppointmentDraft({ ...appointmentDraft, title: e.target.value })} />
+              </label>
+              <label className="mentor-field">Nhóm
+                <select className="input" value={appointmentDraft.groupId} onChange={(e) => setAppointmentDraft({ ...appointmentDraft, groupId: e.target.value })}>
+                  <option value="">Lịch chung</option>
+                  {groups.map((group) => <option key={group.groupId} value={group.groupId}>{group.groupName}</option>)}
+                </select>
+              </label>
+              <label className="mentor-field">Thời gian
+                <input className="input" type="datetime-local" required value={appointmentDraft.startsAt} onChange={(e) => setAppointmentDraft({ ...appointmentDraft, startsAt: e.target.value })} />
+              </label>
+              <label className="mentor-field">Ghi chú
+                <textarea className="textarea" rows={2} maxLength={2000} value={appointmentDraft.notes} onChange={(e) => setAppointmentDraft({ ...appointmentDraft, notes: e.target.value })} />
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="submit" className="btn btn-primary btn-sm"><Plus size={14} /><span>{editingAppointmentId ? 'Lưu lịch' : 'Tạo lịch'}</span></button>
+                {editingAppointmentId && <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setEditingAppointmentId(null); setAppointmentDraft(emptyAppointment) }}>Hủy sửa</button>}
+              </div>
+            </form>
+            <div className="mentor-workspace-list" style={{ marginTop: 18 }}>
+              {appointments.map((item) => (
+                <div className="mentor-appointment" key={item.id}>
+                  <div><strong>{item.title}</strong><span><Clock3 size={13} /> {displayDate(item.startsAt)}</span>{item.notes && <p>{item.notes}</p>}</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button type="button" className="btn btn-ghost btn-sm" aria-label={`Sửa lịch ${item.title}`} onClick={() => {
+                      setEditingAppointmentId(item.id)
+                      setAppointmentDraft({
+                        title: item.title,
+                        groupId: item.groupId || '',
+                        startsAt: localDateTime(item.startsAt),
+                        notes: item.notes
+                      })
+                    }}><Pencil size={14} /></button>
+                    <button type="button" className="btn btn-ghost btn-sm" aria-label={`Xóa lịch ${item.title}`} onClick={() => deleteAppointment(item.id)}><X size={15} /></button>
                   </div>
                 </div>
               ))}
+              {appointments.length === 0 && <p className="mentor-empty-state">Chưa có lịch tư vấn.</p>}
             </div>
-          </div>
-        </div>
+          </section>
 
-        {/* Right Column: Quota Guideline & Quick Schedule */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          {/* Quota Rules Card */}
-          <div className="card">
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <ShieldAlert size={17} color="var(--primary)" />
-              <span>Quy chế Quota Cố vấn EXE</span>
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-              Tiêu chuẩn phân bổ giảng viên hướng dẫn của Hội đồng Khởi nghiệp Đại học FPT:
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
-              <div style={{ display: 'flex', gap: 10, fontSize: 12.5, lineHeight: 1.5 }}>
-                <span style={{ color: 'var(--primary)', fontWeight: 700 }}>•</span>
-                <span><strong>Hạn mức tối đa:</strong> Mỗi giảng viên hướng dẫn tối đa <strong>4 - 5 nhóm</strong> trong cùng một học kỳ để đảm bảo chất lượng cố vấn sâu sát.</span>
-              </div>
-              <div style={{ display: 'flex', gap: 10, fontSize: 12.5, lineHeight: 1.5 }}>
-                <span style={{ color: 'var(--primary)', fontWeight: 700 }}>•</span>
-                <span><strong>Cam kết số buổi:</strong> Tối thiểu 10 buổi cố vấn trực tiếp (1 buổi/tuần) và ký biên bản nghiệm thu từng giai đoạn.</span>
-              </div>
-              <div style={{ display: 'flex', gap: 10, fontSize: 12.5, lineHeight: 1.5 }}>
-                <span style={{ color: 'var(--primary)', fontWeight: 700 }}>•</span>
-                <span><strong>Quyền tự quyết:</strong> Mentor có toàn quyền duyệt đề tài phù hợp với chuyên môn hoặc từ chối kèm góp ý xây dựng cho nhóm.</span>
-              </div>
+          <section className="card">
+            <div className="mentor-section-heading">
+              <div><h2>Thông báo</h2><p>{unreadCount} thông báo chưa đọc</p></div>
+              {unreadCount > 0 && <button className="btn btn-ghost btn-sm" onClick={markAllRead} type="button"><Check size={14} /> Đánh dấu đã đọc</button>}
             </div>
-          </div>
-
-          {/* Quick Shortcuts */}
-          <div className="card">
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', marginBottom: 12 }}>
-              Lối tắt tác vụ
-            </h2>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Link to="/mentor/requests" className="quick-action-link">
-                <span>Duyệt danh sách yêu cầu ({pendingRequests.length} chờ)</span>
-                <ArrowRight size={14} color="var(--text-muted)" />
-              </Link>
-              <Link to="/groups" className="quick-action-link">
-                <span>Xem tất cả nhóm khởi nghiệp toàn trường</span>
-                <ArrowRight size={14} color="var(--text-muted)" />
-              </Link>
-              <Link to="/semesters" className="quick-action-link">
-                <span>Theo dõi các mốc bảo vệ học kỳ</span>
-                <ArrowRight size={14} color="var(--text-muted)" />
-              </Link>
+            <div className="mentor-workspace-list">
+              {notifications.slice(0, 8).map((notification) => (
+                <button type="button" className={`mentor-notification ${notification.isRead ? '' : 'unread'}`} key={notification.id} onClick={() => !notification.isRead && markRead(notification.id)}>
+                  <strong>{notification.title}</strong><span>{notification.message}</span><small>{displayDate(notification.createdAt)}</small>
+                </button>
+              ))}
+              {notifications.length === 0 && <p className="mentor-empty-state">Bạn chưa có thông báo.</p>}
             </div>
-          </div>
+          </section>
         </div>
       </div>
-
-      {/* ── Modal: Accept / Reject / View Proposal ── */}
-      {selectedRequest && decisionModalType && (
-        <div className="modal-backdrop" onClick={() => setDecisionModalType(null)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: decisionModalType === 'view' ? 680 : 520 }}>
-            {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>
-                {decisionModalType === 'accept' && `Chấp nhận hướng dẫn: ${selectedRequest.groupName}`}
-                {decisionModalType === 'reject' && `Từ chối yêu cầu: ${selectedRequest.groupName}`}
-                {decisionModalType === 'view' && `Hồ sơ đề cương: ${selectedRequest.groupName}`}
-              </h2>
-              <button className="btn btn-ghost btn-sm" onClick={() => setDecisionModalType(null)} style={{ padding: 4 }}>
-                <XCircle size={18} />
-              </button>
-            </div>
-
-            {/* Modal Content for Accept */}
-            {decisionModalType === 'accept' && (
-              <div>
-                <div className="alert alert-success" style={{ marginBottom: 16 }}>
-                  <span>Sau khi chấp thuận, nhóm sẽ chính thức được ghi nhận vào Quota của Thầy ({currentCount + 1}/{maxQuota} nhóm).</span>
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <label className="input-label">Lời nhắn / Hướng dẫn ban đầu gửi tới nhóm (tùy chọn):</label>
-                  <textarea
-                    className="textarea"
-                    rows={3}
-                    placeholder="VD: Thầy đồng ý hướng dẫn nhóm. Nhóm trưởng liên hệ qua Zalo hoặc gặp Thầy vào sáng Thứ Năm tại phòng Co-working nhé!"
-                    value={decisionNote}
-                    onChange={(e) => setDecisionNote(e.target.value)}
-                  />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-                  <button className="btn btn-secondary" onClick={() => setDecisionModalType(null)}>Hủy bỏ</button>
-                  <button className="btn btn-primary" onClick={handleConfirmDecision}>
-                    <CheckCircle2 size={16} />
-                    <span>Xác nhận chấp nhận</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Modal Content for Reject */}
-            {decisionModalType === 'reject' && (
-              <div>
-                <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', marginBottom: 14 }}>
-                  Vui lòng gửi lý do hoặc lời khuyên mang tính góp ý để nhóm sinh viên có thể cải thiện đề tài hoặc tìm giảng viên phù hợp hơn:
-                </p>
-                <div style={{ marginBottom: 14 }}>
-                  <label className="input-label">Lý do từ chối & Lời khuyên định hướng *</label>
-                  <textarea
-                    required
-                    className="textarea"
-                    rows={3}
-                    placeholder="VD: Đề tài của nhóm rất tiềm năng, tuy nhiên học kỳ này lịch hướng dẫn của Thầy đã kín chuyên môn sâu. Thầy khuyên nhóm liên hệ Thầy Tuấn (Khoa HTTT) sẽ phù hợp hơn nhé."
-                    value={decisionNote}
-                    onChange={(e) => setDecisionNote(e.target.value)}
-                  />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-                  <button className="btn btn-secondary" onClick={() => setDecisionModalType(null)}>Hủy bỏ</button>
-                  <button
-                    className="btn btn-primary"
-                    style={{ backgroundColor: 'var(--error)' }}
-                    onClick={handleConfirmDecision}
-                  >
-                    <span>Gửi phản hồi từ chối</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Modal Content for Full View */}
-            {decisionModalType === 'view' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="proposal-highlight-grid">
-                  <div className="proposal-highlight-box">
-                    <div className="proposal-highlight-label">Lĩnh vực & Mô hình</div>
-                    <div className="proposal-highlight-text">
-                      <strong>{selectedRequest.industry}</strong><br />
-                      {selectedRequest.revenueModel}
-                    </div>
-                  </div>
-                  <div className="proposal-highlight-box">
-                    <div className="proposal-highlight-label">Thị trường mục tiêu</div>
-                    <div className="proposal-highlight-text">{selectedRequest.targetMarket}</div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="proposal-highlight-label">Vấn đề giải quyết</div>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    {selectedRequest.problemStatement}
-                  </p>
-                </div>
-
-                <div>
-                  <div className="proposal-highlight-label">Giải pháp & Điểm sáng tạo</div>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    {selectedRequest.solutionOverview}
-                  </p>
-                </div>
-
-                <div>
-                  <div className="proposal-highlight-label">Đội ngũ sinh viên ({selectedRequest.members?.length} thành viên)</div>
-                  <div className="roster-members-list" style={{ marginTop: 6 }}>
-                    {selectedRequest.members?.map((m, idx) => (
-                      <span key={idx} className="roster-member-chip">
-                        <span>{m.name}</span>
-                        <span className={`major-badge-tiny ${m.major}`}>{m.major}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({m.role})</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="team-pitch-quote" style={{ marginTop: 8 }}>
-                  <strong>Thư từ nhóm:</strong> "{selectedRequest.message}"
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 12, borderTop: '1px solid var(--border-default)' }}>
-                  <span style={{ fontSize: 12.5, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                    <FileText size={15} />
-                    <span>{selectedRequest.pitchDeckName}</span>
-                  </span>
-
-                  <button className="btn btn-secondary btn-sm" onClick={() => setDecisionModalType(null)}>
-                    Đóng cửa sổ
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
