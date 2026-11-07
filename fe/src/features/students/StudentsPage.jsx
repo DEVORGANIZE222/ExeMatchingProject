@@ -18,6 +18,8 @@ export default function StudentsPage() {
   const [studentTotal, setStudentTotal] = useState(0)
   const [busy, setBusy] = useState(false)
   const [search, setSearch] = useState('')
+  const [bulkDeleteSemester, setBulkDeleteSemester] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   // Tab switch between Excel Import & Single Student Add
   const [addMode, setAddMode] = useState('excel') // 'excel' | 'manual'
@@ -203,6 +205,25 @@ export default function StudentsPage() {
       await load()
     } catch (error) {
       toast.error(error.message || 'Không thể xóa sinh viên này (sinh viên có thể đang nằm trong nhóm).')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 6. Delete all students by semester
+  const handleBulkDeleteBySemester = async () => {
+    if (!bulkDeleteSemester) return
+    try {
+      setBusy(true)
+      const res = await request(`/api/students/semester/${encodeURIComponent(bulkDeleteSemester)}`, {
+        method: 'DELETE'
+      })
+      toast.success(res || `Đã xóa toàn bộ sinh viên trong học kỳ ${bulkDeleteSemester}!`)
+      setShowDeleteModal(false)
+      setBulkDeleteSemester('')
+      await load()
+    } catch (err) {
+      toast.error(err.message || 'Lỗi khi xóa sinh viên học kỳ.')
     } finally {
       setBusy(false)
     }
@@ -461,6 +482,57 @@ export default function StudentsPage() {
             </select>
           </div>
 
+          {/* Bulk Delete Bar */}
+          {isAdmin && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fee2e2',
+              borderRadius: 8,
+              marginBottom: 10,
+              flexWrap: 'wrap'
+            }}>
+              <Trash2 size={15} color="#dc2626" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#991b1b', whiteSpace: 'nowrap' }}>
+                Xóa SV theo kỳ:
+              </span>
+              <select
+                className="select input-sm"
+                value={bulkDeleteSemester}
+                onChange={(e) => setBulkDeleteSemester(e.target.value)}
+                style={{ flex: 1, minWidth: 140, fontSize: 12, height: 32, borderColor: '#fca5a5' }}
+              >
+                <option value="">-- Chọn mã học kỳ cần xóa --</option>
+                {semesters.map((s) => (
+                  <option key={s.id} value={s.code}>
+                    {s.code} · {s.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={busy || !bulkDeleteSemester}
+                onClick={() => setShowDeleteModal(true)}
+                style={{
+                  backgroundColor: '#dc2626',
+                  color: '#fff',
+                  border: 'none',
+                  fontSize: 12,
+                  padding: '5px 12px',
+                  whiteSpace: 'nowrap',
+                  cursor: !bulkDeleteSemester ? 'not-allowed' : 'pointer',
+                  opacity: !bulkDeleteSemester ? 0.6 : 1
+                }}
+              >
+                Xóa toàn bộ SV {bulkDeleteSemester ? `kỳ ${bulkDeleteSemester}` : ''}
+              </button>
+            </div>
+          )}
+
           {/* Search Box */}
           <div style={{ position: 'relative', marginBottom: 10 }}>
             <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
@@ -650,6 +722,83 @@ export default function StudentsPage() {
               </button>
               <button className="btn btn-primary" onClick={saveStrengthRoles} disabled={busy}>
                 Lưu role
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Delete Confirmation Modal ── */}
+      {showDeleteModal && (
+        <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: '50%',
+                  backgroundColor: '#fee2e2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Trash2 size={20} color="#dc2626" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: '#991b1b', margin: 0 }}>
+                    Xác nhận xóa toàn bộ sinh viên
+                  </h3>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Học kỳ: <strong style={{ color: '#dc2626' }}>{bulkDeleteSemester}</strong>
+                  </span>
+                </div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowDeleteModal(false)} style={{ padding: 4 }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.6, marginBottom: 18 }}>
+              <p style={{ margin: '0 0 10px 0' }}>
+                Bạn có chắc chắn muốn xóa <strong>toàn bộ sinh viên</strong> thuộc học kỳ <span className="badge badge-neutral" style={{ fontWeight: 700, color: '#dc2626' }}>{bulkDeleteSemester}</span>?
+              </p>
+              <div style={{
+                padding: '10px 12px',
+                backgroundColor: '#fff1f2',
+                borderRadius: 6,
+                border: '1px solid #ffe4e6',
+                color: '#be123c',
+                fontSize: 12
+              }}>
+                ⚠️ <strong>Cảnh báo:</strong> Thao tác này sẽ xóa vĩnh viễn hồ sơ sinh viên và phân quyền role thế mạnh của kỳ này trong hệ thống. Hành động này <strong>không thể hoàn tác</strong>!
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={busy}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={handleBulkDeleteBySemester}
+                disabled={busy}
+                style={{
+                  backgroundColor: '#dc2626',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '8px 16px',
+                  fontWeight: 600,
+                  borderRadius: 6
+                }}
+              >
+                {busy ? 'Đang xóa...' : `Xác nhận xóa hết SV kỳ ${bulkDeleteSemester}`}
               </button>
             </div>
           </div>

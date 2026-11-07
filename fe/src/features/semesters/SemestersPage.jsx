@@ -4,6 +4,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
+import DatePicker from '../../components/DatePicker'
+import SemesterTimelineProgress from '../../components/SemesterTimelineProgress'
 import '../../components/ServicePages.css'
 
 const toUtc = (value) => (value ? new Date(value).toISOString() : null)
@@ -295,6 +297,19 @@ export default function SemestersPage() {
                   <strong>{formatDate(item.mentorDeadline)}</strong>
                 </div>
               </div>
+
+              {/* Visual Timeline Progress for Semester */}
+              <div style={{ marginTop: 12 }}>
+                <SemesterTimelineProgress
+                  compact
+                  startDate={item.startDate}
+                  endDate={item.endDate}
+                  registrationDeadline={item.registrationDeadline}
+                  topicDeadline={item.topicDeadline}
+                  mentorDeadline={item.mentorDeadline}
+                  showTodayMarker={isActive}
+                />
+              </div>
             </div>
           )
         })}
@@ -354,22 +369,20 @@ export default function SemestersPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label className="input-label">Ngày bắt đầu *</label>
-                  <input
+                  <DatePicker
                     required
-                    type="date"
-                    className="input"
+                    placeholder="dd/mm/yyyy"
                     value={form.startDate}
-                    onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                    onChange={(val) => setForm({ ...form, startDate: val })}
                   />
                 </div>
                 <div>
                   <label className="input-label">Ngày kết thúc *</label>
-                  <input
+                  <DatePicker
                     required
-                    type="date"
-                    className="input"
+                    placeholder="dd/mm/yyyy"
                     value={form.endDate}
-                    onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                    onChange={(val) => setForm({ ...form, endDate: val })}
                   />
                 </div>
               </div>
@@ -385,32 +398,40 @@ export default function SemestersPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div>
                     <label className="input-label">1. Hạn chót ghép nhóm tự do</label>
-                    <input
-                      type="date"
-                      className="input input-sm"
+                    <DatePicker
+                      placeholder="dd/mm/yyyy"
                       value={form.registrationDeadline}
-                      onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })}
+                      onChange={(val) => setForm({ ...form, registrationDeadline: val })}
                     />
                   </div>
                   <div>
                     <label className="input-label">2. Hạn chót đăng ký đề tài</label>
-                    <input
-                      type="date"
-                      className="input input-sm"
+                    <DatePicker
+                      placeholder="dd/mm/yyyy"
                       value={form.topicDeadline}
-                      onChange={(e) => setForm({ ...form, topicDeadline: e.target.value })}
+                      onChange={(val) => setForm({ ...form, topicDeadline: val })}
                     />
                   </div>
                   <div>
                     <label className="input-label">3. Hạn chót ghép Mentor hướng dẫn</label>
-                    <input
-                      type="date"
-                      className="input input-sm"
+                    <DatePicker
+                      placeholder="dd/mm/yyyy"
                       value={form.mentorDeadline}
-                      onChange={(e) => setForm({ ...form, mentorDeadline: e.target.value })}
+                      onChange={(val) => setForm({ ...form, mentorDeadline: val })}
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Visual Timeline Progress Preview */}
+              <div style={{ marginTop: 4 }}>
+                <SemesterTimelineProgress
+                  startDate={form.startDate}
+                  endDate={form.endDate}
+                  registrationDeadline={form.registrationDeadline}
+                  topicDeadline={form.topicDeadline}
+                  mentorDeadline={form.mentorDeadline}
+                />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
@@ -475,22 +496,20 @@ export default function SemestersPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label className="input-label">Ngày bắt đầu *</label>
-                  <input
+                  <DatePicker
                     required
-                    type="date"
-                    className="input"
+                    placeholder="dd/mm/yyyy"
                     value={editForm.startDate}
-                    onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                    onChange={(val) => setEditForm({ ...editForm, startDate: val })}
                   />
                 </div>
                 <div>
                   <label className="input-label">Ngày kết thúc *</label>
-                  <input
+                  <DatePicker
                     required
-                    type="date"
-                    className="input"
+                    placeholder="dd/mm/yyyy"
                     value={editForm.endDate}
-                    onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
+                    onChange={(val) => setEditForm({ ...editForm, endDate: val })}
                   />
                 </div>
               </div>
@@ -516,32 +535,41 @@ export default function SemestersPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
                   <div>
                     <label className="input-label">1. Hạn ghép nhóm tự do</label>
-                    <input
-                      type="date"
-                      className="input input-sm"
+                    <DatePicker
+                      placeholder="dd/mm/yyyy"
                       value={editForm.registrationDeadline}
-                      onChange={(e) => setEditForm({ ...editForm, registrationDeadline: e.target.value })}
+                      onChange={(val) => setEditForm({ ...editForm, registrationDeadline: val })}
                     />
                   </div>
                   <div>
                     <label className="input-label">2. Hạn chốt đề tài</label>
-                    <input
-                      type="date"
-                      className="input input-sm"
+                    <DatePicker
+                      placeholder="dd/mm/yyyy"
                       value={editForm.topicDeadline}
-                      onChange={(e) => setEditForm({ ...editForm, topicDeadline: e.target.value })}
+                      onChange={(val) => setEditForm({ ...editForm, topicDeadline: val })}
                     />
                   </div>
                   <div>
                     <label className="input-label">3. Hạn ghép Mentor hướng dẫn</label>
-                    <input
-                      type="date"
-                      className="input input-sm"
+                    <DatePicker
+                      placeholder="dd/mm/yyyy"
                       value={editForm.mentorDeadline}
-                      onChange={(e) => setEditForm({ ...editForm, mentorDeadline: e.target.value })}
+                      onChange={(val) => setEditForm({ ...editForm, mentorDeadline: val })}
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Visual Timeline Progress Preview */}
+              <div style={{ marginTop: 4 }}>
+                <SemesterTimelineProgress
+                  startDate={editForm.startDate}
+                  endDate={editForm.endDate}
+                  registrationDeadline={editForm.registrationDeadline}
+                  topicDeadline={editForm.topicDeadline}
+                  mentorDeadline={editForm.mentorDeadline}
+                  showTodayMarker={editForm.isActive}
+                />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>

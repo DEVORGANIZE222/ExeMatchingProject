@@ -428,7 +428,11 @@ export function AuthProvider({ children }) {
       }
     })
     const body = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(body.message || 'Không thể kết nối dữ liệu.')
+    if (!response.ok) {
+      const error = new Error(body.message || 'Không thể kết nối dữ liệu.')
+      error.status = response.status
+      throw error
+    }
     return body.data
   }, [token])
 

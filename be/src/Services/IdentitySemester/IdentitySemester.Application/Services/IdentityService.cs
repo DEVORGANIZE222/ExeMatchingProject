@@ -98,7 +98,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         var emails = rawEmails.Select(Required).Select(x => x.ToLowerInvariant()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // A department roster can cover several classes; keep this independent
         // from the roster enrollment batch limit.
-        if (emails.Count is < 1 or > 2000) throw new IdentityException(400, "Import requires 1 to 2000 unique email addresses.");
+        if (emails.Count is < 1 or > 5000) throw new IdentityException(400, "Import requires 1 to 5000 unique email addresses.");
         // The department roster is the authority for this import. Preserve every
         // non-empty value under its Email/Gmail column; Google authentication still
         // accepts only the verified email claim from a valid Google ID token.
@@ -145,8 +145,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     public async Task<ImportResult> Import(ImportStudentsRequest request, string initialPassword, CancellationToken ct)
     {
         ValidatePassword(initialPassword);
-        if (request.Students is null || request.Students.Count is < 1 or > 2000)
-            throw new IdentityException(400, "Import requires 1 to 2000 students.");
+        if (request.Students is null || request.Students.Count is < 1 or > 5000)
+            throw new IdentityException(400, "Import requires 1 to 5000 students.");
         var semester = await FindSemester(request.SemesterCode, ct);
         var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -196,6 +196,12 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         if (student.HasGroup) throw new IdentityException(409, "Remove group membership through GroupMatching before deleting this student.");
         store.RemoveStudent(student);
         await store.Save(ct);
+    }
+    public async Task<int> DeleteStudentsBySemester(string semesterCode, CancellationToken ct)
+    {
+        var code = Required(semesterCode).ToUpperInvariant();
+        var semester = await store.SemesterByCode(code, ct) ?? throw new IdentityException(404, "Semester not found.");
+        return await store.DeleteStudentsBySemester(semester.Id, ct);
     }
     public Task<PageResult<SemesterDto>> Semesters(ListQuery query, CancellationToken ct) => store.Semesters(query, ct);
     public async Task<SemesterDto> Semester(Guid id, CancellationToken ct) => Map(await store.SemesterById(id, ct) ?? throw new IdentityException(404, "Semester not found."));

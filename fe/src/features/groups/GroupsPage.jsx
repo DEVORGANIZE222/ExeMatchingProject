@@ -12,7 +12,7 @@ import { useAuth } from '../../hooks/useAuth'
 const TEAM_ROLES = ['Frontend', 'Backend', 'Mobile', 'UIUX', 'BusinessAnalysis', 'QualityAssurance', 'DataAI']
 
 export default function GroupsPage() {
-  const { account, request, isAdmin } = useAuth()
+  const { account, request, isAdmin, isMentor, isStudent } = useAuth()
   const [groups, setGroups] = useState([])
   const [semesters, setSemesters] = useState([])
   const [semesterCode, setSemesterCode] = useState('')
@@ -73,7 +73,7 @@ export default function GroupsPage() {
         const items = semData.items || []
         setSemesters(items)
 
-        if (isAdmin) {
+        if (isAdmin || isMentor) {
           if (items.length > 0 && !semesterCode) {
             const active = items.find((s) => s.isActive) || items[0]
             setSemesterCode(active.code)
@@ -87,11 +87,11 @@ export default function GroupsPage() {
       }
     }
     fetchSemesters()
-  }, [account, isAdmin, request, semesterCode, studentSemesterCode])
+  }, [account, isAdmin, isMentor, request, semesterCode, studentSemesterCode])
 
   // 2. Load Groups by Semester
   const loadGroups = useCallback(async () => {
-    const targetCode = isAdmin ? semesterCode : studentSemesterCode
+    const targetCode = isStudent ? studentSemesterCode : semesterCode
     if (!targetCode) {
       setGroups([])
       return
@@ -119,18 +119,18 @@ export default function GroupsPage() {
     } finally {
       setBusy(false)
     }
-  }, [isAdmin, mapGroup, request, selectedGroup, semesterCode, studentSemesterCode])
+  }, [isStudent, mapGroup, request, selectedGroup, semesterCode, studentSemesterCode])
 
   useEffect(() => {
-    if (isAdmin ? semesterCode : studentSemesterCode) {
+    if (isStudent ? studentSemesterCode : semesterCode) {
       loadGroups()
     }
-  }, [isAdmin, semesterCode, studentSemesterCode])
+  }, [isStudent, semesterCode, studentSemesterCode, loadGroups])
 
   // 1. Create Group
   const handleCreateGroup = async (e) => {
     e.preventDefault()
-    const targetCode = isAdmin ? semesterCode : studentSemesterCode
+    const targetCode = isStudent ? studentSemesterCode : semesterCode
     if (!newGroupName.trim() || !targetCode) return
     try {
       setBusy(true)
@@ -395,8 +395,8 @@ export default function GroupsPage() {
       {/* ── Semester Header / Filter Tabs ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {/* Admin has Semester Dropdown; Student has Fixed Badge */}
-          {isAdmin ? (
+          {/* Admin and Mentor have Semester Dropdown; Student has Fixed Badge */}
+          {isAdmin || isMentor ? (
             <select
               className="select input-sm"
               value={semesterCode}
@@ -410,14 +410,12 @@ export default function GroupsPage() {
               ))}
             </select>
           ) : (
-            studentSemesterCode && (
-              <div className="badge badge-teal" style={{ fontSize: 13, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Calendar size={14} />
-                <span>
-                  Học kỳ của bạn: <strong>{activeSemester ? `${activeSemester.code} · ${activeSemester.name}` : studentSemesterCode}</strong>
-                </span>
-              </div>
-            )
+            <div className="badge badge-teal" style={{ fontSize: 13, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Calendar size={14} />
+              <span>
+                Học kỳ của bạn: <strong>{activeSemester ? `${activeSemester.code} · ${activeSemester.name}` : (studentSemesterCode || 'Chưa xếp kỳ')}</strong>
+              </span>
+            </div>
           )}
 
           {/* Filter Tabs */}

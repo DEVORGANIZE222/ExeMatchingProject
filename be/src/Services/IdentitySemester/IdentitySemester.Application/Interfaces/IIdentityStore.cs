@@ -22,6 +22,7 @@ public interface IIdentityStore
     Task<Role> RoleByName(string name, CancellationToken ct);
     Task<bool> GoogleEmailAllowed(string email, CancellationToken ct);
     Task<IReadOnlyList<GoogleAllowedEmail>> GoogleAllowedEmails(CancellationToken ct);
+    Task<int> DeleteStudentsBySemester(Guid semesterId, CancellationToken ct);
     void AddStudent(Student student);
     void AddUser(User user);
     void RemoveStudent(Student student);

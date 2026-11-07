@@ -50,7 +50,7 @@ public class DatabaseInitializer(IdentitySemesterDbContext db, IPasswordService 
         const string devEmail = "thithinh714@gmail.com";
         const string devPassword = "Admin@12345678";
 
-        if (!await db.GoogleAllowedEmails.AnyAsync(x => x.Email == devEmail, ct))
+        if (!await db.GoogleAllowedEmails.AnyAsync(x => x.Email.ToLower() == devEmail, ct))
         {
             db.GoogleAllowedEmails.Add(new GoogleAllowedEmail
             {
@@ -59,9 +59,9 @@ public class DatabaseInitializer(IdentitySemesterDbContext db, IPasswordService 
             });
         }
 
-        if (!await db.Users.AnyAsync(u => u.Email.ToLower() == devEmail, ct))
+        var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Admin", ct);
+        if (adminRole != null && !await db.Users.AnyAsync(u => u.Email.ToLower() == devEmail, ct))
         {
-            var adminRole = await db.Roles.SingleAsync(r => r.Name == "Admin", ct);
             var devAdmin = new User
             {
                 Email = devEmail,
@@ -77,7 +77,7 @@ public class DatabaseInitializer(IdentitySemesterDbContext db, IPasswordService 
         const string mentorEmail = "danghung25022005@gmail.com";
         const string mentorPassword = "Mentor@12345678";
 
-        if (!await db.GoogleAllowedEmails.AnyAsync(x => x.Email == mentorEmail, ct))
+        if (!await db.GoogleAllowedEmails.AnyAsync(x => x.Email.ToLower() == mentorEmail, ct))
         {
             db.GoogleAllowedEmails.Add(new GoogleAllowedEmail
             {
@@ -86,24 +86,27 @@ public class DatabaseInitializer(IdentitySemesterDbContext db, IPasswordService 
             });
         }
 
-        var mentorRole = await db.Roles.SingleAsync(r => r.Name == "Mentor", ct);
-        var existingMentorUser = await db.Users.SingleOrDefaultAsync(u => u.Email.ToLower() == mentorEmail, ct);
-        if (existingMentorUser is null)
+        var mentorRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Mentor", ct);
+        if (mentorRole != null)
         {
-            var mentorUser = new User
+            var existingMentorUser = await db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == mentorEmail, ct);
+            if (existingMentorUser is null)
             {
-                Email = mentorEmail,
-                Username = "danghung_mentor",
-                RoleId = mentorRole.Id,
-                CreatedAt = DateTime.UtcNow
-            };
-            mentorUser.PasswordHash = passwords.Hash(mentorUser, mentorPassword);
-            db.Users.Add(mentorUser);
-        }
-        else if (existingMentorUser.RoleId != mentorRole.Id)
-        {
-            existingMentorUser.RoleId = mentorRole.Id;
-            existingMentorUser.UpdatedAt = DateTime.UtcNow;
+                var mentorUser = new User
+                {
+                    Email = mentorEmail,
+                    Username = "danghung_mentor",
+                    RoleId = mentorRole.Id,
+                    CreatedAt = DateTime.UtcNow
+                };
+                mentorUser.PasswordHash = passwords.Hash(mentorUser, mentorPassword);
+                db.Users.Add(mentorUser);
+            }
+            else if (existingMentorUser.RoleId != mentorRole.Id)
+            {
+                existingMentorUser.RoleId = mentorRole.Id;
+                existingMentorUser.UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync(ct);
@@ -115,10 +118,13 @@ public class DatabaseInitializer(IdentitySemesterDbContext db, IPasswordService 
         IdentityService.ValidatePassword(password);
         email = email.Trim().ToLowerInvariant();
         if (await db.Users.AnyAsync(u => u.Email.ToLower() == email, ct)) return;
-        var role = await db.Roles.SingleAsync(r => r.Name == "Admin", ct);
-        var admin = new User { Email = email, Username = "admin", RoleId = role.Id };
-        admin.PasswordHash = passwords.Hash(admin, password);
-        db.Users.Add(admin);
-        await db.SaveChangesAsync(ct);
+        var role = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Admin", ct);
+        if (role != null)
+        {
+            var admin = new User { Email = email, Username = "admin", RoleId = role.Id };
+            admin.PasswordHash = passwords.Hash(admin, password);
+            db.Users.Add(admin);
+            await db.SaveChangesAsync(ct);
+        }
     }
 }

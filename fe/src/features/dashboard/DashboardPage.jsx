@@ -8,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth'
 import './DashboardPage.css'
 
 export default function DashboardPage() {
-  const { account, request, isAdmin } = useAuth()
+  const { account, request, isAdmin, isMentor, isStudent } = useAuth()
   const navigate = useNavigate()
 
   const [semesters, setSemesters] = useState([])
@@ -37,7 +37,7 @@ export default function DashboardPage() {
         const items = semData.items || []
         setSemesters(items)
 
-        if (isAdmin) {
+        if (isAdmin || isMentor) {
           if (items.length > 0 && !selectedSemesterCode) {
             const defaultSem = items.find((s) => s.isActive) || items[0]
             setSelectedSemesterCode(defaultSem.code)
@@ -51,11 +51,11 @@ export default function DashboardPage() {
       }
     }
     fetchSemesters()
-  }, [account, isAdmin, request, studentSemesterCode])
+  }, [account, isAdmin, isMentor, request, studentSemesterCode])
 
   // 2. Load Realtime Metrics when Semester Changes
   const loadMetrics = useCallback(async () => {
-    const targetCode = isAdmin ? selectedSemesterCode : studentSemesterCode
+    const targetCode = isStudent ? studentSemesterCode : selectedSemesterCode
     if (!targetCode) return
 
     setLoading(true)
@@ -144,8 +144,8 @@ export default function DashboardPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {isAdmin ? (
-            // Admin can choose semester
+          {isAdmin || isMentor ? (
+            // Admin & Mentor can choose semester
             <select
               className="select input-sm"
               value={selectedSemesterCode}
@@ -171,7 +171,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Warning Banner if Student has no semester assigned */}
-      {!isAdmin && !studentSemesterCode && (
+      {!isAdmin && !isMentor && !studentSemesterCode && (
         <div className="card" style={{ marginBottom: 'var(--space-6)', backgroundColor: '#FEFCE8', borderColor: '#FEF08A', display: 'flex', alignItems: 'center', gap: 12 }}>
           <AlertCircle size={22} color="#CA8A04" style={{ flexShrink: 0 }} />
           <div>
