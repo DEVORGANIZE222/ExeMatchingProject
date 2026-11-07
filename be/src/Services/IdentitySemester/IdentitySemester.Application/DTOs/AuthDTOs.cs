@@ -7,7 +7,7 @@ public record GoogleLoginRequest([Required, MinLength(20)] string Credential);
 public record GoogleAllowedEmailResponse(Guid Id, string Email, DateTime CreatedAt);
 public record GoogleEmailImportResult(int ImportedCount, int ExistingCount);
 public record LoginResponse(string Token, string? RefreshToken, DateTime Expiration, StudentResponse? Student);
-public record AccountResponse(Guid Id, string Username, string Email, string Role);
+public record AccountResponse(Guid Id, string Username, string Email, string Role, string? AvatarUrl = null);
 public record ActivateMentorRequest([Required, EmailAddress, StringLength(254)] string Email);
 public record UpdateAccountRequest([Required, StringLength(100)] string Username);
 public record ChangePasswordRequest([Required] string CurrentPassword, [Required, StringLength(128, MinimumLength = 12)] string NewPassword);

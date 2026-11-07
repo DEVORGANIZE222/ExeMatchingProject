@@ -2,6 +2,7 @@
 -- Executed inside a transaction by DatabaseInitializer after EnsureCreated.
 ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "TokenVersion" integer NOT NULL DEFAULT 0;
 ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "GoogleSubject" text;
+ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "GooglePictureUrl" text;
 ALTER TABLE "Semesters" ADD COLUMN IF NOT EXISTS "RegistrationDeadline" timestamptz;
 ALTER TABLE "Semesters" ADD COLUMN IF NOT EXISTS "TopicDeadline" timestamptz;
 ALTER TABLE "Semesters" ADD COLUMN IF NOT EXISTS "MentorDeadline" timestamptz;

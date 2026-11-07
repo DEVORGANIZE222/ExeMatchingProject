@@ -15,6 +15,7 @@ export default function AppLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const location = useLocation()
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState(null)
 
   useEffect(() => {
     if (!isMentor) return
@@ -106,7 +107,9 @@ export default function AppLayout() {
           <div className="topbar-actions">
             <div className="user-profile-badge">
               <div className="avatar avatar-sm avatar-primary">
-                {userInitial}
+                {account?.avatarUrl && account.avatarUrl !== failedAvatarUrl ? (
+                  <img src={account.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarUrl(account.avatarUrl)} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : userInitial}
               </div>
               <div style={{ textAlign: 'left' }}>
                 <div className="user-name">{account?.username || 'Người dùng'}</div>

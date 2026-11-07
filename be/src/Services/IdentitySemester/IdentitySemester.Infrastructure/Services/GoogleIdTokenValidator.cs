@@ -29,7 +29,7 @@ public sealed class GoogleIdTokenValidator(IOptions<GoogleAuthSettings> options)
         {
             var payload = await GoogleJsonWebSignature.ValidateAsync(credential,
                 new GoogleJsonWebSignature.ValidationSettings { Audience = clientIds });
-            return new GoogleIdentity(payload.Subject, payload.Email, payload.EmailVerified, payload.HostedDomain, payload.Name);
+            return new GoogleIdentity(payload.Subject, payload.Email, payload.EmailVerified, payload.HostedDomain, payload.Name, payload.Picture);
         }
         catch (InvalidJwtException)
         {
