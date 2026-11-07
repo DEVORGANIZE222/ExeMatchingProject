@@ -23,6 +23,7 @@ public interface IIdentityStore
     Task<bool> GoogleEmailAllowed(string email, CancellationToken ct);
     Task<IReadOnlyList<GoogleAllowedEmail>> GoogleAllowedEmails(CancellationToken ct);
     Task<int> DeleteStudentsBySemester(Guid semesterId, CancellationToken ct);
+    Task DeleteStudentEnrollment(Guid studentId, CancellationToken ct);
     void AddStudent(Student student);
     void AddUser(User user);
     void RemoveStudent(Student student);

@@ -87,16 +87,41 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
     }
     public void AddUser(User user) => db.Users.Add(user);
     public void RemoveStudent(Student student) => db.Students.Remove(student);
+    public async Task DeleteStudentEnrollment(Guid studentId, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var student = await db.Students.Include(s => s.User).ThenInclude(u => u.Role).SingleOrDefaultAsync(s => s.Id == studentId, ct)
+            ?? throw new IdentityException(404, "Student not found.");
+        await DeleteEnrollments([student], ct);
+        await tx.CommitAsync(ct);
+    }
     public async Task<int> DeleteStudentsBySemester(Guid semesterId, CancellationToken ct)
     {
-        var students = await db.Students.Where(s => s.SemesterId == semesterId).ToListAsync(ct);
-        if (students.Count == 0) return 0;
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var students = await db.Students.Include(s => s.User).ThenInclude(u => u.Role).Where(s => s.SemesterId == semesterId).ToListAsync(ct);
+        await DeleteEnrollments(students, ct);
+        await tx.CommitAsync(ct);
+        return students.Count;
+    }
+    private async Task DeleteEnrollments(List<Student> students, CancellationToken ct)
+    {
+        if (students.Count == 0) return;
+        if (students.Any(s => s.HasGroup))
+            throw new IdentityException(409, "Remove group membership through GroupMatching before deleting students.");
         var studentIds = students.Select(s => s.Id).ToList();
+        var userIds = students.Select(s => s.UserId).Distinct().ToList();
+        var remaining = await db.Students.Where(s => userIds.Contains(s.UserId) && !studentIds.Contains(s.Id))
+            .Select(s => s.UserId).Distinct().ToListAsync(ct);
+        var affected = students.Select(s => s.User).DistinctBy(u => u.Id)
+            .Where(u => u.Role.Name == "Student" && !remaining.Contains(u.Id)).ToList();
+        var emails = affected.Select(u => u.Email.Trim().ToLower()).ToList();
+        var allowed = await db.GoogleAllowedEmails.Where(e => emails.Contains(e.Email.Trim().ToLower())).ToListAsync(ct);
+        db.GoogleAllowedEmails.RemoveRange(allowed);
+        foreach (var user in affected) { user.TokenVersion++; user.UpdatedAt = DateTime.UtcNow; }
         var roles = await db.StudentStrengthRoles.Where(r => studentIds.Contains(r.StudentId)).ToListAsync(ct);
         db.StudentStrengthRoles.RemoveRange(roles);
         db.Students.RemoveRange(students);
         await db.SaveChangesAsync(ct);
-        return students.Count;
     }
     public void AddSemester(Semester semester) => db.Semesters.Add(semester);
     public void RemoveSemester(Semester semester) => db.Semesters.Remove(semester);
