@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS "Groups" (
     "Id" uuid NOT NULL PRIMARY KEY,
     "GroupCode" character varying(64) NOT NULL,
     "GroupName" character varying(120) NOT NULL,
+    "ProjectDescription" character varying(1200) NOT NULL DEFAULT '',
     "TopicTitle" character varying(300) NULL,
     "SemesterCode" character varying(30) NOT NULL,
     "Status" integer NOT NULL,
@@ -42,6 +43,16 @@ CREATE TABLE IF NOT EXISTS "LeaderVotes" (
     "UpdatedAt" timestamp with time zone NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_LeaderVotes_GroupId_VoterStudentId" ON "LeaderVotes" ("GroupId", "VoterStudentId");
+
+CREATE TABLE IF NOT EXISTS "GroupRecruitmentNeeds" (
+    "Id" uuid NOT NULL PRIMARY KEY,
+    "GroupId" uuid NOT NULL REFERENCES "Groups" ("Id") ON DELETE CASCADE,
+    "RoleCode" character varying(40) NOT NULL,
+    "Slots" integer NOT NULL CHECK ("Slots" > 0),
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_GroupRecruitmentNeeds_GroupId_RoleCode" ON "GroupRecruitmentNeeds" ("GroupId", "RoleCode");
 
 CREATE TABLE IF NOT EXISTS "GroupEventOutbox" (
     "Id" uuid NOT NULL PRIMARY KEY,

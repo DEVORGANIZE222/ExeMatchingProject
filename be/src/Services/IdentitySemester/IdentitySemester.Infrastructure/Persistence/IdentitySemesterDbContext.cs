@@ -13,6 +13,7 @@ public class IdentitySemesterDbContext : DbContext
     public DbSet<Semester> Semesters => Set<Semester>();
     public DbSet<StudentEventOutbox> StudentEventOutbox => Set<StudentEventOutbox>();
     public DbSet<GoogleAllowedEmail> GoogleAllowedEmails => Set<GoogleAllowedEmail>();
+    public DbSet<StudentStrengthRole> StudentStrengthRoles => Set<StudentStrengthRole>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +26,12 @@ public class IdentitySemesterDbContext : DbContext
         modelBuilder.Entity<Student>().HasIndex(s => new { s.SemesterId, s.StudentCode }).IsUnique();
         modelBuilder.Entity<Student>().HasIndex(s => new { s.SemesterId, s.UserId }).IsUnique();
         modelBuilder.Entity<Student>().HasOne(s => s.Semester).WithMany().HasForeignKey(s => s.SemesterId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<StudentStrengthRole>(entity =>
+        {
+            entity.Property(x => x.RoleCode).HasMaxLength(40).IsRequired();
+            entity.HasIndex(x => new { x.StudentId, x.RoleCode }).IsUnique();
+            entity.HasOne(x => x.Student).WithMany(x => x.StrengthRoles).HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<User>().Property(u => u.TokenVersion).IsConcurrencyToken();
 
         // Seed Roles

@@ -74,7 +74,10 @@ export default function SemestersPage() {
     return () => clearTimeout(id)
   }, [load])
 
-  // Create Semester
+  const resetForm = () => setForm({
+    code: '', name: '', startDate: '', endDate: '', registrationDeadline: '', topicDeadline: '', mentorDeadline: ''
+  })
+
   const handleCreate = async (e) => {
     e.preventDefault()
     const milestones = [form.registrationDeadline, form.topicDeadline, form.mentorDeadline]
@@ -100,15 +103,7 @@ export default function SemestersPage() {
         })
       })
       toast.success(`Đã tạo học kỳ ${form.code} thành công.`)
-      setForm({
-        code: '',
-        name: '',
-        startDate: '',
-        endDate: '',
-        registrationDeadline: '',
-        topicDeadline: '',
-        mentorDeadline: ''
-      })
+      resetForm()
       setShowModal(false)
       await load()
     } catch (err) {
@@ -203,7 +198,7 @@ export default function SemestersPage() {
         </div>
 
         {isAdmin && (
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true) }}>
             <Plus size={16} />
             <span>Tạo học kỳ mới</span>
           </button>
@@ -322,7 +317,7 @@ export default function SemestersPage() {
               </h2>
               <button
                 className="btn btn-ghost btn-sm"
-                onClick={() => setShowModal(false)}
+                onClick={() => { setShowModal(false); resetForm() }}
                 style={{ padding: 4 }}
               >
                 <X size={18} />
@@ -419,7 +414,7 @@ export default function SemestersPage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); resetForm() }}
                 >
                   Hủy
                 </button>

@@ -7,6 +7,8 @@ import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 
+const TEAM_ROLES = ['Frontend', 'Backend', 'Mobile', 'UIUX', 'BusinessAnalysis', 'QualityAssurance', 'DataAI']
+
 export default function StudentsPage() {
   const { request, isAdmin } = useAuth()
   const [semesters, setSemesters] = useState([])
@@ -44,6 +46,10 @@ export default function StudentsPage() {
     fullName: '',
     major: ''
   })
+
+  // Strength roles modal
+  const [roleStudent, setRoleStudent] = useState(null)
+  const [selectedRoles, setSelectedRoles] = useState([])
 
   // Load Semesters
   useEffect(() => {
@@ -197,6 +203,34 @@ export default function StudentsPage() {
       await load()
     } catch (error) {
       toast.error(error.message || 'Không thể xóa sinh viên này (sinh viên có thể đang nằm trong nhóm).')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 6. Strength Roles
+  const openStrengthRoles = (student) => {
+    setRoleStudent(student)
+    setSelectedRoles(student.strengthRoles || [])
+  }
+
+  const saveStrengthRoles = async () => {
+    if (!roleStudent || selectedRoles.length < 1) {
+      toast.error('Chọn ít nhất một role thế mạnh.')
+      return
+    }
+    try {
+      setBusy(true)
+      await request(`/api/students/${roleStudent.id}/strength-roles`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roleCodes: selectedRoles })
+      })
+      toast.success(`Đã cập nhật role thế mạnh cho ${roleStudent.fullName}`)
+      setRoleStudent(null)
+      await load()
+    } catch (error) {
+      toast.error(error.message || 'Không thể cập nhật role thế mạnh.')
     } finally {
       setBusy(false)
     }
@@ -462,13 +496,16 @@ export default function StudentsPage() {
                     {item.fullName ? item.fullName.charAt(0) : 'S'}
                   </div>
                   <div className="student-meta-block">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <strong style={{ fontSize: 13.5 }}>{item.fullName}</strong>
                       {item.hasGroup ? (
                         <span className="badge badge-teal" style={{ fontSize: 10 }}>Đã có nhóm</span>
                       ) : (
                         <span className="badge badge-warning" style={{ fontSize: 10 }}>Chưa có nhóm</span>
                       )}
+                      {item.strengthRoles?.map((r) => (
+                        <span key={r} className="badge badge-neutral" style={{ fontSize: 9.5 }}>{r}</span>
+                      ))}
                     </div>
                     <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                       {item.studentCode} · {item.email}
@@ -480,6 +517,15 @@ export default function StudentsPage() {
                   <span className="badge badge-neutral" style={{ fontSize: 11 }}>
                     {item.major || 'Kỹ thuật PM'}
                   </span>
+
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: '4px 8px', fontSize: 11.5, color: 'var(--primary)' }}
+                    onClick={() => openStrengthRoles(item)}
+                    title="Cập nhật Role thế mạnh"
+                  >
+                    Roles
+                  </button>
 
                   {isAdmin && (
                     <div style={{ display: 'flex', gap: 2 }}>
@@ -569,6 +615,56 @@ export default function StudentsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ── Strength Roles Modal (PUT /api/students/{id}/strength-roles) ── */}
+      {roleStudent && (
+        <div className="modal-backdrop" onClick={() => setRoleStudent(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div>
+                <h2 style={{ fontSize: 18, margin: 0, fontWeight: 700, color: 'var(--text-main)' }}>
+                  Role thế mạnh của sinh viên
+                </h2>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+                  {roleStudent.fullName} ({roleStudent.studentCode})
+                </p>
+              </div>
+              <button className="btn btn-ghost btn-sm" aria-label="Đóng" onClick={() => setRoleStudent(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div role="group" aria-label="Chọn tối đa sáu role thế mạnh" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '16px 0' }}>
+              {TEAM_ROLES.map((role) => {
+                const selected = selectedRoles.includes(role)
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    aria-pressed={selected}
+                    className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() =>
+                      setSelectedRoles((items) =>
+                        selected ? items.filter((item) => item !== role) : items.length < 6 ? [...items, role] : items
+                      )
+                    }
+                  >
+                    {role}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => setRoleStudent(null)}>
+                Hủy
+              </button>
+              <button className="btn btn-primary" onClick={saveStrengthRoles} disabled={busy}>
+                Lưu role
+              </button>
+            </div>
           </div>
         </div>
       )}

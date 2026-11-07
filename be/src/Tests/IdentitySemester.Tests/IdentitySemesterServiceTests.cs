@@ -143,6 +143,10 @@ public class IdentitySemesterServiceTests(IdentityApiFixture fixture) : IClassFi
             new CreateSemesterRequest("NO", "NO", Utc(1), Utc(6)))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync("/api/auth/me", new UpdateAccountRequest("New name"))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await fixture.Admin.PutAsJsonAsync("/api/students/" + student.Id, new UpdateStudentRequest("Updated", "AI"))).StatusCode);
+        var strengths = await fixture.Admin.PutAsJsonAsync("/api/students/" + student.Id + "/strength-roles",
+            new UpdateStudentStrengthRolesRequest(["Frontend", "DataAI"]));
+        Assert.Equal(HttpStatusCode.OK, strengths.StatusCode);
+        Assert.Equal(["DataAI", "Frontend"], (await strengths.Content.ReadFromJsonAsync<ApiResponse<StudentResponse>>())!.Data!.StrengthRoles);
         var page = (await fixture.Admin.GetFromJsonAsync<ApiResponse<PageResult<StudentResponse>>>(
             "/api/students?search=" + student.StudentCode + "&semesterCode=" + semester.Code + "&hasGroup=false&sortBy=name&descending=true&pageSize=1"))!.Data!;
         Assert.Equal(1, page.TotalCount);
@@ -196,10 +200,19 @@ public class IdentitySemesterServiceTests(IdentityApiFixture fixture) : IClassFi
         Assert.Equal(HttpStatusCode.OK, (await fixture.Admin.GetAsync("/api/semesters/" + semester.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await fixture.Admin.PostAsJsonAsync("/api/semesters",
             new CreateSemesterRequest(semester.Code.ToLower(), "Duplicate", Utc(1), Utc(6)))).StatusCode);
+        var renamedCode = ("R" + Guid.NewGuid().ToString("N")[..10]).ToUpperInvariant();
+        var rename = await fixture.Admin.PutAsJsonAsync("/api/semesters/" + semester.Id,
+            new UpdateSemesterRequest(renamedCode, semester.Name, Utc(1), Utc(6), true, Utc(2), Utc(3), Utc(4)));
+        Assert.Equal(HttpStatusCode.OK, rename.StatusCode);
+        semester = (await rename.Content.ReadFromJsonAsync<ApiResponse<SemesterDto>>())!.Data!;
+        Assert.Equal(renamedCode, semester.Code);
+        using (var scope = fixture.Services.CreateScope())
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IdentitySemesterDbContext>().StudentEventOutbox
+                .AnyAsync(item => item.Topic == "semester-code-changed" && item.Payload.Contains(renamedCode)));
         Assert.Equal(HttpStatusCode.BadRequest, (await fixture.Admin.PutAsJsonAsync("/api/semesters/" + semester.Id,
-            new UpdateSemesterRequest("Invalid", Utc(6), Utc(1), true))).StatusCode);
+            new UpdateSemesterRequest(semester.Code, "Invalid", Utc(6), Utc(1), true))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await fixture.Admin.PutAsJsonAsync("/api/semesters/" + semester.Id,
-            new UpdateSemesterRequest("Archived", Utc(1), Utc(6), false, Utc(2), Utc(3), Utc(4)))).StatusCode);
+            new UpdateSemesterRequest(semester.Code, "Archived", Utc(1), Utc(6), false, Utc(2), Utc(3), Utc(4)))).StatusCode);
         var list = (await fixture.Admin.GetFromJsonAsync<ApiResponse<PageResult<SemesterDto>>>(
             "/api/semesters?search=" + semester.Code + "&isActive=false&sortBy=startDate&pageSize=1"))!.Data!;
         Assert.Equal("Archived", Assert.Single(list.Items).Name);

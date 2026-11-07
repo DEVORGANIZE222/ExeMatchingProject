@@ -24,7 +24,7 @@ public class StudentOutboxPublisher(IServiceScopeFactory scopes, IConfiguration 
                 var pending = await db.StudentEventOutbox.Where(e => e.PublishedAt == null).OrderBy(e => e.CreatedAt).Take(50).ToListAsync(stoppingToken);
                 foreach (var item in pending)
                 {
-                    await producer.ProduceAsync("student-imported", new Message<string, string> { Key = item.Id.ToString(), Value = item.Payload }, stoppingToken);
+                    await producer.ProduceAsync(item.Topic, new Message<string, string> { Key = item.Id.ToString(), Value = item.Payload }, stoppingToken);
                     item.PublishedAt = DateTime.UtcNow;
                     await db.SaveChangesAsync(stoppingToken);
                 }

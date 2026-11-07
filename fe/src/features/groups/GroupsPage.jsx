@@ -9,6 +9,8 @@ import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 import { useAuth } from '../../hooks/useAuth'
 
+const TEAM_ROLES = ['Frontend', 'Backend', 'Mobile', 'UIUX', 'BusinessAnalysis', 'QualityAssurance', 'DataAI']
+
 export default function GroupsPage() {
   const { account, request, isAdmin } = useAuth()
   const [groups, setGroups] = useState([])
@@ -24,6 +26,7 @@ export default function GroupsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupTopic, setNewGroupTopic] = useState('')
+  const [newRecruitmentNeeds, setNewRecruitmentNeeds] = useState([])
 
   // Edit Topic / Name Modal
   const [editGroupModal, setEditGroupModal] = useState(false)
@@ -42,6 +45,8 @@ export default function GroupsPage() {
       ...group,
       name: group.groupName,
       topic: group.topicTitle || 'Chưa đăng ký đề tài',
+      projectDescription: group.projectDescription || 'Chưa có mô tả dự án.',
+      recruitmentNeeds: group.recruitmentNeeds || [],
       leader: leader?.fullName || 'Chưa bầu trưởng nhóm',
       isLocked,
       members: (group.members || []).map((member) => ({
@@ -132,7 +137,12 @@ export default function GroupsPage() {
       const group = await request('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupName: newGroupName.trim(), semesterCode: targetCode })
+        body: JSON.stringify({
+          groupName: newGroupName.trim(),
+          semesterCode: targetCode,
+          projectDescription: newGroupTopic.trim(),
+          recruitmentNeeds: newRecruitmentNeeds.map((roleCode) => ({ roleCode, slots: 1 }))
+        })
       })
 
       if (newGroupTopic.trim() && group?.id) {
@@ -151,6 +161,7 @@ export default function GroupsPage() {
       setShowCreateModal(false)
       setNewGroupName('')
       setNewGroupTopic('')
+      setNewRecruitmentNeeds([])
       await loadGroups()
     } catch (error) {
       toast.error(error.message || 'Không thể tạo nhóm.')
@@ -480,6 +491,8 @@ export default function GroupsPage() {
                 )}
               </div>
               <p className="group-topic">{group.topic}</p>
+              <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>{group.projectDescription}</p>
+              {!!group.recruitmentNeeds.length && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>{group.recruitmentNeeds.map((need) => <span className="badge badge-warning" key={need.roleCode}>{need.roleCode} · {need.slots}</span>)}</div>}
 
               {/* Members List */}
               <div className="group-members-list">
@@ -582,9 +595,24 @@ export default function GroupsPage() {
                   </button>
                 )}
               </div>
-              <p style={{ fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.5, margin: 0 }}>
+              <p style={{ fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.5, margin: 0, fontWeight: 500 }}>
                 {selectedGroup.topic}
               </p>
+              {selectedGroup.projectDescription && (
+                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 6, marginBottom: 0 }}>
+                  {selectedGroup.projectDescription}
+                </p>
+              )}
+              {selectedGroup.recruitmentNeeds && selectedGroup.recruitmentNeeds.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', alignSelf: 'center' }}>Vị trí cần tuyển:</span>
+                  {selectedGroup.recruitmentNeeds.map((need) => (
+                    <span className="badge badge-warning" key={need.roleCode} style={{ fontSize: 11 }}>
+                      {need.roleCode} ({need.slots} chỗ)
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Members List with Vote & Kick Actions */}
@@ -818,6 +846,16 @@ export default function GroupsPage() {
                   value={newGroupTopic}
                   onChange={(e) => setNewGroupTopic(e.target.value)}
                 />
+              </div>
+
+              <div style={{ marginBottom: 18 }}>
+                <label className="input-label">Đang cần tuyển role nào? <span style={{ color: 'var(--text-muted)' }}>(tối đa 4)</span></label>
+                <div role="group" aria-label="Role nhóm đang cần tuyển" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                  {TEAM_ROLES.map((role) => {
+                    const selected = newRecruitmentNeeds.includes(role)
+                    return <button key={role} type="button" aria-pressed={selected} className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`} onClick={() => setNewRecruitmentNeeds((roles) => selected ? roles.filter((item) => item !== role) : roles.length < 4 ? [...roles, role] : roles)}>{role}</button>
+                  })}
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
