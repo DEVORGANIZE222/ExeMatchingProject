@@ -297,19 +297,6 @@ export default function SemestersPage() {
                   <strong>{formatDate(item.mentorDeadline)}</strong>
                 </div>
               </div>
-
-              {/* Visual Timeline Progress for Semester */}
-              <div style={{ marginTop: 12 }}>
-                <SemesterTimelineProgress
-                  compact
-                  startDate={item.startDate}
-                  endDate={item.endDate}
-                  registrationDeadline={item.registrationDeadline}
-                  topicDeadline={item.topicDeadline}
-                  mentorDeadline={item.mentorDeadline}
-                  showTodayMarker={isActive}
-                />
-              </div>
             </div>
           )
         })}

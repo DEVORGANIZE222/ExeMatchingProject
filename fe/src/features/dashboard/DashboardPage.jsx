@@ -122,17 +122,19 @@ export default function DashboardPage() {
         }
       }
 
-      // Fetch Student Metrics
+      // Fetch Student Metrics (Admin only)
       let totalStudents = 0
       let unmatchedStudents = 0
-      try {
-        const allStudentsRes = await request(`/api/students?semesterCode=${encodeURIComponent(targetCode)}&page=1&pageSize=1`)
-        totalStudents = allStudentsRes?.totalCount || 0
+      if (isAdmin) {
+        try {
+          const allStudentsRes = await request(`/api/students?semesterCode=${encodeURIComponent(targetCode)}&page=1&pageSize=1`)
+          totalStudents = allStudentsRes?.totalCount || 0
 
-        const unmatchedRes = await request(`/api/students?semesterCode=${encodeURIComponent(targetCode)}&hasGroup=false&page=1&pageSize=1`)
-        unmatchedStudents = unmatchedRes?.totalCount || 0
-      } catch {
-        // user might not be admin to query all students
+          const unmatchedRes = await request(`/api/students?semesterCode=${encodeURIComponent(targetCode)}&hasGroup=false&page=1&pageSize=1`)
+          unmatchedStudents = unmatchedRes?.totalCount || 0
+        } catch {
+          // ignore
+        }
       }
 
       // Fetch Groups Metrics
@@ -226,60 +228,62 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── 4 Clean Metrics (Realtime API Data) ── */}
-      <div className="dashboard-metrics-grid">
-        <div className="metric-card-clean">
-          <div className="metric-icon-box">
-            <Users size={20} />
+      {/* ── 4 Macro Metrics (Admin Only) ── */}
+      {isAdmin && (
+        <div className="dashboard-metrics-grid">
+          <div className="metric-card-clean">
+            <div className="metric-icon-box">
+              <Users size={20} />
+            </div>
+            <div className="metric-info">
+              <span className="metric-label">Tổng sinh viên</span>
+              <span className="metric-number">{metrics.totalStudents}</span>
+              <span className="metric-subtext">
+                {metrics.matchedStudents} đã có nhóm · {metrics.unmatchedStudents} chờ ghép
+              </span>
+            </div>
           </div>
-          <div className="metric-info">
-            <span className="metric-label">Tổng sinh viên</span>
-            <span className="metric-number">{metrics.totalStudents}</span>
-            <span className="metric-subtext">
-              {metrics.matchedStudents} đã có nhóm · {metrics.unmatchedStudents} chờ ghép
-            </span>
+
+          <div className="metric-card-clean">
+            <div className="metric-icon-box">
+              <Layers size={20} />
+            </div>
+            <div className="metric-info">
+              <span className="metric-label">Nhóm đã lập</span>
+              <span className="metric-number">{metrics.totalGroups}</span>
+              <span className="metric-subtext">
+                {metrics.fullGroups} nhóm đã khóa hoặc đủ 5 người
+              </span>
+            </div>
+          </div>
+
+          <div className="metric-card-clean">
+            <div className="metric-icon-box">
+              <FileText size={20} />
+            </div>
+            <div className="metric-info">
+              <span className="metric-label">Đề tài đã đăng ký</span>
+              <span className="metric-number">{metrics.topicCount}</span>
+              <span className="metric-subtext">Đề tài khởi nghiệp đã chốt</span>
+            </div>
+          </div>
+
+          <div className="metric-card-clean">
+            <div className="metric-icon-box">
+              <Calendar size={20} />
+            </div>
+            <div className="metric-info">
+              <span className="metric-label">Hạn ghép tự do</span>
+              <span className="metric-number">{regCountdown.text}</span>
+              <span className="metric-subtext">
+                {regCountdown.subtext}
+              </span>
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="metric-card-clean">
-          <div className="metric-icon-box">
-            <Layers size={20} />
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Nhóm đã lập</span>
-            <span className="metric-number">{metrics.totalGroups}</span>
-            <span className="metric-subtext">
-              {metrics.fullGroups} nhóm đã khóa hoặc đủ 5 người
-            </span>
-          </div>
-        </div>
-
-        <div className="metric-card-clean">
-          <div className="metric-icon-box">
-            <FileText size={20} />
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Đề tài đã đăng ký</span>
-            <span className="metric-number">{metrics.topicCount}</span>
-            <span className="metric-subtext">Đề tài khởi nghiệp đã chốt</span>
-          </div>
-        </div>
-
-        <div className="metric-card-clean">
-          <div className="metric-icon-box">
-            <Calendar size={20} />
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Hạn ghép tự do</span>
-            <span className="metric-number">{regCountdown.text}</span>
-            <span className="metric-subtext">
-              {regCountdown.subtext}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 3 Key Milestone Countdowns & Timeline Progress (Unified for Admin, Student, Mentor) ── */}
+      {/* ── 3 Key Milestone Countdowns & Timeline Progress ── */}
       {currentSemester && (
         <div className="card" style={{ marginBottom: 'var(--space-6)', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
@@ -290,9 +294,6 @@ export default function DashboardPage() {
                   3 Mốc Thời Hạn & Đếm Ngược Học Kỳ Khởi Nghiệp
                 </h2>
               </div>
-              <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-                Đồng bộ thời gian đếm ngược thời gian thực cho cả 3 vai trò: Quản trị viên, Sinh viên và Giảng viên Mentor
-              </p>
             </div>
             {currentSemester.isActive ? (
               <span className="badge badge-green">Học kỳ đang kích hoạt</span>
