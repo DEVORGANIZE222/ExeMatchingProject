@@ -241,25 +241,33 @@ export function AuthProvider({ children }) {
     })
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.message || 'Phiên đăng nhập không hợp lệ.')
-    const next = { ...body.data, student }
+    const saved = localStorage.getItem('exe_account')
+    let savedStudent = null
+    try {
+      savedStudent = saved ? JSON.parse(saved)?.student : null
+    } catch {
+      // ignore
+    }
+    const next = { ...body.data, student: student || savedStudent }
     setAccount(next)
     localStorage.setItem('exe_account', JSON.stringify(next))
     return next
   }, [])
 
   useEffect(() => {
-    if (!token || account) return
+    if (!token) return
     const timer = setTimeout(() => {
       loadAccount(token)
         .catch(() => {
           localStorage.removeItem('exe_access_token')
           localStorage.removeItem('exe_account')
           setToken('')
+          setAccount(null)
         })
         .finally(() => setLoading(false))
     }, 0)
     return () => clearTimeout(timer)
-  }, [account, loadAccount, token])
+  }, [loadAccount, token])
 
   const googleLogin = async ({ credential }) => {
     try {
@@ -421,7 +429,11 @@ export function AuthProvider({ children }) {
       }
     })
     const body = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(body.message || 'Không thể kết nối dữ liệu.')
+    if (!response.ok) {
+      const error = new Error(body.message || 'Không thể kết nối dữ liệu.')
+      error.status = response.status
+      throw error
+    }
     return body.data
   }, [token])
 

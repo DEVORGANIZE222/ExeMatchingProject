@@ -7,6 +7,9 @@ import './LoginPage.css'
 
 function GoogleAuthButton({ onCredential }) {
   const mount = useRef(null)
+  const onCredentialRef = useRef(onCredential)
+  onCredentialRef.current = onCredential
+  const initializedRef = useRef(false)
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   useEffect(() => {
@@ -14,10 +17,14 @@ function GoogleAuthButton({ onCredential }) {
     const render = () => {
       try {
         if (window.google?.accounts?.id && mount.current) {
-          window.google.accounts.id.initialize({
-            client_id: clientId,
-            callback: onCredential
-          })
+          if (!initializedRef.current) {
+            window.google.accounts.id.initialize({
+              client_id: clientId,
+              callback: (response) => onCredentialRef.current?.(response)
+            })
+            initializedRef.current = true
+          }
+          mount.current.innerHTML = ''
           window.google.accounts.id.renderButton(mount.current, {
             theme: 'outline',
             size: 'large',
@@ -42,7 +49,7 @@ function GoogleAuthButton({ onCredential }) {
       document.head.appendChild(script)
       return () => script.remove()
     }
-  }, [clientId, onCredential])
+  }, [clientId])
 
   return (
     <div className="google-btn-wrapper">

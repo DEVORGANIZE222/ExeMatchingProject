@@ -87,6 +87,17 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
     }
     public void AddUser(User user) => db.Users.Add(user);
     public void RemoveStudent(Student student) => db.Students.Remove(student);
+    public async Task<int> DeleteStudentsBySemester(Guid semesterId, CancellationToken ct)
+    {
+        var students = await db.Students.Where(s => s.SemesterId == semesterId).ToListAsync(ct);
+        if (students.Count == 0) return 0;
+        var studentIds = students.Select(s => s.Id).ToList();
+        var roles = await db.StudentStrengthRoles.Where(r => studentIds.Contains(r.StudentId)).ToListAsync(ct);
+        db.StudentStrengthRoles.RemoveRange(roles);
+        db.Students.RemoveRange(students);
+        await db.SaveChangesAsync(ct);
+        return students.Count;
+    }
     public void AddSemester(Semester semester) => db.Semesters.Add(semester);
     public void RemoveSemester(Semester semester) => db.Semesters.Remove(semester);
     public void AddGoogleAllowedEmail(GoogleAllowedEmail email) => db.GoogleAllowedEmails.Add(email);
