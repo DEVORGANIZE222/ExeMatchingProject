@@ -144,10 +144,15 @@ services:
       - "${MENTOR_PORT:-5003}:8080"
       - "${MENTOR_GRPC_PORT:-50051}:50051"
     environment:
+      - JwtSettings__Secret=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - JwtSettings__Issuer=${JWT_ISSUER:-EXETeamMatching}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-EXETeamMatchingClients}
+      - GroupMatching__BaseUrl=http://group-matching:8080/
       - ConnectionStrings__DefaultConnection=${MENTOR_DB_CONNECTION:-Host=postgres;Database=mentor_db;Username=postgres;Password=postgres}
       - KafkaSettings__BootstrapServers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
     depends_on:
       - postgres
+      - group-matching
       - kafka
     networks:
       - capstone-network
@@ -169,5 +174,3 @@ services:
       - kafka
     networks:
       - capstone-network
-
-

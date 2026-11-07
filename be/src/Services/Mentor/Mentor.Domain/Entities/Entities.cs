@@ -9,6 +9,7 @@ public class MentorUser : BaseEntity
     public string Email { get; set; } = string.Empty;
     public string Department { get; set; } = string.Empty;
     public string Expertise { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
     public MentorQuota? Quota { get; set; }
 }
 
@@ -32,7 +33,40 @@ public class MentorRequest : BaseEntity
     public Guid GroupId { get; set; }
     public Guid MentorId { get; set; }
     public MentorUser Mentor { get; set; } = null!;
+    public Guid? RequesterUserId { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public string Topic { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
     public RequestStatus Status { get; set; } = RequestStatus.Pending;
     public string? DecisionReason { get; set; }
+    public DateTime? DecidedAt { get; set; }
+}
+
+public class MentorGroupProgress : BaseEntity
+{
+    public Guid MentorId { get; set; }
+    public Guid GroupId { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public string Topic { get; set; } = string.Empty;
+    public string Milestone { get; set; } = string.Empty;
+    public int Progress { get; set; }
+    public string Feedback { get; set; } = string.Empty;
+}
+
+public class MentorAppointment : BaseEntity
+{
+    public Guid MentorId { get; set; }
+    public Guid? GroupId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public DateTime StartsAt { get; set; }
+    public string Notes { get; set; } = string.Empty;
+}
+
+public class MentorNotification : BaseEntity
+{
+    public Guid MentorId { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public bool IsRead { get; set; }
 }

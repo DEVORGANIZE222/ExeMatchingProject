@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Layers, Users, Plus, Search,
+  GraduationCap, Layers, Users, Plus, Search,
   CheckCircle2, X, Crown,
   LogOut, Lock, Shuffle,
   Trash2, Edit3, UserMinus, Calendar, AlertCircle
@@ -27,6 +27,11 @@ export default function GroupsPage() {
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupTopic, setNewGroupTopic] = useState('')
   const [newRecruitmentNeeds, setNewRecruitmentNeeds] = useState([])
+  const [mentors, setMentors] = useState([])
+  const [mentorRequestGroup, setMentorRequestGroup] = useState(null)
+  const [mentorRequestId, setMentorRequestId] = useState('')
+  const [mentorRequestMessage, setMentorRequestMessage] = useState('')
+  const [sendingMentorRequest, setSendingMentorRequest] = useState(false)
 
   // Edit Topic / Name Modal
   const [editGroupModal, setEditGroupModal] = useState(false)
@@ -61,9 +66,11 @@ export default function GroupsPage() {
         ? 'Đã khóa nhóm'
         : memberCount >= 5 ? 'Đã đủ 5 thành viên' : `Cần thêm ${5 - memberCount} thành viên`,
       statusType: memberCount >= 5 || isLocked ? 'full' : 'recruiting',
+      canRequestMentor: (group.status === 2 || group.status === 'Locked') && Boolean(group.topicTitle),
+      isCurrentLeader: Boolean(account?.student?.id && group.leaderStudentId === account.student.id),
       mentor: 'Chưa kết nối Mentor'
     }
-  }, [])
+  }, [account])
 
   // 1. Load Semesters & Initialize target semesterCode
   useEffect(() => {
@@ -121,6 +128,44 @@ export default function GroupsPage() {
     }
   }, [isStudent, mapGroup, request, selectedGroup, semesterCode, studentSemesterCode])
 
+  useEffect(() => {
+    if (!isStudent) return
+    const timer = setTimeout(() => {
+      request('/api/mentors')
+        .then((items) => setMentors(items.filter((mentor) => mentor.currentAssigned < mentor.maxQuota)))
+        .catch((error) => toast.error(error.message || 'Không thể tải danh sách mentor.'))
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [isStudent, request])
+
+  const handleRequestMentor = async (event) => {
+    event.preventDefault()
+    if (!mentorRequestGroup || !mentorRequestId) return
+    setSendingMentorRequest(true)
+    try {
+      await request('/api/mentor-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId: mentorRequestGroup.id,
+          mentorId: mentorRequestId,
+          groupName: mentorRequestGroup.name,
+          topic: mentorRequestGroup.topic,
+          message: mentorRequestMessage.trim()
+        })
+      })
+      toast.success('Đã gửi yêu cầu hướng dẫn tới mentor.')
+      setMentorRequestGroup(null)
+      setMentorRequestMessage('')
+      setMentorRequestId('')
+    } catch (error) {
+      toast.error(error.message || 'Không thể gửi yêu cầu mentor.')
+    } finally {
+      setSendingMentorRequest(false)
+    }
+  }
+
+  // Load groups for the selected semester.
   useEffect(() => {
     if (isStudent ? studentSemesterCode : semesterCode) {
       loadGroups()
@@ -531,6 +576,20 @@ export default function GroupsPage() {
                     Xin gia nhập
                   </button>
                 )}
+                {account?.role === 'Student' && group.isCurrentLeader && group.canRequestMentor && (
+                  <button
+                    className="btn btn-outline btn-sm"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      setMentorRequestGroup(group)
+                      setMentorRequestId(mentors[0]?.id || '')
+                    }}
+                    disabled={mentors.length === 0}
+                    title={mentors.length === 0 ? 'Hiện chưa có mentor còn hạn ngạch' : undefined}
+                  >
+                    <GraduationCap size={14} /> Xin mentor hướng dẫn
+                  </button>
+                )}
               </div>
             </div>
           )
@@ -747,6 +806,20 @@ export default function GroupsPage() {
                       Xin gia nhập
                     </button>
                   )}
+                {account?.role === 'Student' && selectedGroup.isCurrentLeader && selectedGroup.canRequestMentor && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled={mentors.length === 0}
+                    onClick={() => {
+                      setMentorRequestGroup(selectedGroup)
+                      setMentorRequestId(mentors[0]?.id || '')
+                      setSelectedGroup(null)
+                    }}
+                  >
+                    <GraduationCap size={14} /> Mời Mentor
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -870,6 +943,34 @@ export default function GroupsPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {mentorRequestGroup && (
+        <div className="modal-backdrop" onClick={() => setMentorRequestGroup(null)}>
+          <form className="modal-dialog" onSubmit={handleRequestMentor} onClick={(event) => event.stopPropagation()}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Mời mentor hướng dẫn</h2>
+            <p className="page-subtitle" style={{ marginBottom: 16 }}>{mentorRequestGroup.name}</p>
+            <label className="input-label">Chọn mentor *
+              <select className="select" required value={mentorRequestId} onChange={(event) => setMentorRequestId(event.target.value)}>
+                <option value="" disabled>Chọn mentor còn nhận nhóm</option>
+                {mentors.map((mentor) => (
+                  <option key={mentor.id} value={mentor.id}>
+                    {mentor.fullName} · {mentor.department} · còn {mentor.maxQuota - mentor.currentAssigned} suất
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="input-label" style={{ display: 'block', marginTop: 14 }}>Lời mời *
+              <textarea className="textarea" required minLength={10} maxLength={2000} rows={4} value={mentorRequestMessage} onChange={(event) => setMentorRequestMessage(event.target.value)} placeholder="Giới thiệu đề tài và mong muốn được mentor hỗ trợ..." />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setMentorRequestGroup(null)}>Hủy</button>
+              <button type="submit" className="btn btn-primary" disabled={sendingMentorRequest || !mentorRequestId}>
+                {sendingMentorRequest ? 'Đang gửi...' : 'Gửi lời mời'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

@@ -8,6 +8,7 @@ public record GoogleAllowedEmailResponse(Guid Id, string Email, DateTime Created
 public record GoogleEmailImportResult(int ImportedCount, int ExistingCount);
 public record LoginResponse(string Token, string? RefreshToken, DateTime Expiration, StudentResponse? Student);
 public record AccountResponse(Guid Id, string Username, string Email, string Role, string? AvatarUrl = null);
+public record ActivateMentorRequest([Required, EmailAddress, StringLength(254)] string Email);
 public record UpdateAccountRequest([Required, StringLength(100)] string Username);
 public record ChangePasswordRequest([Required] string CurrentPassword, [Required, StringLength(128, MinimumLength = 12)] string NewPassword);
 public record StudentResponse(Guid Id, Guid UserId, string StudentCode, string FullName, string Email, string Major, string SemesterCode, bool HasGroup,

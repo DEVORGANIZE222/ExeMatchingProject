@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   GraduationCap, Users, Plus, Search,
   Sliders, CheckCircle2, Sparkles, X, Mail
@@ -8,7 +8,9 @@ import { useAuth } from '../../hooks/useAuth'
 import './MentorPages.css'
 
 export default function AdminMentorsPage() {
-  const { mentorsList, updateMentorQuota, addMentor } = useAuth()
+  const { request } = useAuth()
+  const [mentorsList, setMentorsList] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all') // 'all' | 'available' | 'full'
@@ -26,6 +28,19 @@ export default function AdminMentorsPage() {
     phone: '',
     maxQuota: 4
   })
+
+  useEffect(() => {
+    let active = true
+    request('/api/mentors')
+      .then((mentors) => {
+        if (active) setMentorsList(mentors.map((mentor) => ({ ...mentor, avatar: mentor.fullName.charAt(0).toUpperCase() })))
+      })
+      .catch((error) => toast.error(error.message || 'Không thể tải danh sách mentor.'))
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => { active = false }
+  }, [request])
 
   // Summary Metrics
   const totalMentors = mentorsList.length
@@ -56,12 +71,17 @@ export default function AdminMentorsPage() {
     setNewQuotaValue(mentor.maxQuota)
   }
 
-  const handleSaveQuota = (e) => {
+  const handleSaveQuota = async (e) => {
     e.preventDefault()
     if (!selectedMentorForQuota) return
 
     try {
-      updateMentorQuota(selectedMentorForQuota.id, newQuotaValue)
+      const updatedMentor = await request(`/api/mentors/${selectedMentorForQuota.id}/quota`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxQuota: newQuotaValue })
+      })
+      setMentorsList((current) => current.map((mentor) => mentor.id === updatedMentor.id ? { ...updatedMentor, avatar: updatedMentor.fullName.charAt(0).toUpperCase() } : mentor))
       toast.success(`Đã cập nhật hạn ngạch của ${selectedMentorForQuota.fullName} thành ${newQuotaValue} nhóm.`)
       setSelectedMentorForQuota(null)
     } catch (err) {
@@ -69,7 +89,7 @@ export default function AdminMentorsPage() {
     }
   }
 
-  const handleCreateMentor = (e) => {
+  const handleCreateMentor = async (e) => {
     e.preventDefault()
     if (!newMentorForm.fullName.trim() || !newMentorForm.email.trim()) {
       toast.error('Vui lòng điền đầy đủ họ tên và email.')
@@ -77,8 +97,26 @@ export default function AdminMentorsPage() {
     }
 
     try {
-      addMentor(newMentorForm)
-      toast.success(`Đã thêm giảng viên "${newMentorForm.fullName}" vào danh sách học kỳ!`)
+      const account = await request('/api/admin/mentors/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newMentorForm.email.trim() })
+      })
+      const mentor = await request('/api/mentors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: account.id,
+          fullName: newMentorForm.fullName.trim(),
+          email: account.email,
+          department: newMentorForm.department.trim(),
+          expertise: newMentorForm.expertise.trim(),
+          phone: newMentorForm.phone.trim(),
+          maxQuota: Number(newMentorForm.maxQuota)
+        })
+      })
+      setMentorsList((current) => [{ ...mentor, avatar: mentor.fullName.charAt(0).toUpperCase() }, ...current])
+      toast.success(`Đã kích hoạt ${mentor.email} làm mentor. Tài khoản cần đăng nhập lại.`)
       setShowAddMentorModal(false)
       setNewMentorForm({
         fullName: '',
@@ -294,6 +332,18 @@ export default function AdminMentorsPage() {
         </div>
       )}
 
+      {loading && (
+        <div className="card" role="status" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+          Đang tải danh sách mentor...
+        </div>
+      )}
+
+      {!loading && mentorsList.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+          Chưa có mentor nào. Tài khoản cần đăng nhập Google ít nhất một lần trước khi Admin kích hoạt.
+        </div>
+      )}
+
       {/* ── Modal: Edit Quota ── */}
       {selectedMentorForQuota && (
         <div className="modal-backdrop" onClick={() => setSelectedMentorForQuota(null)}>
@@ -359,6 +409,9 @@ export default function AdminMentorsPage() {
             </div>
 
             <form onSubmit={handleCreateMentor}>
+              <div className="alert alert-warning" style={{ marginBottom: 14 }}>
+                Tài khoản cần đăng nhập bằng Google và được whitelist trước. Sau khi kích hoạt, giảng viên đăng nhập lại để sử dụng không gian Mentor.
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <label className="input-label">Họ tên & Học hàm/Học vị *</label>

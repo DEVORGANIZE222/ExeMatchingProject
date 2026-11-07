@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using EXETeamMatching.Mentor.Domain.Entities;
 
 namespace EXETeamMatching.Mentor.Application.DTOs;
@@ -9,6 +10,7 @@ public record MentorResponse(
     string Email,
     string Department,
     string Expertise,
+    string Phone,
     int MaxQuota,
     int CurrentAssigned
 );
@@ -19,11 +21,80 @@ public record MentorRequestDto(
     Guid MentorId,
     string Message,
     RequestStatus Status,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string GroupName,
+    string Topic,
+    string? DecisionReason,
+    DateTime? DecidedAt
 );
 
 public record MentorDecisionDto(
     Guid RequestId,
     bool IsAccepted,
-    string DecisionReason
+    [StringLength(2000)] string DecisionReason = ""
+);
+
+public record CreateMentorProfileRequest(
+    [Required] Guid UserId,
+    [Required, StringLength(200)] string FullName,
+    [Required, EmailAddress, StringLength(254)] string Email,
+    [Required, StringLength(200)] string Department,
+    [StringLength(1000)] string Expertise,
+    [StringLength(40)] string Phone,
+    [Range(1, 50)] int MaxQuota
+);
+
+public record UpdateMentorProfileRequest(
+    [Required, StringLength(200)] string FullName,
+    [Required, StringLength(200)] string Department,
+    [StringLength(1000)] string Expertise,
+    [StringLength(40)] string Phone
+);
+
+public record MentorProgressRequest(
+    [Required, StringLength(200)] string Milestone,
+    [Range(0, 100)] int Progress,
+    [StringLength(2000)] string Feedback
+);
+
+public record MentorProgressResponse(
+    Guid GroupId,
+    string GroupName,
+    string Topic,
+    string Milestone,
+    int Progress,
+    string Feedback,
+    DateTime UpdatedAt
+);
+
+public record MentorAppointmentRequest(
+    [Required, StringLength(200)] string Title,
+    Guid? GroupId,
+    DateTime StartsAt,
+    [StringLength(2000)] string Notes
+);
+
+public record MentorAppointmentResponse(
+    Guid Id,
+    Guid? GroupId,
+    string Title,
+    DateTime StartsAt,
+    string Notes
+);
+
+public record MentorNotificationResponse(
+    Guid Id,
+    string Type,
+    string Title,
+    string Message,
+    bool IsRead,
+    DateTime CreatedAt
+);
+
+public record CreateMentorRequest(
+    [Required] Guid GroupId,
+    [Required] Guid MentorId,
+    [Required, StringLength(200)] string GroupName,
+    [StringLength(1000)] string Topic,
+    [Required, StringLength(2000)] string Message
 );

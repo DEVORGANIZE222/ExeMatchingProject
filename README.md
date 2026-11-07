@@ -101,6 +101,9 @@ dotnet run --project be/src/Services/GroupMatching/GroupMatching.Api
 dotnet run --project be/src/Services/Mentor/Mentor.Api
 ```
 
+### Mentor Workspace
+Add the mentor's email to Google Access and have the mentor sign in once. An Admin can then activate that account from **Giảng viên Mentor**; the mentor must sign out and sign in again to receive the Mentor role. The mentor workspace stores profile details, assigned-group progress, appointments, mentor requests, and notifications in the Mentor database. Elected group leaders can send mentor requests from the Groups page.
+
 
 ---
 
@@ -220,4 +223,3 @@ Service 1 tests use real PostgreSQL in isolated temporary databases. With Docker
 | Infrastructure/integration owner | Shared gateway deployment, integration and complete end-to-end demonstration | Compose available; see `docs/DEMO_SCRIPT.md` for verified Service 1/2 flow and remaining Service 3/4 dependency |
 
 The supplied team document does not name individual members. Replace responsibility labels with actual team member names before submission; do not invent names.
-

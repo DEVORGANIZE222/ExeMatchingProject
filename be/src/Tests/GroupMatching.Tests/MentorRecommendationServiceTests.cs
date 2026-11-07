@@ -42,6 +42,7 @@ public class MentorRecommendationServiceTests
     private sealed class FixedGroups(GroupDto group) : IGroupService
     {
         public Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => Task.FromResult(group);
+        public Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default) => Task.FromResult(group);
         public Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
