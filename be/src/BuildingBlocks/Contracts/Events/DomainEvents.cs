@@ -14,27 +14,31 @@ public record GroupCreatedEvent(
     string GroupCode,
     string GroupName,
     Guid CreatorStudentId,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? CreatorEmail = null
 );
 
 public record GroupLockedEvent(
     Guid GroupId,
     string GroupCode,
     int MemberCount,
-    DateTime LockedAt
+    DateTime LockedAt,
+    string? ContactEmail = null
 );
 
 public record LeaderElectedEvent(
     Guid GroupId,
     Guid LeaderStudentId,
-    DateTime ElectedAt
+    DateTime ElectedAt,
+    string? LeaderEmail = null
 );
 
 public record TopicRegisteredEvent(
     Guid GroupId,
     string TopicCode,
     string TopicTitle,
-    DateTime RegisteredAt
+    DateTime RegisteredAt,
+    string? ContactEmail = null
 );
 
 public record StudentGroupMembershipChangedEvent(
@@ -56,7 +60,11 @@ public record MentorRequestedEvent(
     Guid GroupId,
     Guid MentorId,
     string Message,
-    DateTime RequestedAt
+    DateTime RequestedAt,
+    string? MentorEmail = null,
+    string? RequesterEmail = null,
+    string? GroupName = null,
+    string? Topic = null
 );
 
 public record MentorDecisionEvent(
@@ -65,5 +73,8 @@ public record MentorDecisionEvent(
     Guid MentorId,
     bool IsAccepted,
     string DecisionReason,
-    DateTime DecidedAt
+    DateTime DecidedAt,
+    string? RequesterEmail = null,
+    string? MentorEmail = null,
+    string? GroupName = null
 );

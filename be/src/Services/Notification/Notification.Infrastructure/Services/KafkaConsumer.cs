@@ -8,15 +8,19 @@ namespace EXETeamMatching.Notification.Infrastructure.Services;
 
 public class KafkaConsumer : IKafkaConsumer
 {
+    // Topics aligned with Architecture Diagram:
+    // 1. GroupMatching Service -> Publish events -> Kafka
+    // 2. Mentor Service -> Publish events -> Kafka
+    // 3. Notification Worker -> Consume -> Kafka -> SMTP Provider Gmail (default)
     private static readonly string[] Topics =
     [
-        "student-imported",
         "group-created",
         "group-locked",
         "leader-elected",
         "topic-registered",
         "mentor-requested",
-        "mentor-decision"
+        "mentor-decision",
+        "student-imported"
     ];
 
     private readonly KafkaSettings _settings;

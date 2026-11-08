@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Data;
 using System.Net;
+using EXETeamMatching.Contracts.Events;
+using EXETeamMatching.Messaging.Abstractions;
 using EXETeamMatching.Mentor.Application.DTOs;
 using EXETeamMatching.Mentor.Domain.Entities;
 using EXETeamMatching.Mentor.Infrastructure.Persistence;
@@ -10,13 +12,18 @@ using EXETeamMatching.SharedKernel.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EXETeamMatching.Mentor.Api.Controllers;
 
 [ApiController]
 [Route("api/mentor-requests")]
 [Authorize]
-public class MentorRequestsController(MentorDbContext db, IHttpClientFactory clients) : ControllerBase
+public class MentorRequestsController(
+    MentorDbContext db,
+    IHttpClientFactory clients,
+    IEventPublisher publisher,
+    ILogger<MentorRequestsController> logger) : ControllerBase
 {
     private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
 
@@ -48,7 +55,7 @@ public class MentorRequestsController(MentorDbContext db, IHttpClientFactory cli
         if (await db.MentorRequests.AnyAsync(x => x.GroupId == request.GroupId && x.Status != RequestStatus.Rejected, ct))
             throw new ArgumentException("This group already has a pending or approved mentor request.");
 
-        db.MentorRequests.Add(new MentorRequest
+        var mentorRequest = new MentorRequest
         {
             GroupId = request.GroupId,
             MentorId = request.MentorId,
@@ -57,7 +64,8 @@ public class MentorRequestsController(MentorDbContext db, IHttpClientFactory cli
             Topic = group.TopicTitle ?? group.ProjectDescription,
             RequesterName = group.Members.FirstOrDefault(member => member.StudentId == group.LeaderStudentId)?.FullName ?? "Trưởng nhóm",
             Message = request.Message.Trim()
-        });
+        };
+        db.MentorRequests.Add(mentorRequest);
         db.MentorNotifications.Add(new MentorNotification
         {
             MentorId = mentor.Id,
@@ -66,6 +74,29 @@ public class MentorRequestsController(MentorDbContext db, IHttpClientFactory cli
             Message = $"Nhóm {group.GroupName} vừa gửi lời mời hướng dẫn."
         });
         await db.SaveChangesAsync(ct);
+
+        try
+        {
+            var userEmail = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email");
+            var mentorEvent = new MentorRequestedEvent(
+                RequestId: mentorRequest.Id,
+                GroupId: mentorRequest.GroupId,
+                MentorId: mentorRequest.MentorId,
+                Message: mentorRequest.Message,
+                RequestedAt: mentorRequest.CreatedAt,
+                MentorEmail: mentor.Email,
+                RequesterEmail: userEmail,
+                GroupName: group.GroupName,
+                Topic: mentorRequest.Topic
+            );
+            await publisher.PublishAsync("mentor-requested", mentorRequest.Id.ToString(), mentorEvent, ct);
+            logger.LogInformation("Published mentor-requested event for RequestId {RequestId} to Kafka", mentorRequest.Id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to publish mentor-requested event to Kafka");
+        }
+
         return Ok(ApiResponse<bool>.Ok(true));
     }
 
@@ -159,6 +190,28 @@ public class MentorRequestsController(MentorDbContext db, IHttpClientFactory cli
         request.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+
+        try
+        {
+            var decisionEvent = new MentorDecisionEvent(
+                RequestId: request.Id,
+                GroupId: request.GroupId,
+                MentorId: request.MentorId,
+                IsAccepted: decision.IsAccepted,
+                DecisionReason: request.DecisionReason,
+                DecidedAt: request.DecidedAt.Value,
+                RequesterEmail: null,
+                MentorEmail: mentor.Email,
+                GroupName: request.GroupName
+            );
+            await publisher.PublishAsync("mentor-decision", request.Id.ToString(), decisionEvent, ct);
+            logger.LogInformation("Published mentor-decision event for RequestId {RequestId} to Kafka", request.Id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to publish mentor-decision event to Kafka");
+        }
+
         return Ok(ApiResponse<bool>.Ok(true));
     }
 

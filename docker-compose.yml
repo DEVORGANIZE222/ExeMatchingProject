@@ -171,6 +171,7 @@ services:
       - EmailSettings__SenderName=${SENDER_NAME:-EXE Team Matching System}
       - EmailSettings__Username=${SMTP_USER:-}
       - EmailSettings__Password=${SMTP_PASSWORD:-}
+      - EmailSettings__DefaultRecipientEmail=${DEFAULT_NOTIFICATION_RECIPIENT:-notification@exeteammatching.com}
     depends_on:
       - kafka
     networks:

@@ -10,4 +10,5 @@ public class EmailSettings
     public string? Password { get; set; }
     public bool EnableSsl { get; set; } = true;
     public bool SimulateOnly { get; set; } = false;
+    public string DefaultRecipientEmail { get; set; } = "notification@exeteammatching.com";
 }
