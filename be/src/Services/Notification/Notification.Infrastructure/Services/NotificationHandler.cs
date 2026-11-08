@@ -3,6 +3,7 @@ using EXETeamMatching.Contracts.Events;
 using EXETeamMatching.Notification.Application.Interfaces;
 using EXETeamMatching.Notification.Application.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EXETeamMatching.Notification.Infrastructure.Services;
 
@@ -15,16 +16,27 @@ public class NotificationHandler : INotificationService
 
     private readonly IEmailService _emailService;
     private readonly INotificationStore _store;
+    private readonly EmailSettings _emailSettings;
     private readonly ILogger<NotificationHandler> _logger;
 
     public NotificationHandler(
         IEmailService emailService,
         INotificationStore store,
+        IOptions<EmailSettings> emailSettings,
         ILogger<NotificationHandler> logger)
     {
         _emailService = emailService;
         _store = store;
+        _emailSettings = emailSettings?.Value ?? new EmailSettings();
         _logger = logger;
+    }
+
+    public NotificationHandler(
+        IEmailService emailService,
+        INotificationStore store,
+        ILogger<NotificationHandler> logger)
+        : this(emailService, store, Options.Create(new EmailSettings()), logger)
+    {
     }
 
     public async Task HandleEventAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
@@ -202,11 +214,15 @@ public class NotificationHandler : INotificationService
             </html>
             """;
 
+        var recipient = !string.IsNullOrWhiteSpace(@event.CreatorEmail)
+            ? @event.CreatorEmail
+            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "team@exeteammatching.com");
+
         await SendAndRecordAsync(
             topic: "group-created",
             eventKey: key ?? @event.GroupId.ToString(),
             eventType: nameof(GroupCreatedEvent),
-            recipient: "group-members@exeteammatching.internal",
+            recipient: recipient,
             subject: subject,
             body: body,
             cancellationToken: ct);
@@ -222,11 +238,15 @@ public class NotificationHandler : INotificationService
             </div>
             """;
 
+        var recipient = !string.IsNullOrWhiteSpace(@event.ContactEmail)
+            ? @event.ContactEmail
+            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "team@exeteammatching.com");
+
         await SendAndRecordAsync(
             topic: "group-locked",
             eventKey: key ?? @event.GroupId.ToString(),
             eventType: nameof(GroupLockedEvent),
-            recipient: "group-members@exeteammatching.internal",
+            recipient: recipient,
             subject: subject,
             body: body,
             cancellationToken: ct);
@@ -242,11 +262,15 @@ public class NotificationHandler : INotificationService
             </div>
             """;
 
+        var recipient = !string.IsNullOrWhiteSpace(@event.LeaderEmail)
+            ? @event.LeaderEmail
+            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "leader@exeteammatching.com");
+
         await SendAndRecordAsync(
             topic: "leader-elected",
             eventKey: key ?? @event.GroupId.ToString(),
             eventType: nameof(LeaderElectedEvent),
-            recipient: "group-members@exeteammatching.internal",
+            recipient: recipient,
             subject: subject,
             body: body,
             cancellationToken: ct);
@@ -263,11 +287,15 @@ public class NotificationHandler : INotificationService
             </div>
             """;
 
+        var recipient = !string.IsNullOrWhiteSpace(@event.ContactEmail)
+            ? @event.ContactEmail
+            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "team@exeteammatching.com");
+
         await SendAndRecordAsync(
             topic: "topic-registered",
             eventKey: key ?? @event.GroupId.ToString(),
             eventType: nameof(TopicRegisteredEvent),
-            recipient: "group-members@exeteammatching.internal",
+            recipient: recipient,
             subject: subject,
             body: body,
             cancellationToken: ct);
@@ -275,21 +303,32 @@ public class NotificationHandler : INotificationService
 
     private async Task ProcessMentorRequestedAsync(MentorRequestedEvent @event, string? key, CancellationToken ct)
     {
-        var subject = $"[EXE Matching] Yêu cầu hướng dẫn mới từ nhóm {@event.GroupId}";
+        var groupName = !string.IsNullOrWhiteSpace(@event.GroupName) ? @event.GroupName : $"Nhóm {@event.GroupId}";
+        var topicName = !string.IsNullOrWhiteSpace(@event.Topic) ? $" (Đề tài: {@event.Topic})" : "";
+        var subject = $"[EXE Matching] Yêu cầu hướng dẫn mới từ {groupName}";
         var body = $"""
-            <div style="font-family: Arial, sans-serif;">
-                <h3>Yêu Cầu Hướng Dẫn Mới</h3>
-                <p>Giảng viên ID <strong>{@event.MentorId}</strong> đã nhận được yêu cầu hướng dẫn từ nhóm <strong>{@event.GroupId}</strong>.</p>
-                <p><strong>Lời nhắn:</strong> {@event.Message}</p>
-                <p>Thời gian gửi: {@event.RequestedAt:yyyy-MM-dd HH:mm:ss} UTC.</p>
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <h3 style="color: #2b5797;">Yêu Cầu Hướng Dẫn Mới</h3>
+                <p>Kính gửi Quý Giảng viên,</p>
+                <p>Nhóm <strong>{groupName}</strong>{topicName} đã gửi yêu cầu hướng dẫn đến Quý Thầy/Cô trên Hệ thống EXE Team Matching.</p>
+                <div style="background-color: #f8f9fa; border-left: 4px solid #2b5797; padding: 12px; margin: 15px 0;">
+                    <p style="margin: 0;"><strong>Lời nhắn từ nhóm:</strong></p>
+                    <p style="margin: 5px 0 0 0; font-style: italic;">"{@event.Message}"</p>
+                    <p style="margin: 8px 0 0 0; font-size: 12px; color: #666;">Thời gian gửi: {@event.RequestedAt:yyyy-MM-dd HH:mm:ss} UTC</p>
+                </div>
+                <p>Vui lòng đăng nhập vào hệ thống để phản hồi yêu cầu.</p>
             </div>
             """;
+
+        var recipient = !string.IsNullOrWhiteSpace(@event.MentorEmail)
+            ? @event.MentorEmail
+            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "mentor@exeteammatching.com");
 
         await SendAndRecordAsync(
             topic: "mentor-requested",
             eventKey: key ?? @event.RequestId.ToString(),
             eventType: nameof(MentorRequestedEvent),
-            recipient: "mentor@exeteammatching.internal",
+            recipient: recipient,
             subject: subject,
             body: body,
             cancellationToken: ct);
@@ -298,21 +337,30 @@ public class NotificationHandler : INotificationService
     private async Task ProcessMentorDecisionAsync(MentorDecisionEvent @event, string? key, CancellationToken ct)
     {
         var decisionText = @event.IsAccepted ? "ĐÃ CHẤP NHẬN" : "TỪ CHỐI";
-        var subject = $"[EXE Matching] Giảng viên đã {decisionText.ToLower()} yêu cầu hướng dẫn của nhóm";
+        var groupName = !string.IsNullOrWhiteSpace(@event.GroupName) ? @event.GroupName : $"Nhóm {@event.GroupId}";
+        var subject = $"[EXE Matching] Giảng viên đã {decisionText.ToLower()} yêu cầu hướng dẫn của {groupName}";
         var body = $"""
-            <div style="font-family: Arial, sans-serif;">
-                <h3>Kết Quả Yêu Cầu Hướng Dẫn: <span style="color: {(@event.IsAccepted ? "green" : "red")};">{decisionText}</span></h3>
-                <p>Giảng viên ID: {@event.MentorId}</p>
-                <p>Lý do / Nhận xét: {@event.DecisionReason}</p>
-                <p>Thời gian: {@event.DecidedAt:yyyy-MM-dd HH:mm:ss} UTC</p>
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <h3 style="color: #2b5797;">Kết Quả Yêu Cầu Hướng Dẫn: <span style="color: {(@event.IsAccepted ? "green" : "red")};">{decisionText}</span></h3>
+                <p>Xin chào nhóm <strong>{groupName}</strong>,</p>
+                <p>Giảng viên hướng dẫn đã đưa ra quyết định đối với yêu cầu của nhóm:</p>
+                <div style="background-color: #f8f9fa; border-left: 4px solid {(@event.IsAccepted ? "green" : "red")}; padding: 12px; margin: 15px 0;">
+                    <p style="margin: 0;"><strong>Kết quả:</strong> {decisionText}</p>
+                    <p style="margin: 5px 0 0 0;"><strong>Lý do / Phản hồi:</strong> {@event.DecisionReason}</p>
+                    <p style="margin: 8px 0 0 0; font-size: 12px; color: #666;">Thời gian: {@event.DecidedAt:yyyy-MM-dd HH:mm:ss} UTC</p>
+                </div>
             </div>
             """;
+
+        var recipient = !string.IsNullOrWhiteSpace(@event.RequesterEmail)
+            ? @event.RequesterEmail
+            : (!string.IsNullOrWhiteSpace(@event.MentorEmail) ? @event.MentorEmail : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "student@exeteammatching.com"));
 
         await SendAndRecordAsync(
             topic: "mentor-decision",
             eventKey: key ?? @event.RequestId.ToString(),
             eventType: nameof(MentorDecisionEvent),
-            recipient: "group-members@exeteammatching.internal",
+            recipient: recipient,
             subject: subject,
             body: body,
             cancellationToken: ct);
@@ -327,6 +375,13 @@ public class NotificationHandler : INotificationService
         string body,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(recipient) || recipient.EndsWith(".internal", StringComparison.OrdinalIgnoreCase))
+        {
+            recipient = !string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail)
+                ? _emailSettings.DefaultRecipientEmail
+                : "notification@exeteammatching.com";
+        }
+
         var record = new NotificationRecord
         {
             Topic = topic,

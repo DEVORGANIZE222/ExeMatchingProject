@@ -167,4 +167,52 @@ public class NotificationServiceTests
         Assert.False(recent[0].IsSuccess);
         Assert.NotNull(recent[0].ErrorMessage);
     }
+
+    [Fact]
+    public async Task Mentor_Requested_And_Decision_With_Direct_Emails_Sends_To_Real_Recipients()
+    {
+        var emailService = new TestEmailService();
+        var store = new InMemoryNotificationStore();
+        var handler = new NotificationHandler(emailService, store, NullLogger<NotificationHandler>.Instance);
+
+        var mentorEmail = "mentor@university.edu";
+        var studentEmail = "student123@university.edu";
+
+        var mentorReq = new MentorRequestedEvent(
+            RequestId: Guid.NewGuid(),
+            GroupId: Guid.NewGuid(),
+            MentorId: Guid.NewGuid(),
+            Message: "We need your guidance on AI",
+            RequestedAt: DateTime.UtcNow,
+            MentorEmail: mentorEmail,
+            RequesterEmail: studentEmail,
+            GroupName: "AI Innovators",
+            Topic: "Healthcare AI"
+        );
+
+        await handler.HandleEventAsync(mentorReq);
+
+        Assert.Single(emailService.SentEmails);
+        Assert.Equal(mentorEmail, emailService.SentEmails[0].To);
+        Assert.Contains("AI Innovators", emailService.SentEmails[0].Subject);
+        Assert.Contains("Healthcare AI", emailService.SentEmails[0].Body);
+
+        var mentorDecision = new MentorDecisionEvent(
+            RequestId: Guid.NewGuid(),
+            GroupId: Guid.NewGuid(),
+            MentorId: Guid.NewGuid(),
+            IsAccepted: true,
+            DecisionReason: "Impressive project scope",
+            DecidedAt: DateTime.UtcNow,
+            RequesterEmail: studentEmail,
+            MentorEmail: mentorEmail,
+            GroupName: "AI Innovators"
+        );
+
+        await handler.HandleEventAsync(mentorDecision);
+
+        Assert.Equal(2, emailService.SentEmails.Count);
+        Assert.Equal(studentEmail, emailService.SentEmails[1].To);
+        Assert.Contains("ĐÃ CHẤP NHẬN", emailService.SentEmails[1].Body);
+    }
 }
