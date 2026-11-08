@@ -25,13 +25,13 @@ public class ExcelImportTests
             XElement Cell(string reference, string value) => new(ns + "c", new XAttribute("r", reference), new XAttribute("t", "inlineStr"), new XElement(ns + "is", new XElement(ns + "t", value)));
             var sheet = new XElement(ns + "sheetData",
                 new XElement(ns + "row", new XAttribute("r", 1), Cell("B1", "File Status:"), Cell("C1", "CLOSE")),
-                new XElement(ns + "row", new XAttribute("r", 5), Cell("F5", "Họ & Tên"), Cell("G5", "MSSV"), Cell("H5", "Email (email trên FAP của SV)"), Cell("I5", "Ngành")),
-                new XElement(ns + "row", new XAttribute("r", 6), Cell("F6", "Lê Hữu Đại"), Cell("G6", "SE184118"), Cell("H6", "dai@example.edu"), Cell("I6", "Công nghệ thông tin")));
+                new XElement(ns + "row", new XAttribute("r", 5), Cell("F5", "Họ & Tên"), Cell("G5", "MSSV"), Cell("H5", "Email (email trên FAP của SV)"), Cell("I5", "Ngành"), Cell("J5", "SemesterCode")),
+                new XElement(ns + "row", new XAttribute("r", 6), Cell("F6", "Lê Hữu Đại"), Cell("G6", "SE184118"), Cell("H6", "dai@example.edu"), Cell("I6", "Công nghệ thông tin"), Cell("J6", "FA26")));
             Write("xl/worksheets/sheet1.xml", new XDocument(new XElement(ns + "worksheet", sheet)).ToString());
         }
         return stream.ToArray();
     }
-    public static byte[] Workbook(int count, bool formula = false, bool wrongHeader = false)
+    public static byte[] Workbook(int count, bool formula = false, bool wrongHeader = false, string semesterCode = "EXCEL")
     {
         using var stream = new MemoryStream();
         using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, true))
@@ -47,8 +47,8 @@ public class ExcelImportTests
             var data = new XElement(ns + "sheetData");
             void Row(int number, params string[] values) => data.Add(new XElement(ns + "row", new XAttribute("r", number), values.Select((v, i) =>
                 new XElement(ns + "c", new XAttribute("r", ((char)('A' + i)).ToString() + number), new XAttribute("t", "inlineStr"), new XElement(ns + "is", new XElement(ns + "t", v))))));
-            Row(1, wrongHeader ? "Invalid" : "StudentCode", "FullName", "Email", "Major");
-            for (var i = 1; i <= count; i++) Row(i + 1, "EX" + i, "Nguyễn Văn " + i, "excel" + i + "@test.edu", "SE");
+            Row(1, wrongHeader ? "Invalid" : "StudentCode", "FullName", "Email", "Major", "SemesterCode");
+            for (var i = 1; i <= count; i++) Row(i + 1, "EX" + i, "Nguyễn Văn " + i, "excel" + i + "@test.edu", "SE", semesterCode);
             if (formula) data.Elements().Last().Elements().First().Add(new XElement(ns + "f", "1+1"));
             Write("xl/worksheets/sheet1.xml", new XDocument(new XElement(ns + "worksheet", data)).ToString());
         }
@@ -61,6 +61,7 @@ public class ExcelImportTests
         var rows = new StudentImportReader().Read(stream);
         Assert.Equal(200, rows.Count);
         Assert.Equal("Nguyễn Văn 1", rows[0].FullName);
+        Assert.Equal("EXCEL", rows[0].SemesterCode);
     }
     [Fact]
     public void Reads_roster_layout_with_notes_and_non_adjacent_vietnamese_headers()
@@ -101,7 +102,7 @@ public class ExcelApiTests(IdentityApiFixture fixture) : IClassFixture<IdentityA
         MultipartFormDataContent Form()
         {
             var form = new MultipartFormDataContent();
-            form.Add(new ByteArrayContent(ExcelImportTests.Workbook(200)), "file", "students.xlsx");
+            form.Add(new ByteArrayContent(ExcelImportTests.Workbook(200, semesterCode: "EXCEL")), "file", "students.xlsx");
             form.Add(new StringContent("EXCEL"), "semesterCode");
             form.Add(new StringContent(IdentityApiFixture.Password), "initialPassword");
             return form;

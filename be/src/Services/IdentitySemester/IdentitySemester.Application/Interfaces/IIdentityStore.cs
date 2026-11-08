@@ -10,6 +10,7 @@ public interface IIdentityStore
     Task<User?> UserById(Guid id, CancellationToken ct);
     Task<Student?> StudentById(Guid id, CancellationToken ct);
     Task<Student?> StudentByUser(Guid id, CancellationToken ct);
+    Task<Student?> StudentByUserSemester(Guid userId, string semesterCode, CancellationToken ct);
     Task<Semester?> SemesterById(Guid id, CancellationToken ct);
     Task<Semester?> SemesterByCode(string code, CancellationToken ct);
     Task<PageResult<StudentResponse>> Students(ListQuery query, CancellationToken ct);
@@ -17,9 +18,12 @@ public interface IIdentityStore
     Task<bool> StudentExists(string code, Guid semesterId, CancellationToken ct);
     Task<bool> EnrollmentExists(Guid userId, Guid semesterId, CancellationToken ct);
     Task<bool> SemesterHasStudents(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<StudentStrengthRole>> StudentStrengthRoles(Guid studentId, CancellationToken ct);
     Task<Role> RoleByName(string name, CancellationToken ct);
     Task<bool> GoogleEmailAllowed(string email, CancellationToken ct);
     Task<IReadOnlyList<GoogleAllowedEmail>> GoogleAllowedEmails(CancellationToken ct);
+    Task<int> DeleteStudentsBySemester(Guid semesterId, CancellationToken ct);
+    Task DeleteStudentEnrollment(Guid studentId, CancellationToken ct);
     void AddStudent(Student student);
     void AddUser(User user);
     void RemoveStudent(Student student);
@@ -27,6 +31,9 @@ public interface IIdentityStore
     void RemoveSemester(Semester semester);
     void AddGoogleAllowedEmail(GoogleAllowedEmail email);
     void RemoveGoogleAllowedEmail(GoogleAllowedEmail email);
+    void AddStudentStrengthRole(StudentStrengthRole role);
+    void RemoveStudentStrengthRole(StudentStrengthRole role);
+    void AddOutboxEvent(string topic, object payload);
     Task Save(CancellationToken ct);
 }
 public interface IPasswordService
@@ -38,7 +45,7 @@ public interface ITokenIssuer
 {
     (string Token, DateTime Expiration) Issue(User user);
 }
-public record GoogleIdentity(string Subject, string Email, bool EmailVerified, string? HostedDomain, string? DisplayName);
+public record GoogleIdentity(string Subject, string Email, bool EmailVerified, string? HostedDomain, string? DisplayName, string? PictureUrl = null);
 public interface IGoogleIdTokenValidator
 {
     Task<GoogleIdentity> ValidateAsync(string credential, CancellationToken ct);

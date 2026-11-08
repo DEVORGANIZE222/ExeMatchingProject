@@ -37,6 +37,20 @@ public record TopicRegisteredEvent(
     DateTime RegisteredAt
 );
 
+public record StudentGroupMembershipChangedEvent(
+    Guid StudentId,
+    bool HasGroup,
+    DateTime ChangedAt
+);
+
+/// <summary>Published by IdentitySemester after a successful semester-code rename.</summary>
+public record SemesterCodeChangedEvent(
+    Guid SemesterId,
+    string OldSemesterCode,
+    string NewSemesterCode,
+    DateTime ChangedAt
+);
+
 public record MentorRequestedEvent(
     Guid RequestId,
     Guid GroupId,

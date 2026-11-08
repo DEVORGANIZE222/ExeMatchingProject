@@ -7,7 +7,7 @@ An enterprise-grade Capstone / EXE Team Matching System built with **.NET 8 Micr
 ## 1. Project Overview
 The **EXE Team Matching System** coordinates student registration, team formation, leader voting, mentor assignment, and topic approval for Capstone/EXE courses.
 
-> **Service 1 update (2026-09-29)**: IdentitySemester now implements JWT/RBAC, account information/password changes, student CRUD/Excel import, semester CRUD/milestones, PostgreSQL repositories and a Kafka outbox producer. See [Service 1 guide and requirements checklist](docs/identity-semester.md) and [working agreement](AGENTS.md). GroupMatching, Mentor and Notification remain Phase 1 skeletons; their end-to-end requirements are not complete.
+> **Service updates**: IdentitySemester implements JWT/RBAC, roster/semester management and a Kafka outbox. GroupMatching implements the group lifecycle, leader vote, random matching and its own outbox. See [IdentitySemester](docs/identity-semester.md) and [GroupMatching](docs/group-matching.md). Mentor and Notification still require their own end-to-end implementation.
 
 ---
 
@@ -19,8 +19,8 @@ React/Vite client --> Nginx gateway --> IdentitySemester --> identity_db
                                   --> GroupMatching    --> group_matching_db
                                   --> Mentor REST/gRPC --> mentor_db
 
-IdentitySemester --> durable outbox --> Kafka --> Notification Worker (implemented)
-GroupMatching / Mentor --> Kafka (implemented)
+IdentitySemester --> durable outbox --> Kafka --> consumers
+GroupMatching --> durable outbox --> Kafka --> IdentitySemester membership consumer
 PostgreSQL hosts three separate databases.
 Kafka uses Zookeeper; Redis is provisioned but not integrated.
 ```
@@ -32,7 +32,7 @@ Kafka uses Zookeeper; Redis is provisioned but not integrated.
 | Service | Internal Port | External Port | Description |
 |---|---|---|---|
 | **IdentitySemester.Api** | 8080 | 5001 | User authentication, JWT tokens, Student imports & Semester management |
-| **GroupMatching.Api** | 8080 | 5002 | Team creation, member management, leader voting, matching placeholder |
+| **GroupMatching.Api** | 8080 | 5002 | Team lifecycle, leader voting, random matching, topic registration and Mentor gRPC recommendation client |
 | **Mentor.Api** | 8080 / 50051 | 5003 / 50051 | Mentor profiles, quota tracking, REST & gRPC operations |
 | **Notification.Worker** | N/A | N/A | Background worker consuming Kafka events to send email notifications |
 | **Nginx API Gateway** | 8080 | 8080 | Unified entry point & routing reverse proxy |
@@ -100,6 +100,9 @@ dotnet run --project be/src/Services/IdentitySemester/IdentitySemester.Api
 dotnet run --project be/src/Services/GroupMatching/GroupMatching.Api
 dotnet run --project be/src/Services/Mentor/Mentor.Api
 ```
+
+### Mentor Workspace
+Add the mentor's email to Google Access and have the mentor sign in once. An Admin can then activate that account from **Giảng viên Mentor**; the mentor must sign out and sign in again to receive the Mentor role. The mentor workspace stores profile details, assigned-group progress, appointments, mentor requests, and notifications in the Mentor database. Elected group leaders can send mentor requests from the Groups page.
 
 
 ---
@@ -214,10 +217,9 @@ Service 1 tests use real PostgreSQL in isolated temporary databases. With Docker
 | Assignment | Responsibility | Status |
 |---|---|---|
 | Service 1 - current contributor | Authentication/JWT/RBAC, student import and account information, semester milestones | Implemented; see Service 1 guide |
-| Service 2 owner | Groups, membership, vote leader, locking, random matching, topic workflow | Team implementation pending |
+| Service 2 owner | Groups, membership, vote leader, locking, random matching, topic workflow; Kafka outbox and Mentor gRPC client | Implemented for Service 2; Service 3 must provide real Mentor gRPC data for end-to-end mentor recommendations |
 | Service 3 owner | Mentor profiles, quotas, mentor decisions, real REST-to-gRPC interaction | Team implementation pending |
 | Service 4 owner | Kafka event consumer, notification/email worker | Team implementation pending |
-| Infrastructure/integration owner | Shared gateway deployment, integration and complete end-to-end demonstration | Compose scaffold present; integration pending |
+| Infrastructure/integration owner | Shared gateway deployment, integration and complete end-to-end demonstration | Compose available; see `docs/DEMO_SCRIPT.md` for verified Service 1/2 flow and remaining Service 3/4 dependency |
 
 The supplied team document does not name individual members. Replace responsibility labels with actual team member names before submission; do not invent names.
-

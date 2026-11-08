@@ -1,75 +1,51 @@
 using EXETeamMatching.GroupMatching.Domain.Entities;
-using EXETeamMatching.GroupMatching.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EXETeamMatching.GroupMatching.Infrastructure.Persistence;
 
-public class GroupMatchingDbContext : DbContext
+public class GroupMatchingDbContext(DbContextOptions<GroupMatchingDbContext> options) : DbContext(options)
 {
-    public GroupMatchingDbContext(DbContextOptions<GroupMatchingDbContext> options) : base(options) { }
 
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
-    public DbSet<GroupInvitation> GroupInvitations => Set<GroupInvitation>();
     public DbSet<LeaderVote> LeaderVotes => Set<LeaderVote>();
+    public DbSet<GroupEventOutbox> GroupEventOutbox => Set<GroupEventOutbox>();
+    public DbSet<GroupRecruitmentNeed> GroupRecruitmentNeeds => Set<GroupRecruitmentNeed>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        var groupId = Guid.Parse("66666666-6666-6666-6666-666666666666");
-        var leaderStudentId = Guid.Parse("55555555-5555-5555-5555-555555555555");
-        var member2StudentId = Guid.Parse("77777777-7777-7777-7777-777777777777");
-
-        modelBuilder.Entity<Group>().HasData(
-            new Group
-            {
-                Id = groupId,
-                GroupCode = "GRP-FALL26-001",
-                GroupName = "Alpha Team EXE",
-                TopicTitle = "AI Capstone Matching Platform",
-                SemesterCode = "FALL2026",
-                Status = GroupStatus.Open,
-                LeaderStudentId = leaderStudentId,
-                CreatedAt = DateTime.UtcNow
-            }
-        );
-
-        modelBuilder.Entity<GroupMember>().HasData(
-            new GroupMember
-            {
-                Id = Guid.Parse("88888888-8888-8888-8888-888888888888"),
-                GroupId = groupId,
-                StudentId = leaderStudentId,
-                StudentCode = "SE160001",
-                FullName = "Nguyen Van A",
-                Role = MemberRole.Leader,
-                JoinedAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            },
-            new GroupMember
-            {
-                Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
-                GroupId = groupId,
-                StudentId = member2StudentId,
-                StudentCode = "SE160002",
-                FullName = "Tran Van B",
-                Role = MemberRole.Member,
-                JoinedAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            }
-        );
-
-        modelBuilder.Entity<LeaderVote>().HasData(
-            new LeaderVote
-            {
-                Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                GroupId = groupId,
-                VoterStudentId = member2StudentId,
-                NominatedStudentId = leaderStudentId,
-                VotedAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            }
-        );
+        modelBuilder.Entity<Group>(entity =>
+        {
+            entity.HasIndex(x => x.GroupCode).IsUnique();
+            entity.Property(x => x.GroupCode).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.GroupName).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.ProjectDescription).HasMaxLength(1200).IsRequired();
+            entity.Property(x => x.SemesterCode).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.TopicTitle).HasMaxLength(300);
+            entity.HasMany(x => x.Members).WithOne(x => x.Group).HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(x => x.Votes).WithOne().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(x => x.RecruitmentNeeds).WithOne(x => x.Group).HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<GroupMember>(entity =>
+        {
+            entity.HasIndex(x => new { x.GroupId, x.StudentId }).IsUnique();
+            entity.HasIndex(x => x.StudentId).IsUnique();
+            entity.Property(x => x.StudentCode).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.FullName).HasMaxLength(200).IsRequired();
+        });
+        modelBuilder.Entity<LeaderVote>(entity => entity.HasIndex(x => new { x.GroupId, x.VoterStudentId }).IsUnique());
+        modelBuilder.Entity<GroupEventOutbox>(entity =>
+        {
+            entity.HasIndex(x => x.PublishedAt);
+            entity.Property(x => x.Topic).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Payload).HasColumnType("jsonb").IsRequired();
+        });
+        modelBuilder.Entity<GroupRecruitmentNeed>(entity =>
+        {
+            entity.Property(x => x.RoleCode).HasMaxLength(40).IsRequired();
+            entity.HasIndex(x => new { x.GroupId, x.RoleCode }).IsUnique();
+        });
     }
 }

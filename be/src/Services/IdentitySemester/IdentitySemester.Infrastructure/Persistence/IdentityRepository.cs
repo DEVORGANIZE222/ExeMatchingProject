@@ -10,16 +10,20 @@ namespace EXETeamMatching.IdentitySemester.Infrastructure.Persistence;
 
 public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
 {
-    private IQueryable<Student> StudentQuery => db.Students.Include(s => s.User).ThenInclude(u => u.Role).Include(s => s.Semester);
+    private IQueryable<Student> StudentQuery => db.Students.Include(s => s.User).ThenInclude(u => u.Role).Include(s => s.Semester).Include(s => s.StrengthRoles);
     public Task<User?> UserByEmail(string email, CancellationToken ct) => db.Users.Include(u => u.Role).SingleOrDefaultAsync(u => u.Email.ToLower() == email, ct);
     public Task<User?> UserByGoogleSubject(string subject, CancellationToken ct) => db.Users.Include(u => u.Role).SingleOrDefaultAsync(u => u.GoogleSubject == subject, ct);
     public Task<User?> UserById(Guid id, CancellationToken ct) => db.Users.Include(u => u.Role).SingleOrDefaultAsync(u => u.Id == id, ct);
     public Task<Student?> StudentById(Guid id, CancellationToken ct) => StudentQuery.SingleOrDefaultAsync(s => s.Id == id, ct);
     public Task<Student?> StudentByUser(Guid id, CancellationToken ct) => StudentQuery.OrderByDescending(s => s.Semester.StartDate).FirstOrDefaultAsync(s => s.UserId == id, ct);
+    public Task<Student?> StudentByUserSemester(Guid userId, string semesterCode, CancellationToken ct) => StudentQuery
+        .SingleOrDefaultAsync(s => s.UserId == userId && s.Semester.Code == semesterCode, ct);
     public Task<Semester?> SemesterById(Guid id, CancellationToken ct) => db.Semesters.SingleOrDefaultAsync(s => s.Id == id, ct);
     public Task<Semester?> SemesterByCode(string code, CancellationToken ct) => db.Semesters.SingleOrDefaultAsync(s => s.Code.ToUpper() == code, ct);
     public Task<bool> StudentExists(string code, Guid semesterId, CancellationToken ct) => db.Students.AnyAsync(s => s.StudentCode.ToUpper() == code && s.SemesterId == semesterId, ct);
     public Task<bool> SemesterHasStudents(Guid id, CancellationToken ct) => db.Students.AnyAsync(s => s.SemesterId == id, ct);
+    public async Task<IReadOnlyList<StudentStrengthRole>> StudentStrengthRoles(Guid studentId, CancellationToken ct)
+        => await db.StudentStrengthRoles.Where(x => x.StudentId == studentId).OrderBy(x => x.RoleCode).ToListAsync(ct);
     public Task<bool> EnrollmentExists(Guid userId, Guid semesterId, CancellationToken ct) => db.Students.AnyAsync(s => s.UserId == userId && s.SemesterId == semesterId, ct);
     public Task<Role> RoleByName(string name, CancellationToken ct) => db.Roles.SingleAsync(r => r.Name == name, ct);
     public Task<bool> GoogleEmailAllowed(string email, CancellationToken ct) => db.GoogleAllowedEmails.AnyAsync(x => x.Email == email, ct);
@@ -79,13 +83,56 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
         if (db.Entry(student.User).State == EntityState.Detached) db.Users.Add(student.User);
         db.Entry(student).State = EntityState.Added;
         var payload = new StudentImportedEvent(student.Id, student.StudentCode, student.FullName, student.User.Email, student.Semester.Code, DateTime.UtcNow);
-        db.StudentEventOutbox.Add(new StudentEventOutbox { Payload = JsonSerializer.Serialize(payload) });
+        AddOutboxEvent("student-imported", payload);
     }
     public void AddUser(User user) => db.Users.Add(user);
     public void RemoveStudent(Student student) => db.Students.Remove(student);
+    public async Task DeleteStudentEnrollment(Guid studentId, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var student = await db.Students.Include(s => s.User).ThenInclude(u => u.Role).SingleOrDefaultAsync(s => s.Id == studentId, ct)
+            ?? throw new IdentityException(404, "Student not found.");
+        await DeleteEnrollments([student], ct);
+        await tx.CommitAsync(ct);
+    }
+    public async Task<int> DeleteStudentsBySemester(Guid semesterId, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var students = await db.Students.Include(s => s.User).ThenInclude(u => u.Role).Where(s => s.SemesterId == semesterId).ToListAsync(ct);
+        await DeleteEnrollments(students, ct);
+        await tx.CommitAsync(ct);
+        return students.Count;
+    }
+    private async Task DeleteEnrollments(List<Student> students, CancellationToken ct)
+    {
+        if (students.Count == 0) return;
+        if (students.Any(s => s.HasGroup))
+            throw new IdentityException(409, "Remove group membership through GroupMatching before deleting students.");
+        var studentIds = students.Select(s => s.Id).ToList();
+        var userIds = students.Select(s => s.UserId).Distinct().ToList();
+        var remaining = await db.Students.Where(s => userIds.Contains(s.UserId) && !studentIds.Contains(s.Id))
+            .Select(s => s.UserId).Distinct().ToListAsync(ct);
+        var affected = students.Select(s => s.User).DistinctBy(u => u.Id)
+            .Where(u => u.Role.Name == "Student" && !remaining.Contains(u.Id)).ToList();
+        var emails = affected.Select(u => u.Email.Trim().ToLower()).ToList();
+        var allowed = await db.GoogleAllowedEmails.Where(e => emails.Contains(e.Email.Trim().ToLower())).ToListAsync(ct);
+        db.GoogleAllowedEmails.RemoveRange(allowed);
+        foreach (var user in affected) { user.TokenVersion++; user.UpdatedAt = DateTime.UtcNow; }
+        var roles = await db.StudentStrengthRoles.Where(r => studentIds.Contains(r.StudentId)).ToListAsync(ct);
+        db.StudentStrengthRoles.RemoveRange(roles);
+        db.Students.RemoveRange(students);
+        await db.SaveChangesAsync(ct);
+    }
     public void AddSemester(Semester semester) => db.Semesters.Add(semester);
     public void RemoveSemester(Semester semester) => db.Semesters.Remove(semester);
     public void AddGoogleAllowedEmail(GoogleAllowedEmail email) => db.GoogleAllowedEmails.Add(email);
     public void RemoveGoogleAllowedEmail(GoogleAllowedEmail email) => db.GoogleAllowedEmails.Remove(email);
+    public void AddStudentStrengthRole(StudentStrengthRole role) => db.StudentStrengthRoles.Add(role);
+    public void RemoveStudentStrengthRole(StudentStrengthRole role) => db.StudentStrengthRoles.Remove(role);
+    public void AddOutboxEvent(string topic, object payload) => db.StudentEventOutbox.Add(new StudentEventOutbox
+    {
+        Topic = topic,
+        Payload = JsonSerializer.Serialize(payload)
+    });
     public Task Save(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

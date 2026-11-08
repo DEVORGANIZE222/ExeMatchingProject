@@ -1,0 +1,374 @@
+/* ═══════════════════════════════════════════════════════════
+   LoginPage.css — ExeMatching SaaS Layout (No-Scroll 100vh)
+   Top Nav Header · Centered 12-Col Grid (7:5) · Stepper Flow
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Fullscreen No-Scroll Viewport ───────────────────────── */
+.login-viewport {
+  min-height: 100vh;
+  max-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-color: var(--bg-page);
+}
+
+/* ── Top Navigation Bar (Fixed at top, aligns with 1152px grid) ── */
+.login-top-bar {
+  width: 100%;
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 28px var(--space-6) 0 var(--space-6);
+  flex-shrink: 0;
+}
+
+.login-top-bar-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.login-brand-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo-img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.brand-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.text-exe {
+  color: #0F172A; /* Slate 900 */
+}
+
+.text-matching {
+  color: #15803D; /* Primary Growth Green */
+}
+
+.top-bar-meta {
+  display: flex;
+  align-items: center;
+}
+
+.campus-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748B;
+  background-color: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  letter-spacing: -0.01em;
+}
+
+/* ── Main Center Grid Container (max-w-6xl 7:5 ratio, vertically centered) ── */
+.login-center-container {
+  max-width: 1152px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 56px;
+  align-items: center;
+  flex: 1;
+  min-height: 0; /* Prevents overflow in flex container */
+}
+
+/* ── Left Column (col-span-7) ────────────────────────────── */
+.login-col-left {
+  grid-column: span 7;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.login-announcement-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #15803D;
+  background-color: #DCFCE7;
+  border: 1px solid #BBF7D0;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  margin-bottom: 16px;
+  width: fit-content;
+}
+
+.pill-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #15803D;
+}
+
+.login-headline {
+  font-size: 38px;
+  font-weight: 800;
+  color: #0F172A;
+  line-height: 1.22;
+  letter-spacing: -0.035em;
+  margin-bottom: 12px;
+}
+
+.login-subheadline {
+  font-size: 15px;
+  color: #475569;
+  line-height: 1.6;
+  margin-bottom: 24px;
+  max-width: 560px;
+}
+
+/* ── Stepper 3-Step Flow Card (p-6, space-y-4 with vertical connectors) ── */
+.workflow-stepper-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.stepper-item {
+  display: flex;
+  gap: 16px;
+}
+
+.stepper-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.stepper-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #DCFCE7;
+  color: #15803D;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 0 0 1px #BBF7D0;
+  flex-shrink: 0;
+}
+
+.stepper-line {
+  width: 2px;
+  flex: 1;
+  min-height: 22px;
+  background-color: #E2E8F0;
+  margin: 4px 0;
+  border-radius: 1px;
+}
+
+.stepper-content {
+  padding-bottom: 16px;
+  flex: 1;
+}
+
+.stepper-item:last-child .stepper-content {
+  padding-bottom: 0;
+}
+
+.stepper-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 3px;
+  line-height: 1.35;
+}
+
+.stepper-desc {
+  font-size: 12.5px;
+  color: #64748B;
+  line-height: 1.45;
+}
+
+/* ── Right Column (col-span-5) ───────────────────────────── */
+.login-col-right {
+  grid-column: span 5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Auth Card (max-w-[400px] w-full bg-white rounded-2xl p-7 shadow-xl) */
+.login-auth-card {
+  max-width: 400px;
+  width: 100%;
+  background-color: #FFFFFF;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 16px;
+  padding: 30px 28px;
+  box-shadow: 0 20px 25px -5px rgba(241, 245, 249, 1), 0 8px 10px -6px rgba(241, 245, 249, 1), 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+}
+
+.auth-card-header {
+  margin-bottom: 22px;
+  text-align: left;
+}
+
+.auth-card-title {
+  font-size: 21px;
+  font-weight: 700;
+  color: #0F172A;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.auth-card-subtitle {
+  font-size: 13px;
+  color: #64748B;
+  line-height: 1.5;
+}
+
+/* Google Sign-in Slot (Full width) */
+.google-auth-slot {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+  margin-bottom: 16px; /* Enhanced breathing room */
+}
+
+.google-auth-slot > div {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Whitelist Note below the Google button */
+.whitelist-note-compact {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  background-color: #F0FDF4;
+  border: 1px solid #DCFCE7;
+  border-radius: 8px;
+  color: #166534;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.whitelist-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #15803D;
+}
+
+/* Demo Mode: 2 pills horizontal */
+.demo-mode-footer {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #F1F5F9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.demo-mode-label {
+  font-size: 11.5px;
+  color: #64748B;
+}
+
+.demo-pills-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.demo-pill-btn {
+  background-color: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-full);
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.demo-pill-btn:hover {
+  background-color: #DCFCE7;
+  border-color: #BBF7D0;
+  color: #15803D;
+}
+
+/* ── Footer: fixed at bottom (w-full py-4 border-t border-slate-200/60 max-w-6xl mx-auto flex justify-between px-6) ── */
+.login-bottom-footer {
+  width: 100%;
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 16px var(--space-6);
+  border-top: 1px solid rgba(226, 232, 240, 0.6);
+  font-size: 12px;
+  color: #64748B;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .login-viewport {
+    height: auto;
+    min-height: 100vh;
+    max-height: none;
+    overflow: auto;
+  }
+  .login-top-bar {
+    padding: 20px var(--space-4) 0;
+  }
+  .login-center-container {
+    grid-template-columns: 1fr;
+    gap: 36px;
+    padding: 24px var(--space-4);
+  }
+  .login-col-left {
+    grid-column: span 1;
+  }
+  .login-headline {
+    font-size: 30px;
+  }
+  .login-col-right {
+    grid-column: span 1;
+  }
+  .login-bottom-footer {
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+    padding: 16px var(--space-4);
+  }
+}

@@ -2,6 +2,8 @@ using System.ComponentModel.DataAnnotations;
 using EXETeamMatching.IdentitySemester.Application.DTOs;
 using EXETeamMatching.IdentitySemester.Application.Interfaces;
 using EXETeamMatching.IdentitySemester.Domain.Entities;
+using EXETeamMatching.Contracts.Events;
+using EXETeamMatching.Contracts.TeamRoles;
 
 namespace EXETeamMatching.IdentitySemester.Application.Services;
 
@@ -26,6 +28,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         var user = await store.UserByGoogleSubject(identity.Subject, ct);
         if (user is not null)
         {
+            await EnsureStudentEnrolled(user, ct);
             if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
             {
                 var emailOwner = await store.UserByEmail(email, ct);
@@ -33,33 +36,31 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
                     throw new IdentityException(409, "Google email is already linked to a different account.");
                 user.Email = email;
                 user.UpdatedAt = DateTime.UtcNow;
-                await store.Save(ct);
             }
+            if (GooglePicture(identity.PictureUrl) is { } picture && user.GooglePictureUrl != picture)
+            {
+                user.GooglePictureUrl = picture;
+                user.UpdatedAt = DateTime.UtcNow;
+            }
+            await store.Save(ct);
             return await IssueLoginAsync(user, ct);
         }
 
         user = await store.UserByEmail(email, ct);
         if (user is null)
         {
-            var studentRole = await store.RoleByName("Student", ct);
-            user = new User
-            {
-                Email = email,
-                Username = string.IsNullOrWhiteSpace(identity.DisplayName) ? email : identity.DisplayName.Trim(),
-                RoleId = studentRole.Id,
-                Role = studentRole,
-                GoogleSubject = identity.Subject
-            };
-            store.AddUser(user);
+            throw new IdentityException(403, "This account has no student enrollment or authorized staff account.");
         }
         else
         {
+            await EnsureStudentEnrolled(user, ct);
             if (!string.IsNullOrWhiteSpace(user.GoogleSubject) && user.GoogleSubject != identity.Subject)
                 throw new IdentityException(409, "This email is already linked to another Google account.");
             user.GoogleSubject = identity.Subject;
             user.UpdatedAt = DateTime.UtcNow;
         }
 
+        if (GooglePicture(identity.PictureUrl) is { } pictureUrl) user.GooglePictureUrl = pictureUrl;
         await store.Save(ct);
         return await IssueLoginAsync(user, ct);
     }
@@ -67,7 +68,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     public async Task<AccountResponse> Account(Guid id, CancellationToken ct)
     {
         var user = await store.UserById(id, ct) ?? throw new IdentityException(401, "Account unavailable.");
-        return new(user.Id, user.Username, user.Email, user.Role.Name);
+        return new(user.Id, user.Username, user.Email, user.Role.Name, user.GooglePictureUrl);
     }
 
     public async Task<AccountResponse> UpdateAccount(Guid id, UpdateAccountRequest request, CancellationToken ct)
@@ -76,7 +77,28 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         user.Username = Required(request.Username);
         user.UpdatedAt = DateTime.UtcNow;
         await store.Save(ct);
-        return new(user.Id, user.Username, user.Email, user.Role.Name);
+        return new(user.Id, user.Username, user.Email, user.Role.Name, user.GooglePictureUrl);
+    }
+
+    public async Task<AccountResponse> ActivateMentor(string email, CancellationToken ct)
+    {
+        email = Required(email).ToLowerInvariant();
+        if (!new EmailAddressAttribute().IsValid(email))
+            throw new IdentityException(400, "A valid email address is required.");
+        var user = await store.UserByEmail(email, ct)
+            ?? throw new IdentityException(404, "The user must sign in with Google before being activated as a mentor.");
+        if (user.Role.Name == "Admin")
+            throw new IdentityException(409, "Administrator accounts cannot be changed to mentor accounts.");
+        var mentorRole = await store.RoleByName("Mentor", ct);
+        if (user.RoleId != mentorRole.Id)
+        {
+            user.RoleId = mentorRole.Id;
+            user.Role = mentorRole;
+            user.TokenVersion++;
+            user.UpdatedAt = DateTime.UtcNow;
+            await store.Save(ct);
+        }
+        return new(user.Id, user.Username, user.Email, mentorRole.Name);
     }
 
     public async Task ChangePassword(Guid id, ChangePasswordRequest request, CancellationToken ct)
@@ -96,7 +118,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         var emails = rawEmails.Select(Required).Select(x => x.ToLowerInvariant()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         // A department roster can cover several classes; keep this independent
         // from the roster enrollment batch limit.
-        if (emails.Count is < 1 or > 2000) throw new IdentityException(400, "Import requires 1 to 2000 unique email addresses.");
+        if (emails.Count is < 1 or > 5000) throw new IdentityException(400, "Import requires 1 to 5000 unique email addresses.");
         // The department roster is the authority for this import. Preserve every
         // non-empty value under its Email/Gmail column; Google authentication still
         // accepts only the verified email claim from a valid Google ID token.
@@ -119,6 +141,17 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         if (!isAdmin && student.UserId != actor) throw new IdentityException(403, "You can only access your own profile.");
         return Map(student);
     }
+    public async Task<GroupEnrollmentResponse> CurrentEnrollment(Guid actor, string semesterCode, CancellationToken ct)
+    {
+        var code = Required(semesterCode).ToUpperInvariant();
+        var student = await store.StudentByUserSemester(actor, code, ct) ?? throw new IdentityException(404, "No enrollment found for this semester.");
+        return new(student.Id, student.UserId, student.StudentCode, student.FullName, student.Semester.Code, student.HasGroup);
+    }
+    public async Task<SemesterWorkflowResponse> Workflow(string semesterCode, CancellationToken ct)
+    {
+        var semester = await store.SemesterByCode(Required(semesterCode).ToUpperInvariant(), ct) ?? throw new IdentityException(404, "Semester not found.");
+        return new(semester.Code, semester.IsActive, semester.StartDate, semester.EndDate, semester.RegistrationDeadline, semester.TopicDeadline, semester.MentorDeadline);
+    }
     public async Task<StudentResponse> CreateStudent(CreateStudentRequest request, CancellationToken ct)
     {
         ValidatePassword(request.InitialPassword);
@@ -132,8 +165,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     public async Task<ImportResult> Import(ImportStudentsRequest request, string initialPassword, CancellationToken ct)
     {
         ValidatePassword(initialPassword);
-        if (request.Students is null || request.Students.Count is < 1 or > 2000)
-            throw new IdentityException(400, "Import requires 1 to 2000 students.");
+        if (request.Students is null || request.Students.Count is < 1 or > 5000)
+            throw new IdentityException(400, "Import requires 1 to 5000 students.");
         var semester = await FindSemester(request.SemesterCode, ct);
         var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -142,6 +175,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         {
             if (row is null || !codes.Add(Required(row.StudentCode)) || !emails.Add(Required(row.Email)))
                 throw new IdentityException(400, "Duplicate student code or email in import.");
+            if (!string.IsNullOrWhiteSpace(row.SemesterCode) && !row.SemesterCode.Trim().Equals(semester.Code, StringComparison.OrdinalIgnoreCase))
+                throw new IdentityException(400, "Every Excel SemesterCode must match the selected semester.");
             students.Add(await BuildStudent(row, semester, initialPassword, ct));
         }
         // Validate the entire file before tracking inserts. SaveChanges is atomic.
@@ -161,12 +196,29 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         await store.Save(ct);
         return Map(student);
     }
-    public async Task DeleteStudent(Guid id, CancellationToken ct)
+    public async Task<StudentResponse> UpdateStudentStrengthRoles(Guid id, UpdateStudentStrengthRolesRequest request,
+        Guid actor, bool isAdmin, CancellationToken ct)
     {
         var student = await store.StudentById(id, ct) ?? throw new IdentityException(404, "Student not found.");
-        if (student.HasGroup) throw new IdentityException(409, "Remove group membership through GroupMatching before deleting this student.");
-        store.RemoveStudent(student);
+        if (!isAdmin && student.UserId != actor) throw new IdentityException(403, "You can only update your own strengths.");
+        var normalized = NormalizeStrengthRoles(request.RoleCodes);
+        var existing = await store.StudentStrengthRoles(id, ct);
+        foreach (var role in existing) store.RemoveStudentStrengthRole(role);
+        foreach (var role in normalized) store.AddStudentStrengthRole(new StudentStrengthRole { StudentId = id, RoleCode = role });
+        student.UpdatedAt = DateTime.UtcNow;
         await store.Save(ct);
+        student.StrengthRoles = normalized.Select(role => new StudentStrengthRole { StudentId = id, RoleCode = role }).ToList();
+        return Map(student);
+    }
+    public async Task DeleteStudent(Guid id, CancellationToken ct)
+    {
+        await store.DeleteStudentEnrollment(id, ct);
+    }
+    public async Task<int> DeleteStudentsBySemester(string semesterCode, CancellationToken ct)
+    {
+        var code = Required(semesterCode).ToUpperInvariant();
+        var semester = await store.SemesterByCode(code, ct) ?? throw new IdentityException(404, "Semester not found.");
+        return await store.DeleteStudentsBySemester(semester.Id, ct);
     }
     public Task<PageResult<SemesterDto>> Semesters(ListQuery query, CancellationToken ct) => store.Semesters(query, ct);
     public async Task<SemesterDto> Semester(Guid id, CancellationToken ct) => Map(await store.SemesterById(id, ct) ?? throw new IdentityException(404, "Semester not found."));
@@ -185,10 +237,19 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     {
         ValidateDates(request.StartDate, request.EndDate, request.RegistrationDeadline, request.TopicDeadline, request.MentorDeadline);
         var semester = await store.SemesterById(id, ct) ?? throw new IdentityException(404, "Semester not found.");
+        var oldCode = semester.Code;
+        var newCode = Required(request.Code).ToUpperInvariant();
+        var sameCode = oldCode.Equals(newCode, StringComparison.OrdinalIgnoreCase);
+        var existing = await store.SemesterByCode(newCode, ct);
+        if (!sameCode && existing is not null && existing.Id != id)
+            throw new IdentityException(409, "Semester code already exists.");
+        semester.Code = newCode;
         semester.Name = Required(request.Name); semester.StartDate = request.StartDate; semester.EndDate = request.EndDate;
         semester.IsActive = request.IsActive; semester.RegistrationDeadline = request.RegistrationDeadline;
         semester.TopicDeadline = request.TopicDeadline; semester.MentorDeadline = request.MentorDeadline;
         semester.UpdatedAt = DateTime.UtcNow;
+        if (!sameCode)
+            store.AddOutboxEvent("semester-code-changed", new SemesterCodeChangedEvent(semester.Id, oldCode, newCode, DateTime.UtcNow));
         await store.Save(ct);
         return Map(semester);
     }
@@ -214,8 +275,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     }
     public static void ValidatePassword(string password)
     {
-        if (string.IsNullOrWhiteSpace(password) || password.Length is < 12 or > 128)
-            throw new IdentityException(400, "Password must contain 12 to 128 characters.");
+        if (string.IsNullOrWhiteSpace(password) || password.Length is < 6 or > 128)
+            throw new IdentityException(400, "Password must contain 6 to 128 characters.");
     }
     private async Task<Semester> FindSemester(string code, CancellationToken ct)
     {
@@ -264,11 +325,37 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     }
     private async Task<LoginResponse> IssueLoginAsync(User user, CancellationToken ct)
     {
+        await EnsureStudentEnrolled(user, ct);
         var token = tokens.Issue(user);
         var student = await store.StudentByUser(user.Id, ct);
         return new(token.Token, null, token.Expiration, student is null ? null : Map(student));
     }
+    private async Task EnsureStudentEnrolled(User user, CancellationToken ct)
+    {
+        if (user.Role.Name.Equals("Student", StringComparison.OrdinalIgnoreCase) && await store.StudentByUser(user.Id, ct) is null)
+            throw new IdentityException(403, "Student account is not enrolled in any semester.");
+    }
+    private static string? GooglePicture(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            return null;
+        var host = uri.Host.ToLowerInvariant();
+        if (host.EndsWith("googleusercontent.com") || host.EndsWith("ggpht.com") || host.EndsWith("google.com") || host.EndsWith("gstatic.com"))
+            return uri.AbsoluteUri;
+        return null;
+    }
     private static string Required(string value) => string.IsNullOrWhiteSpace(value) ? throw new IdentityException(400, "Required value cannot be blank.") : value.Trim();
-    public static StudentResponse Map(Student s) => new(s.Id, s.UserId, s.StudentCode, s.FullName, s.User.Email, s.Major, s.Semester.Code, s.HasGroup);
+    private static List<string> NormalizeStrengthRoles(IEnumerable<string>? roles)
+    {
+        var normalized = (roles ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList();
+        if (normalized.Count is < 1 or > 6 || normalized.Any(x => !TeamRoleCatalog.IsValid(x)))
+            throw new IdentityException(400, "Choose between 1 and 6 supported strength roles.");
+        var result = normalized.Select(TeamRoleCatalog.Normalize).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (result.Count != normalized.Count) throw new IdentityException(400, "Strength roles must not contain duplicates.");
+        return result;
+    }
+    public static StudentResponse Map(Student s) => new(s.Id, s.UserId, s.StudentCode, s.FullName, s.User.Email, s.Major, s.Semester.Code, s.HasGroup,
+        s.StrengthRoles.OrderBy(x => x.RoleCode).Select(x => x.RoleCode).ToList());
     public static SemesterDto Map(Semester s) => new(s.Id, s.Code, s.Name, s.StartDate, s.EndDate, s.IsActive, s.RegistrationDeadline, s.TopicDeadline, s.MentorDeadline);
 }
