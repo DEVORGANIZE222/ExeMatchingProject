@@ -1,0 +1,57 @@
+@startuml
+title <size:24>Deployment View: EXE Team Matching System - Render (render.yaml blueprint)</size>\n<size:24>Cloud blueprint in render.yaml (no Kafka/Redis defined)</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Deployment>
+
+Deployment_Node(Renderrenderyamlblueprint.Renderregionsingaporeplanfree, "Render — region singapore, plan free", $type="Render PaaS", $descr="render.yaml", $tags="", $link="") {
+  Deployment_Node(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeapigateway, "exe-api-gateway", $type="Docker (be/src/Gateway/nginx)", $descr="type: web", $tags="", $link="") {
+    Container(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeapigateway.APIGateway_1, "API Gateway", $techn="Nginx (nginx:alpine)", $descr="Single HTTP entry point. Path-based reverse proxy, CORS, rate limiting (30 r/s, burst 50), security headers, gzip, /health.", $tags="", $link="")
+  }
+
+  Deployment_Node(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeidentitysemester, "exe-identity-semester", $type="Docker", $descr="type: web; JwtSettings__Secret generated", $tags="", $link="") {
+    Container(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeidentitysemester.IdentitySemesterAPI_1, "IdentitySemester API", $techn="ASP.NET Core 8 Web API", $descr="Auth (login), student import/query, semester management. Login returns a hard-coded skeleton token; other endpoints throw NotImplementedException (HTTP 501).", $tags="", $link="")
+  }
+
+  Deployment_Node(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exegroupmatching, "exe-group-matching", $type="Docker", $descr="type: web", $tags="", $link="") {
+    Container(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exegroupmatching.GroupMatchingAPI_1, "GroupMatching API", $techn="ASP.NET Core 8 Web API", $descr="Groups, members, leader vote, lock, random matching. All endpoints throw NotImplementedException (HTTP 501).", $tags="", $link="")
+  }
+
+  Deployment_Node(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exementor, "exe-mentor", $type="Docker", $descr="type: web", $tags="", $link="") {
+    Container(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exementor.MentorAPI_1, "Mentor API", $techn="ASP.NET Core 8 Web API + gRPC", $descr="Mentor list/detail/quota and mentor requests/decisions over REST (stubs), plus a gRPC service returning hard-coded data.", $tags="", $link="")
+  }
+
+  Deployment_Node(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exenotificationworker, "exe-notification-worker", $type="Docker", $descr="type: worker", $tags="", $link="") {
+    Container(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exenotificationworker.NotificationWorker_1, "Notification Worker", $techn=".NET 8 Worker Service", $descr="Background worker intended to consume Kafka events and send email. Currently loops with Task.Delay(5000) (TODO).", $tags="", $link="")
+  }
+
+  Deployment_Node(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exepostgresdb, "exe-postgres-db", $type="Render PostgreSQL", $descr="Single managed DB exe_matching_db shared by all three APIs", $tags="", $link="") {
+    ContainerDb(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exepostgresdb.identity_db_1, "identity_db", $techn="PostgreSQL 16", $descr="Tables: Users, Roles, Students, Semesters.", $tags="", $link="")
+    ContainerDb(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exepostgresdb.group_matching_db_1, "group_matching_db", $techn="PostgreSQL 16", $descr="Tables: Groups, GroupMembers, GroupInvitations, LeaderVotes.", $tags="", $link="")
+    ContainerDb(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exepostgresdb.mentor_db_1, "mentor_db", $techn="PostgreSQL 16", $descr="Tables: Mentors, MentorQuotas, MentorRequests.", $tags="", $link="")
+  }
+
+}
+
+Rel(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeapigateway.APIGateway_1, Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeidentitysemester.IdentitySemesterAPI_1, "Proxies /api/auth, /api/students, /api/semesters", $techn="HTTP (proxy_pass :8080)", $tags="", $link="")
+Rel(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeapigateway.APIGateway_1, Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exegroupmatching.GroupMatchingAPI_1, "Proxies /api/groups, /api/matching", $techn="HTTP (proxy_pass :8080)", $tags="", $link="")
+Rel(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeapigateway.APIGateway_1, Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exementor.MentorAPI_1, "Proxies /api/mentors, /api/mentor-requests", $techn="HTTP (proxy_pass :8080)", $tags="", $link="")
+Rel(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exeidentitysemester.IdentitySemesterAPI_1, Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exepostgresdb.identity_db_1, "Creates schema + seed at startup (EnsureCreated)", $techn="EF Core / Npgsql, TCP 5432", $tags="", $link="")
+Rel(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exegroupmatching.GroupMatchingAPI_1, Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exepostgresdb.group_matching_db_1, "Creates schema + seed at startup (EnsureCreated)", $techn="EF Core / Npgsql, TCP 5432", $tags="", $link="")
+Rel(Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exementor.MentorAPI_1, Renderrenderyamlblueprint.Renderregionsingaporeplanfree.exepostgresdb.mentor_db_1, "Creates schema + seed at startup (EnsureCreated)", $techn="EF Core / Npgsql, TCP 5432", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

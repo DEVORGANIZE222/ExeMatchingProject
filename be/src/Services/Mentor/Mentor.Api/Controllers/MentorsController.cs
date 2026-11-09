@@ -1,117 +1,84 @@
-using System.Security.Claims;
 using EXETeamMatching.Mentor.Application.DTOs;
-using EXETeamMatching.Mentor.Domain.Entities;
-using EXETeamMatching.Mentor.Infrastructure.Persistence;
+using EXETeamMatching.Mentor.Application.Interfaces;
 using EXETeamMatching.SharedKernel.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace EXETeamMatching.Mentor.Api.Controllers;
 
 [ApiController]
 [Route("api/mentors")]
 [Authorize]
-public class MentorsController(MentorDbContext db) : ControllerBase
+public class MentorsController(IMentorService mentorService) : ControllerBase
 {
-    private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
+    public const string TotalCountHeader = "X-Total-Count";
+    public const string PageIndexHeader = "X-Page-Index";
+    public const string PageSizeHeader = "X-Page-Size";
+    public const string TotalPagesHeader = "X-Total-Pages";
 
+    /// <summary>
+    /// Searches mentors. The body keeps the existing list contract; paging metadata is
+    /// returned in the X-Total-Count / X-Page-Index / X-Page-Size / X-Total-Pages headers.
+    /// </summary>
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<List<MentorResponse>>>> GetMentors(CancellationToken ct)
+    public async Task<ActionResult<ApiResponse<List<MentorResponse>>>> GetMentors([FromQuery] MentorSearchQuery query, CancellationToken ct)
     {
-        var mentors = await db.Mentors.AsNoTracking().Include(x => x.Quota).OrderBy(x => x.FullName).ToListAsync(ct);
-        return Ok(ApiResponse<List<MentorResponse>>.Ok(mentors.Select(Map).ToList()));
+        var page = await mentorService.SearchMentorsAsync(query, ct);
+        Response.Headers[TotalCountHeader] = page.TotalCount.ToString();
+        Response.Headers[PageIndexHeader] = page.PageIndex.ToString();
+        Response.Headers[PageSizeHeader] = page.PageSize.ToString();
+        Response.Headers[TotalPagesHeader] = page.TotalPages.ToString();
+        return Ok(ApiResponse<List<MentorResponse>>.Ok(page.Items.ToList()));
     }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ApiResponse<MentorResponse>>> GetMentorById(Guid id, CancellationToken ct)
     {
-        var mentor = await db.Mentors.AsNoTracking().Include(x => x.Quota).SingleOrDefaultAsync(x => x.Id == id, ct)
+        var mentor = await mentorService.GetMentorByIdAsync(id, ct)
             ?? throw new KeyNotFoundException("Mentor not found.");
-        return Ok(ApiResponse<MentorResponse>.Ok(Map(mentor)));
+        return Ok(ApiResponse<MentorResponse>.Ok(mentor));
     }
 
     [HttpGet("{id:guid}/quota")]
     public async Task<ActionResult<ApiResponse<int>>> GetMentorQuota(Guid id, CancellationToken ct)
     {
-        var quota = await db.MentorQuotas.Where(x => x.MentorId == id).Select(x => (int?)x.MaxQuota).SingleOrDefaultAsync(ct)
+        var quota = await mentorService.GetMentorQuotaAsync(id, ct)
             ?? throw new KeyNotFoundException("Mentor quota not found.");
-        return Ok(ApiResponse<int>.Ok(quota));
+        return Ok(ApiResponse<int>.Ok(quota.MaxQuota));
     }
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<MentorResponse>>> CreateMentor(CreateMentorProfileRequest request, CancellationToken ct)
     {
-        if (await db.Mentors.AnyAsync(x => x.UserId == request.UserId || x.Email.ToLower() == request.Email.ToLower(), ct))
-            throw new ArgumentException("This account already has a mentor profile.");
-
-        var mentor = new MentorUser
-        {
-            UserId = request.UserId,
-            FullName = request.FullName.Trim(),
-            Email = request.Email.Trim().ToLowerInvariant(),
-            Department = request.Department.Trim(),
-            Expertise = request.Expertise.Trim(),
-            Phone = request.Phone.Trim()
-        };
-        mentor.Quota = new MentorQuota { MentorId = mentor.Id, MaxQuota = request.MaxQuota };
-        db.Mentors.Add(mentor);
-        await db.SaveChangesAsync(ct);
-        return CreatedAtAction(nameof(GetMentorById), new { id = mentor.Id }, ApiResponse<MentorResponse>.Ok(Map(mentor)));
+        var mentor = await mentorService.CreateMentorAsync(request, ct);
+        return CreatedAtAction(nameof(GetMentorById), new { id = mentor.Id }, ApiResponse<MentorResponse>.Ok(mentor));
     }
 
     [HttpPut("{id:guid}/quota")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<MentorResponse>>> UpdateQuota(Guid id, UpdateMentorQuotaRequest request, CancellationToken ct)
+        => Ok(ApiResponse<MentorResponse>.Ok(await mentorService.UpdateQuotaAsync(id, request.MaxQuota, ct)));
+
+    /// <summary>
+    /// Deletes a mentor profile with its quota, requests and workspace data.
+    /// Rejected with 400 while the mentor still has assigned groups.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteMentor(Guid id, CancellationToken ct)
     {
-        var mentor = await db.Mentors.Include(x => x.Quota).SingleOrDefaultAsync(x => x.Id == id, ct)
-            ?? throw new KeyNotFoundException("Mentor not found.");
-        var quota = mentor.Quota ??= new MentorQuota { MentorId = mentor.Id };
-        if (request.MaxQuota < quota.CurrentAssigned)
-            throw new ArgumentException("Quota cannot be lower than the number of assigned groups.");
-        quota.MaxQuota = request.MaxQuota;
-        quota.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
-        return Ok(ApiResponse<MentorResponse>.Ok(Map(mentor)));
+        await mentorService.DeleteMentorAsync(id, ct);
+        return NoContent();
     }
 
     [HttpGet("me")]
     [Authorize(Roles = "Mentor")]
     public async Task<ActionResult<ApiResponse<MentorResponse>>> GetMine(CancellationToken ct)
-    {
-        var mentor = await FindMine(ct);
-        return Ok(ApiResponse<MentorResponse>.Ok(Map(mentor)));
-    }
+        => Ok(ApiResponse<MentorResponse>.Ok(await mentorService.GetMyProfileAsync(this.ActorId(), ct)));
 
     [HttpPut("me")]
     [Authorize(Roles = "Mentor")]
     public async Task<ActionResult<ApiResponse<MentorResponse>>> UpdateMine(UpdateMentorProfileRequest request, CancellationToken ct)
-    {
-        var mentor = await FindMine(ct);
-        mentor.FullName = request.FullName.Trim();
-        mentor.Department = request.Department.Trim();
-        mentor.Expertise = request.Expertise.Trim();
-        mentor.Phone = request.Phone.Trim();
-        mentor.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
-        return Ok(ApiResponse<MentorResponse>.Ok(Map(mentor)));
-    }
-
-    private async Task<MentorUser> FindMine(CancellationToken ct)
-        => await db.Mentors.Include(x => x.Quota).SingleOrDefaultAsync(x => x.UserId == ActorId, ct)
-            ?? throw new KeyNotFoundException("Mentor profile not found. Ask an administrator to activate your mentor account.");
-
-    private static MentorResponse Map(MentorUser mentor) => new(
-        mentor.Id,
-        mentor.UserId,
-        mentor.FullName,
-        mentor.Email,
-        mentor.Department,
-        mentor.Expertise,
-        mentor.Phone,
-        mentor.Quota?.MaxQuota ?? 0,
-        mentor.Quota?.CurrentAssigned ?? 0);
+        => Ok(ApiResponse<MentorResponse>.Ok(await mentorService.UpdateMyProfileAsync(this.ActorId(), request, ct)));
 }
-
-public record UpdateMentorQuotaRequest([System.ComponentModel.DataAnnotations.Range(1, 50)] int MaxQuota);

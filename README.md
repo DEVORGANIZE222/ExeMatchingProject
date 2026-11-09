@@ -165,11 +165,20 @@ All HTTP API endpoints are accessible through the Nginx Gateway (`http://localho
 - `POST /api/matching/random` - Trigger random matching algorithm
 
 ### Mentor (`http://localhost/api/...`)
-- `GET /api/mentors` - List mentors
+- `GET /api/mentors?search=&department=&expertise=&pageIndex=1&pageSize=10` - Search mentors (name/email, department, expertise; case-insensitive). Body is the mentor list; paging metadata is returned in the `X-Total-Count`, `X-Page-Index`, `X-Page-Size` and `X-Total-Pages` headers. `pageSize` is 1-100.
 - `GET /api/mentors/{id}` - Get mentor details
-- `GET /api/mentors/{id}/quota` - Get mentor remaining quota
-- `POST /api/mentor-requests` - Request mentor for group
-- `POST /api/mentor-requests/decision` - Accept/reject mentor request
+- `GET /api/mentors/{id}/quota` - Get mentor quota
+- `POST /api/mentors` - Create mentor profile (Admin)
+- `PUT /api/mentors/{id}/quota` - Update mentor quota; cannot go below assigned groups (Admin)
+- `DELETE /api/mentors/{id}` - Delete mentor profile, quota, requests and workspace data; rejected while groups are assigned (Admin)
+- `GET|PUT /api/mentors/me` - Current mentor profile (Mentor)
+- `/api/mentors/me/groups`, `/appointments`, `/notifications` - Mentor workspace (Mentor)
+- `POST /api/mentor-requests` - Request mentor for group (group leader)
+- `GET /api/mentor-requests/groups/{groupId}/status` - Mentor request status for a group (group leader)
+- `POST /api/mentor-requests/decision` - Accept/reject mentor request (Mentor)
+- `GET /api/mentor-requests/mine` - Requests addressed to the current mentor (Mentor)
+
+The Mentor OpenAPI document is regenerated on every local build of `Mentor.Api` into `docs/api/mentor.openapi.json` (disable with `-p:ExportOpenApi=false`).
 
 ---
 
@@ -210,16 +219,18 @@ Run all unit & integration test projects across the solution:
 dotnet test be/EXETeamMatching.sln
 ```
 
-Service 1 tests use real PostgreSQL in isolated temporary databases. With Docker infrastructure running, use `./be/scripts/test-identity.ps1` to avoid host database port conflicts. Run `./be/scripts/smoke-identity.ps1` for Nginx/JWT/CRUD/Kafka verification against the local stack. Existing tests for other services are placeholders.
+Service 1 tests use real PostgreSQL in isolated temporary databases. With Docker infrastructure running, use `./be/scripts/test-identity.ps1` to avoid host database port conflicts. Run `./be/scripts/smoke-identity.ps1` for Nginx/JWT/CRUD/Kafka verification against the local stack. Mentor service tests (`be/src/Tests/Mentor.Tests`) are xUnit + Moq unit tests for `MentorService` and need no infrastructure: `dotnet test be/src/Tests/Mentor.Tests/`.
 
 ## 13. Team responsibilities
 
-| Assignment | Responsibility | Status |
-|---|---|---|
-| Service 1 - current contributor | Authentication/JWT/RBAC, student import and account information, semester milestones | Implemented; see Service 1 guide |
-| Service 2 owner | Groups, membership, vote leader, locking, random matching, topic workflow; Kafka outbox and Mentor gRPC client | Implemented for Service 2; Service 3 must provide real Mentor gRPC data for end-to-end mentor recommendations |
-| Service 3 owner | Mentor profiles, quotas, mentor decisions, real REST-to-gRPC interaction | Team implementation pending |
-| Service 4 owner | Kafka event consumer, notification/email worker | Team implementation pending |
-| Infrastructure/integration owner | Shared gateway deployment, integration and complete end-to-end demonstration | Compose available; see `docs/DEMO_SCRIPT.md` for verified Service 1/2 flow and remaining Service 3/4 dependency |
+| Assignment | Responsibility | Scope delivered | Reference |
+|---|---|---|---|
+| Service 1 owner | IdentitySemester | Authentication/JWT/RBAC, student import and account information, semester milestones, Kafka outbox | [IdentitySemester guide](docs/identity-semester.md), `be/database-scripts/01_identity_db_schema.sql` |
+| Service 2 owner | GroupMatching | Groups, membership, leader vote, locking, random matching, topic workflow, Kafka outbox, Mentor gRPC client for recommendations | [GroupMatching guide](docs/group-matching.md), `be/database-scripts/02_group_matching_db_schema.sql` |
+| Service 3 owner | Mentor | Mentor profiles with search/paging and admin delete, quotas, mentor requests and decisions, mentor workspace (assigned groups, progress, appointments, notifications), REST and gRPC endpoints over a Clean Architecture service/repository layer | `be/database-scripts/03_mentor_db_schema.sql`, `docs/api/mentor.openapi.json` |
+| Service 4 owner | Notification | `Notification.Worker` consumes Kafka topics (group, topic and mentor events) and sends email notifications | `be/src/Services/Notification` |
+| Infrastructure/integration owner | Gateway & delivery | Nginx gateway, Docker Compose stack, OpenAPI exports and end-to-end demonstration | [Demo script](docs/DEMO_SCRIPT.md), `be/scripts/export-openapi.ps1` |
+
+Mentor layering: `Mentor.Api` controllers and `Mentor.Grpc` depend only on `IMentorService` (`Mentor.Application/Services/MentorService.cs`); all EF Core access goes through `IMentorRepository` (`Mentor.Infrastructure/Repositories/MentorRepository.cs`).
 
 The supplied team document does not name individual members. Replace responsibility labels with actual team member names before submission; do not invent names.

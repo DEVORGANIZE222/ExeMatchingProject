@@ -1,0 +1,30 @@
+@startuml
+title <size:24>Dynamic View: EXE Team Matching System</size>\n<size:24>Login flow as implemented (skeleton response, no credential check)</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+System_Boundary("EXETeamMatchingSystem_boundary", "EXE Team Matching System", $tags="") {
+  Container(EXETeamMatchingSystem.APIGateway, "API Gateway", $techn="Nginx (nginx:alpine)", $descr="Single HTTP entry point. Path-based reverse proxy, CORS, rate limiting (30 r/s, burst 50), security headers, gzip, /health.", $tags="", $link="")
+  Container(EXETeamMatchingSystem.IdentitySemesterAPI, "IdentitySemester API", $techn="ASP.NET Core 8 Web API", $descr="Auth (login), student import/query, semester management. Login returns a hard-coded skeleton token; other endpoints throw NotImplementedException (HTTP 501).", $tags="", $link="")
+}
+
+Person(Student, "Student", $descr="Capstone/EXE student. Seeded role 'Student'. Forms/joins groups, votes for a leader, requests a mentor (all endpoints are Phase 2 stubs).", $tags="", $link="")
+
+Rel(Student, EXETeamMatchingSystem.APIGateway, "1: POST /api/auth/login {email, password}", $techn="HTTP/JSON", $tags="", $link="")
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.IdentitySemesterAPI, "2: proxy_pass to identity-semester:8080", $techn="HTTP (proxy_pass :8080)", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

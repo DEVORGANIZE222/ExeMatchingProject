@@ -1,0 +1,30 @@
+@startuml
+title <size:24>System Context View: EXE Team Matching System</size>\n<size:24>C4 Level 1 — System Context</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+Person(Student, "Student", $descr="Capstone/EXE student. Seeded role 'Student'. Forms/joins groups, votes for a leader, requests a mentor (all endpoints are Phase 2 stubs).", $tags="", $link="")
+Person(Admin, "Admin", $descr="Seeded role 'System Administrator'. Role-to-endpoint mapping is NOT enforced (no authorization configured).", $tags="", $link="")
+Person(Mentor, "Mentor", $descr="Lecturer modelled as MentorUser with a quota. Accepts/rejects mentor requests (stub). No 'Mentor' role seeded.", $tags="", $link="")
+System(SMTPEmailServer, "SMTP Email Server", $descr="Configured via EmailSettings (default smtp.gmail.com:587). EmailService only logs; no SMTP client is used.", $tags="", $link="")
+System(EXETeamMatchingSystem, "EXE Team Matching System", $descr="Coordinates student import, semesters, team formation, leader voting, random matching and mentor requests for Capstone/EXE courses.", $tags="", $link="")
+
+Rel(Student, EXETeamMatchingSystem, "Opens (template page only)", $techn="HTTPS / browser", $tags="", $link="")
+Rel(Admin, EXETeamMatchingSystem, "Calls REST API (student import, semesters, random matching)", $techn="HTTP/JSON", $tags="", $link="")
+Rel(Mentor, EXETeamMatchingSystem, "Calls REST API (mentor requests & decisions)", $techn="HTTP/JSON", $tags="", $link="")
+Rel(EXETeamMatchingSystem, SMTPEmailServer, "Intended to send notification emails (EmailService logs only)", $techn="SMTP :587 (configured)", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

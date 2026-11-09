@@ -14,4 +14,31 @@
     <ProjectReference Include="..\Mentor.Infrastructure\Mentor.Infrastructure.csproj" />
     <ProjectReference Include="..\Mentor.Grpc\Mentor.Grpc.csproj" />
   </ItemGroup>
+
+  <!--
+    OpenAPI export: after every local build, writes the Swagger v1 document to
+    docs/api/mentor.openapi.json using Swashbuckle.AspNetCore.Cli (be/.config/dotnet-tools.json).
+    Skipped inside containers (Docker image builds) and design-time builds.
+    Disable explicitly with: dotnet build -p:ExportOpenApi=false
+  -->
+  <PropertyGroup>
+    <ExportOpenApi Condition="'$(ExportOpenApi)' == '' and '$(DOTNET_RUNNING_IN_CONTAINER)' != 'true'">true</ExportOpenApi>
+    <OpenApiOutputFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../docs/api/mentor.openapi.json'))</OpenApiOutputFile>
+  </PropertyGroup>
+
+  <Target Name="ExportMentorOpenApi" AfterTargets="Build" Condition="'$(ExportOpenApi)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(OpenApiOutputFile)'))" />
+    <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildProjectDirectory)" StandardOutputImportance="low" />
+    <!--
+      The CLI boots the app's service container without starting the server. OpenApi__ExportOnly skips
+      the startup database bootstrap; Program.cs requires a 32-byte JWT secret, so a throwaway value
+      is supplied for document generation only.
+      DOTNET_ROLL_FORWARD lets the net8.0 app run on machines that only have a newer runtime.
+    -->
+    <Exec Command="dotnet swagger tofile --output &quot;$(OpenApiOutputFile)&quot; &quot;$(TargetPath)&quot; v1"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          EnvironmentVariables="OpenApi__ExportOnly=true;JwtSettings__Secret=openapi-export-only-not-a-real-secret-0123456789;DOTNET_ROLL_FORWARD=Major;ASPNETCORE_ENVIRONMENT=Development"
+          StandardOutputImportance="low" />
+    <Message Importance="high" Text="Mentor.Api -> OpenAPI exported to $(OpenApiOutputFile)" />
+  </Target>
 </Project>

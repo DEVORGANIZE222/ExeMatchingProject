@@ -1,0 +1,23 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["System Context View: EXE Team Matching System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>Student</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Capstone/EXE student. Seeded<br />role 'Student'. Forms/joins<br />groups, votes for a leader,<br />requests a mentor (all<br />endpoints are Phase 2 stubs).</div>"]
+    style 1 fill:#08427b,stroke:#052e56,color:#ffffff
+    2["<div style='font-weight: bold'>Admin</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Seeded role 'System<br />Administrator'.<br />Role-to-endpoint mapping is<br />NOT enforced (no<br />authorization configured).</div>"]
+    style 2 fill:#08427b,stroke:#052e56,color:#ffffff
+    3["<div style='font-weight: bold'>Mentor</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Lecturer modelled as<br />MentorUser with a quota.<br />Accepts/rejects mentor<br />requests (stub). No 'Mentor'<br />role seeded.</div>"]
+    style 3 fill:#08427b,stroke:#052e56,color:#ffffff
+    4["<div style='font-weight: bold'>SMTP Email Server</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Configured via EmailSettings<br />(default smtp.gmail.com:587).<br />EmailService only logs; no<br />SMTP client is used.</div>"]
+    style 4 fill:#999999,stroke:#6b6b6b,color:#ffffff
+    5["<div style='font-weight: bold'>EXE Team Matching System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Coordinates student import,<br />semesters, team formation,<br />leader voting, random<br />matching and mentor requests<br />for Capstone/EXE courses.</div>"]
+    style 5 fill:#1168bd,stroke:#0b4884,color:#ffffff
+
+    1-. "<div>Opens (template page only)</div><div style='font-size: 70%'>[HTTPS / browser]</div>" .->5
+    2-. "<div>Calls REST API (student<br />import, semesters, random<br />matching)</div><div style='font-size: 70%'>[HTTP/JSON]</div>" .->5
+    3-. "<div>Calls REST API (mentor<br />requests & decisions)</div><div style='font-size: 70%'>[HTTP/JSON]</div>" .->5
+    5-. "<div>Intended to send notification<br />emails (EmailService logs<br />only)</div><div style='font-size: 70%'>[SMTP :587 (configured)]</div>" .->4
+
+  end
