@@ -2,8 +2,12 @@ using System.Text;
 using EXETeamMatching.Messaging.Abstractions;
 using EXETeamMatching.Messaging.Implementations;
 using EXETeamMatching.Messaging.Settings;
+using EXETeamMatching.Mentor.Application.Interfaces;
+using EXETeamMatching.Mentor.Application.Services;
 using EXETeamMatching.Mentor.Grpc.Services;
+using EXETeamMatching.Mentor.Api.Controllers;
 using EXETeamMatching.Mentor.Infrastructure.Persistence;
+using EXETeamMatching.Mentor.Infrastructure.Repositories;
 using EXETeamMatching.SharedKernel.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -33,7 +37,12 @@ builder.Services.AddCors(options =>
     {
         policy.AllowAnyOrigin()
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .WithExposedHeaders(
+                  MentorsController.TotalCountHeader,
+                  MentorsController.PageIndexHeader,
+                  MentorsController.PageSizeHeader,
+                  MentorsController.TotalPagesHeader);
     });
 });
 
@@ -72,71 +81,82 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<MentorDbContext>(options =>
     options.UseNpgsql(connectionString));
-builder.Services.AddHttpClient("groups", client =>
+builder.Services.AddHttpClient(MentorService.GroupsClientName, client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["GroupMatching:BaseUrl"] ?? "http://localhost:5002/");
 });
-builder.Services.AddHttpClient("identity", client =>
+builder.Services.AddHttpClient(MentorService.IdentityClientName, client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["IdentitySemester:BaseUrl"] ?? "http://localhost:5001/");
 });
 
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
+builder.Services.AddScoped<IMentorRepository, MentorRepository>();
+builder.Services.AddScoped<MentorService>();
+builder.Services.AddScoped<IMentorService>(sp => sp.GetRequiredService<MentorService>());
+builder.Services.AddScoped<IMentorQuotaService>(sp => sp.GetRequiredService<MentorService>());
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// Set only by the build-time OpenAPI export (Mentor.Api.csproj): the Swashbuckle CLI loads this
+// host to read the Swagger document and must not touch the database.
+var openApiExportOnly = app.Configuration.GetValue<bool>("OpenApi:ExportOnly");
+
+if (!openApiExportOnly)
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<MentorDbContext>();
-    await dbContext.Database.EnsureCreatedAsync();
-    if (dbContext.Database.IsNpgsql())
+    using (var scope = app.Services.CreateScope())
     {
-        await dbContext.Database.ExecuteSqlRawAsync("""
-            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterUserId" uuid NULL;
-            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterName" character varying(200) NOT NULL DEFAULT '';
-            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "GroupName" character varying(200) NOT NULL DEFAULT '';
-            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "Topic" character varying(1000) NOT NULL DEFAULT '';
-            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "DecisionReason" character varying(2000) NULL;
-            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "DecidedAt" timestamp with time zone NULL;
-            ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "UpdatedAt" timestamp with time zone NULL;
-            ALTER TABLE "Mentors" ADD COLUMN IF NOT EXISTS "Phone" character varying(40) NOT NULL DEFAULT '';
-            CREATE UNIQUE INDEX IF NOT EXISTS "IX_MentorRequests_GroupId"
-                ON "MentorRequests" ("GroupId") WHERE "Status" = 0;
-            CREATE TABLE IF NOT EXISTS "MentorGroupProgress" (
-                "Id" uuid PRIMARY KEY,
-                "MentorId" uuid NOT NULL,
-                "GroupId" uuid NOT NULL,
-                "GroupName" character varying(200) NOT NULL,
-                "Topic" character varying(1000) NOT NULL,
-                "Milestone" character varying(200) NOT NULL,
-                "Progress" integer NOT NULL,
-                "Feedback" character varying(2000) NOT NULL,
-                "CreatedAt" timestamp with time zone NOT NULL,
-                "UpdatedAt" timestamp with time zone NULL
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS "IX_MentorGroupProgress_MentorId_GroupId"
-                ON "MentorGroupProgress" ("MentorId", "GroupId");
-            CREATE TABLE IF NOT EXISTS "MentorAppointments" (
-                "Id" uuid PRIMARY KEY,
-                "MentorId" uuid NOT NULL,
-                "GroupId" uuid NULL,
-                "Title" character varying(200) NOT NULL,
-                "StartsAt" timestamp with time zone NOT NULL,
-                "Notes" character varying(2000) NOT NULL,
-                "CreatedAt" timestamp with time zone NOT NULL,
-                "UpdatedAt" timestamp with time zone NULL
-            );
-            CREATE TABLE IF NOT EXISTS "MentorNotifications" (
-                "Id" uuid PRIMARY KEY,
-                "MentorId" uuid NOT NULL,
-                "Type" character varying(40) NOT NULL,
-                "Title" character varying(200) NOT NULL,
-                "Message" character varying(1000) NOT NULL,
-                "IsRead" boolean NOT NULL,
-                "CreatedAt" timestamp with time zone NOT NULL,
-                "UpdatedAt" timestamp with time zone NULL
-            );
-            """);
+        var dbContext = scope.ServiceProvider.GetRequiredService<MentorDbContext>();
+        await dbContext.Database.EnsureCreatedAsync();
+        if (dbContext.Database.IsNpgsql())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterUserId" uuid NULL;
+                ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterName" character varying(200) NOT NULL DEFAULT '';
+                ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "GroupName" character varying(200) NOT NULL DEFAULT '';
+                ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "Topic" character varying(1000) NOT NULL DEFAULT '';
+                ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "DecisionReason" character varying(2000) NULL;
+                ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "DecidedAt" timestamp with time zone NULL;
+                ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "UpdatedAt" timestamp with time zone NULL;
+                ALTER TABLE "Mentors" ADD COLUMN IF NOT EXISTS "Phone" character varying(40) NOT NULL DEFAULT '';
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_MentorRequests_GroupId"
+                    ON "MentorRequests" ("GroupId") WHERE "Status" = 0;
+                CREATE TABLE IF NOT EXISTS "MentorGroupProgress" (
+                    "Id" uuid PRIMARY KEY,
+                    "MentorId" uuid NOT NULL,
+                    "GroupId" uuid NOT NULL,
+                    "GroupName" character varying(200) NOT NULL,
+                    "Topic" character varying(1000) NOT NULL,
+                    "Milestone" character varying(200) NOT NULL,
+                    "Progress" integer NOT NULL,
+                    "Feedback" character varying(2000) NOT NULL,
+                    "CreatedAt" timestamp with time zone NOT NULL,
+                    "UpdatedAt" timestamp with time zone NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_MentorGroupProgress_MentorId_GroupId"
+                    ON "MentorGroupProgress" ("MentorId", "GroupId");
+                CREATE TABLE IF NOT EXISTS "MentorAppointments" (
+                    "Id" uuid PRIMARY KEY,
+                    "MentorId" uuid NOT NULL,
+                    "GroupId" uuid NULL,
+                    "Title" character varying(200) NOT NULL,
+                    "StartsAt" timestamp with time zone NOT NULL,
+                    "Notes" character varying(2000) NOT NULL,
+                    "CreatedAt" timestamp with time zone NOT NULL,
+                    "UpdatedAt" timestamp with time zone NULL
+                );
+                CREATE TABLE IF NOT EXISTS "MentorNotifications" (
+                    "Id" uuid PRIMARY KEY,
+                    "MentorId" uuid NOT NULL,
+                    "Type" character varying(40) NOT NULL,
+                    "Title" character varying(200) NOT NULL,
+                    "Message" character varying(1000) NOT NULL,
+                    "IsRead" boolean NOT NULL,
+                    "CreatedAt" timestamp with time zone NOT NULL,
+                    "UpdatedAt" timestamp with time zone NULL
+                );
+                """);
+        }
     }
 }
 
@@ -157,3 +177,6 @@ app.MapControllers();
 app.MapGrpcService<MentorGrpcServiceImpl>();
 
 app.Run();
+
+// Exposes the entry point to WebApplicationFactory-based integration tests.
+public partial class Program { }

@@ -1,40 +1,32 @@
 using Grpc.Core;
-using EXETeamMatching.Mentor.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
+using EXETeamMatching.Mentor.Application.DTOs;
+using EXETeamMatching.Mentor.Application.Interfaces;
 
 namespace EXETeamMatching.Mentor.Grpc.Services;
 
-public class MentorGrpcServiceImpl(MentorDbContext db) : MentorGrpcService.MentorGrpcServiceBase
+public class MentorGrpcServiceImpl(IMentorService mentorService) : MentorGrpcService.MentorGrpcServiceBase
 {
     public override async Task<MentorResponse> GetMentor(GetMentorRequest request, ServerCallContext context)
     {
         if (!Guid.TryParse(request.Id, out var mentorId))
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Mentor id must be a GUID."));
 
-        var mentor = await db.Mentors.AsNoTracking().Include(item => item.Quota)
-            .SingleOrDefaultAsync(item => item.Id == mentorId, context.CancellationToken);
+        var mentor = await mentorService.GetMentorByIdAsync(mentorId, context.CancellationToken);
         return mentor is null
             ? throw new RpcException(new Status(StatusCode.NotFound, "Mentor not found."))
-            : Map(mentor.Id, mentor.UserId, mentor.FullName, mentor.Email, mentor.Department,
-                mentor.Quota?.MaxQuota ?? 0, mentor.Quota?.CurrentAssigned ?? 0);
+            : Map(mentor);
     }
 
     public override async Task<GetMentorsResponse> GetMentors(GetMentorsRequest request, ServerCallContext context)
     {
-        if (request.PageNumber < 1 || request.PageSize is < 1 or > 100)
+        if (request.PageNumber < 1 || request.PageSize is < 1 or > MentorSearchQuery.MaxPageSize)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Page number or size is invalid."));
 
-        var mentors = db.Mentors.AsNoTracking().Include(item => item.Quota);
-        var response = new GetMentorsResponse
-        {
-            TotalCount = await mentors.CountAsync(context.CancellationToken)
-        };
-        var page = await mentors.OrderBy(item => item.FullName)
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .ToListAsync(context.CancellationToken);
-        response.Mentors.AddRange(page.Select(item => Map(item.Id, item.UserId, item.FullName, item.Email,
-            item.Department, item.Quota?.MaxQuota ?? 0, item.Quota?.CurrentAssigned ?? 0)));
+        var page = await mentorService.SearchMentorsAsync(
+            new MentorSearchQuery { PageIndex = request.PageNumber, PageSize = request.PageSize },
+            context.CancellationToken);
+        var response = new GetMentorsResponse { TotalCount = page.TotalCount };
+        response.Mentors.AddRange(page.Items.Select(Map));
         return response;
     }
 
@@ -43,10 +35,8 @@ public class MentorGrpcServiceImpl(MentorDbContext db) : MentorGrpcService.Mento
         if (!Guid.TryParse(request.MentorId, out var mentorId))
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Mentor id must be a GUID."));
 
-        var quota = await db.MentorQuotas.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.MentorId == mentorId, context.CancellationToken);
-        if (quota is null)
-            throw new RpcException(new Status(StatusCode.NotFound, "Mentor quota not found."));
+        var quota = await mentorService.GetMentorQuotaAsync(mentorId, context.CancellationToken)
+            ?? throw new RpcException(new Status(StatusCode.NotFound, "Mentor quota not found."));
 
         return new MentorQuotaResponse
         {
@@ -57,15 +47,14 @@ public class MentorGrpcServiceImpl(MentorDbContext db) : MentorGrpcService.Mento
         };
     }
 
-    private static MentorResponse Map(Guid id, Guid userId, string fullName, string email, string department,
-        int maxQuota, int currentAssigned) => new()
+    private static MentorResponse Map(Application.DTOs.MentorResponse mentor) => new()
     {
-        Id = id.ToString(),
-        UserId = userId.ToString(),
-        FullName = fullName,
-        Email = email,
-        Department = department,
-        MaxQuota = maxQuota,
-        CurrentAssigned = currentAssigned
+        Id = mentor.Id.ToString(),
+        UserId = mentor.UserId.ToString(),
+        FullName = mentor.FullName,
+        Email = mentor.Email,
+        Department = mentor.Department,
+        MaxQuota = mentor.MaxQuota,
+        CurrentAssigned = mentor.CurrentAssigned
     };
 }

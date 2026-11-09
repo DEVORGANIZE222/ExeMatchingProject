@@ -1,0 +1,48 @@
+@startuml
+title <size:24>Component View: EXE Team Matching System - GroupMatching API</size>\n<size:24>C4 Level 3 — GroupMatching API</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+System_Boundary("EXETeamMatchingSystem_boundary", "EXE Team Matching System", $tags="") {
+  Container_Boundary("EXETeamMatchingSystem.GroupMatchingAPI_boundary", "GroupMatching API", $tags="") {
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.GroupsController, "GroupsController", $techn="ASP.NET Core MVC controller", $descr="GET/POST /api/groups, GET /api/groups/{id}, POST/DELETE members, POST /api/groups/{id}/lock. All stubs.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.LeaderVoteController, "LeaderVoteController", $techn="ASP.NET Core MVC controller", $descr="POST /api/groups/{id}/vote-leader. Stub.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.MatchingController, "MatchingController", $techn="ASP.NET Core MVC controller", $descr="POST /api/matching/random?semesterCode=. Stub.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.GlobalExceptionHandlerGroup, "GlobalExceptionHandler (Group)", $techn="SharedKernel middleware", $descr="Shared exception-to-JSON middleware.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.ProgramGroupcompositionroot, "Program (Group composition root)", $techn="ASP.NET Core minimal hosting", $descr="Registers DI, Swagger, CORS; calls EnsureCreated() at startup.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.GroupMatchingDbContext, "GroupMatchingDbContext", $techn="EF Core 8 + Npgsql", $descr="EF Core model for Groups, GroupMembers, GroupInvitations, LeaderVotes with seed data.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.KafkaEventPublisherGroup, "KafkaEventPublisher (Group)", $techn="BuildingBlocks.Messaging", $descr="Registered IEventPublisher; logs only; never called.", $tags="", $link="")
+  }
+
+  ContainerDb(EXETeamMatchingSystem.group_matching_db, "group_matching_db", $techn="PostgreSQL 16", $descr="Tables: Groups, GroupMembers, GroupInvitations, LeaderVotes.", $tags="", $link="")
+  ContainerQueue(EXETeamMatchingSystem.KafkaBroker, "Kafka Broker", $techn="Apache Kafka (cp-kafka 7.5.0)", $descr="Event broker provisioned in docker-compose (with Zookeeper). No code actually produces or consumes messages.", $tags="", $link="")
+  Container(EXETeamMatchingSystem.APIGateway, "API Gateway", $techn="Nginx (nginx:alpine)", $descr="Single HTTP entry point. Path-based reverse proxy, CORS, rate limiting (30 r/s, burst 50), security headers, gzip, /health.", $tags="", $link="")
+}
+
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.GroupMatchingAPI.GroupsController, "Routes /api/groups*", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.GroupMatchingAPI.LeaderVoteController, "Routes /api/groups/{id}/vote-leader", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.GroupMatchingAPI.MatchingController, "Routes /api/matching/random", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI.GlobalExceptionHandlerGroup, EXETeamMatchingSystem.GroupMatchingAPI.GroupsController, "Wraps pipeline; maps NotImplementedException to 501", $techn="ASP.NET Core middleware", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI.GlobalExceptionHandlerGroup, EXETeamMatchingSystem.GroupMatchingAPI.LeaderVoteController, "Wraps pipeline; maps NotImplementedException to 501", $techn="ASP.NET Core middleware", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI.GlobalExceptionHandlerGroup, EXETeamMatchingSystem.GroupMatchingAPI.MatchingController, "Wraps pipeline; maps NotImplementedException to 501", $techn="ASP.NET Core middleware", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI.ProgramGroupcompositionroot, EXETeamMatchingSystem.GroupMatchingAPI.GroupMatchingDbContext, "Calls Database.EnsureCreated()", $techn="EF Core", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI.ProgramGroupcompositionroot, EXETeamMatchingSystem.GroupMatchingAPI.KafkaEventPublisherGroup, "Registers (singleton) — not consumed", $techn="DI", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI.GroupMatchingDbContext, EXETeamMatchingSystem.group_matching_db, "Creates tables and seed rows", $techn="Npgsql", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI.KafkaEventPublisherGroup, EXETeamMatchingSystem.KafkaBroker, "Would publish events (logs only)", $techn="Kafka (stub)", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

@@ -1,0 +1,51 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Component View: EXE Team Matching System - IdentitySemester API"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 5 ["EXE Team Matching System"]
+      style 5 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      subgraph 8 ["IdentitySemester API"]
+        style 8 fill:#ffffff,stroke:#2e6295,color:#2e6295
+
+        10["<div style='font-weight: bold'>StudentsController</div><div style='font-size: 70%; margin-top: 0px'>[Component: ASP.NET Core MVC controller]</div><div style='font-size: 80%; margin-top:10px'>GET /api/students, GET<br />/api/students/{id}, POST<br />/api/students/import. All<br />throw<br />NotImplementedException.</div>"]
+        style 10 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        11["<div style='font-weight: bold'>SemesterController</div><div style='font-size: 70%; margin-top: 0px'>[Component: ASP.NET Core MVC controller]</div><div style='font-size: 80%; margin-top:10px'>GET/POST /api/semesters. Both<br />throw<br />NotImplementedException.</div>"]
+        style 11 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        12["<div style='font-weight: bold'>GlobalExceptionHandler</div><div style='font-size: 70%; margin-top: 0px'>[Component: SharedKernel middleware]</div><div style='font-size: 80%; margin-top:10px'>Middleware mapping exceptions<br />to JSON ErrorResponse<br />(NotImplemented→501,<br />Argument→400,<br />KeyNotFound→404,<br />UnauthorizedAccess→401).</div>"]
+        style 12 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        13["<div style='font-weight: bold'>JwtService</div><div style='font-size: 70%; margin-top: 0px'>[Component: C# class]</div><div style='font-size: 80%; margin-top:10px'>IJwtService. Returns<br />'placeholder_jwt_token_{userId}'.<br />Registered in DI but not<br />injected anywhere.</div>"]
+        style 13 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        14["<div style='font-weight: bold'>Program (composition root)</div><div style='font-size: 70%; margin-top: 0px'>[Component: ASP.NET Core minimal hosting]</div><div style='font-size: 80%; margin-top:10px'>Registers DI, Swagger, CORS<br />AllowAll; calls<br />Database.EnsureCreated() at<br />startup.</div>"]
+        style 14 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        15["<div style='font-weight: bold'>IdentitySemesterDbContext</div><div style='font-size: 70%; margin-top: 0px'>[Component: EF Core 8 + Npgsql]</div><div style='font-size: 80%; margin-top:10px'>EF Core model for Users,<br />Roles, Students, Semesters<br />with HasData seed.</div>"]
+        style 15 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        16["<div style='font-weight: bold'>KafkaEventPublisher</div><div style='font-size: 70%; margin-top: 0px'>[Component: BuildingBlocks.Messaging]</div><div style='font-size: 80%; margin-top:10px'>IEventPublisher singleton.<br />PublishAsync only logs; no<br />producer. Never called.</div>"]
+        style 16 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        9["<div style='font-weight: bold'>AuthController</div><div style='font-size: 70%; margin-top: 0px'>[Component: ASP.NET Core MVC controller]</div><div style='font-size: 80%; margin-top:10px'>POST /api/auth/login<br />[AllowAnonymous]. Returns<br />hard-coded 'sample_jwt_token'<br />without checking credentials.</div>"]
+        style 9 fill:#85bbf0,stroke:#5d82a8,color:#000000
+      end
+
+      38[("<div style='font-weight: bold'>identity_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Users, Roles,<br />Students, Semesters.</div>")]
+      style 38 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      41["<div style='font-weight: bold'>Kafka Broker</div><div style='font-size: 70%; margin-top: 0px'>[Container: Apache Kafka (cp-kafka 7.5.0)]</div><div style='font-size: 80%; margin-top:10px'>Event broker provisioned in<br />docker-compose (with<br />Zookeeper). No code actually<br />produces or consumes<br />messages.</div>"]
+      style 41 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      7["<div style='font-weight: bold'>API Gateway</div><div style='font-size: 70%; margin-top: 0px'>[Container: Nginx (nginx:alpine)]</div><div style='font-size: 80%; margin-top:10px'>Single HTTP entry point.<br />Path-based reverse proxy,<br />CORS, rate limiting (30 r/s,<br />burst 50), security headers,<br />gzip, /health.</div>"]
+      style 7 fill:#438dd5,stroke:#2e6295,color:#ffffff
+    end
+
+    7-. "<div>Routes POST /api/auth/login</div><div style='font-size: 70%'>[HTTP]</div>" .->9
+    7-. "<div>Routes /api/students*</div><div style='font-size: 70%'>[HTTP]</div>" .->10
+    7-. "<div>Routes /api/semesters</div><div style='font-size: 70%'>[HTTP]</div>" .->11
+    12-. "<div>Wraps request pipeline</div><div style='font-size: 70%'>[ASP.NET Core middleware]</div>" .->9
+    12-. "<div>Wraps pipeline; maps<br />NotImplementedException to<br />501</div><div style='font-size: 70%'>[ASP.NET Core middleware]</div>" .->10
+    12-. "<div>Wraps pipeline; maps<br />NotImplementedException to<br />501</div><div style='font-size: 70%'>[ASP.NET Core middleware]</div>" .->11
+    14-. "<div>Calls<br />Database.EnsureCreated()</div><div style='font-size: 70%'>[EF Core]</div>" .->15
+    14-. "<div>Registers (scoped) — not<br />consumed</div><div style='font-size: 70%'>[DI]</div>" .->13
+    14-. "<div>Registers (singleton) — not<br />consumed</div><div style='font-size: 70%'>[DI]</div>" .->16
+    15-. "<div>Creates tables and seed rows</div><div style='font-size: 70%'>[Npgsql]</div>" .->38
+    16-. "<div>Would publish events (logs<br />only)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->41
+
+  end

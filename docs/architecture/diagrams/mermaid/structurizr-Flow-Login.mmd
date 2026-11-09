@@ -1,0 +1,22 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Dynamic View: EXE Team Matching System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 5 ["EXE Team Matching System"]
+      style 5 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      7["<div style='font-weight: bold'>API Gateway</div><div style='font-size: 70%; margin-top: 0px'>[Container: Nginx (nginx:alpine)]</div><div style='font-size: 80%; margin-top:10px'>Single HTTP entry point.<br />Path-based reverse proxy,<br />CORS, rate limiting (30 r/s,<br />burst 50), security headers,<br />gzip, /health.</div>"]
+      style 7 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      8["<div style='font-weight: bold'>IdentitySemester API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API]</div><div style='font-size: 80%; margin-top:10px'>Auth (login), student<br />import/query, semester<br />management. Login returns a<br />hard-coded skeleton token;<br />other endpoints throw<br />NotImplementedException (HTTP<br />501).</div>"]
+      style 8 fill:#438dd5,stroke:#2e6295,color:#ffffff
+    end
+
+    1["<div style='font-weight: bold'>Student</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Capstone/EXE student. Seeded<br />role 'Student'. Forms/joins<br />groups, votes for a leader,<br />requests a mentor (all<br />endpoints are Phase 2 stubs).</div>"]
+    style 1 fill:#08427b,stroke:#052e56,color:#ffffff
+
+    1-. "<div>1. POST /api/auth/login<br />{email, password}</div><div style='font-size: 70%'>[HTTP/JSON]</div>" .->7
+    7-. "<div>2. proxy_pass to<br />identity-semester:8080</div><div style='font-size: 70%'>[HTTP (proxy_pass :8080)]</div>" .->8
+
+  end

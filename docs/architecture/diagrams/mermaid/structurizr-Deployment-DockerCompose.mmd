@@ -1,0 +1,90 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: EXE Team Matching System - Docker Compose (local)"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 97 ["Docker host"]
+      style 97 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 100 ["exe-identity-semester"]
+        style 100 fill:#ffffff,stroke:#444444,color:#444444
+
+        101["<div style='font-weight: bold'>IdentitySemester API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API]</div><div style='font-size: 80%; margin-top:10px'>Auth (login), student<br />import/query, semester<br />management. Login returns a<br />hard-coded skeleton token;<br />other endpoints throw<br />NotImplementedException (HTTP<br />501).</div>"]
+        style 101 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      end
+
+      subgraph 103 ["exe-group-matching"]
+        style 103 fill:#ffffff,stroke:#444444,color:#444444
+
+        104["<div style='font-weight: bold'>GroupMatching API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API]</div><div style='font-size: 80%; margin-top:10px'>Groups, members, leader vote,<br />lock, random matching. All<br />endpoints throw<br />NotImplementedException (HTTP<br />501).</div>"]
+        style 104 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      end
+
+      subgraph 106 ["exe-mentor"]
+        style 106 fill:#ffffff,stroke:#444444,color:#444444
+
+        107["<div style='font-weight: bold'>Mentor API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API + gRPC]</div><div style='font-size: 80%; margin-top:10px'>Mentor list/detail/quota and<br />mentor requests/decisions<br />over REST (stubs), plus a<br />gRPC service returning<br />hard-coded data.</div>"]
+        style 107 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      end
+
+      subgraph 109 ["exe-notification-worker"]
+        style 109 fill:#ffffff,stroke:#444444,color:#444444
+
+        110["<div style='font-weight: bold'>Notification Worker</div><div style='font-size: 70%; margin-top: 0px'>[Container: .NET 8 Worker Service]</div><div style='font-size: 80%; margin-top:10px'>Background worker intended to<br />consume Kafka events and send<br />email. Currently loops with<br />Task.Delay(5000) (TODO).</div>"]
+        style 110 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      end
+
+      subgraph 111 ["exe-postgres"]
+        style 111 fill:#ffffff,stroke:#444444,color:#444444
+
+        112[("<div style='font-weight: bold'>identity_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Users, Roles,<br />Students, Semesters.</div>")]
+        style 112 fill:#438dd5,stroke:#2e6295,color:#ffffff
+        114[("<div style='font-weight: bold'>group_matching_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Groups, GroupMembers,<br />GroupInvitations,<br />LeaderVotes.</div>")]
+        style 114 fill:#438dd5,stroke:#2e6295,color:#ffffff
+        116[("<div style='font-weight: bold'>mentor_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Mentors,<br />MentorQuotas, MentorRequests.</div>")]
+        style 116 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      end
+
+      subgraph 118 ["exe-kafka"]
+        style 118 fill:#ffffff,stroke:#444444,color:#444444
+
+        119["<div style='font-weight: bold'>Kafka Broker</div><div style='font-size: 70%; margin-top: 0px'>[Container: Apache Kafka (cp-kafka 7.5.0)]</div><div style='font-size: 80%; margin-top:10px'>Event broker provisioned in<br />docker-compose (with<br />Zookeeper). No code actually<br />produces or consumes<br />messages.</div>"]
+        style 119 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      end
+
+      subgraph 124 ["exe-zookeeper"]
+        style 124 fill:#ffffff,stroke:#444444,color:#444444
+
+        125["<div style='font-weight: bold'>Zookeeper</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: Apache Zookeeper]</div><div style='font-size: 80%; margin-top:10px'>Kafka cluster coordination</div>"]
+        style 125 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+      subgraph 126 ["exe-redis"]
+        style 126 fill:#ffffff,stroke:#444444,color:#444444
+
+        127[("<div style='font-weight: bold'>Redis</div><div style='font-size: 70%; margin-top: 0px'>[Container: Redis 7 (redis:7-alpine)]</div><div style='font-size: 80%; margin-top:10px'>Provisioned in docker-compose<br />only. No service references<br />Redis.</div>")]
+        style 127 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      end
+
+      subgraph 98 ["exe-nginx-gateway"]
+        style 98 fill:#ffffff,stroke:#444444,color:#444444
+
+        99["<div style='font-weight: bold'>API Gateway</div><div style='font-size: 70%; margin-top: 0px'>[Container: Nginx (nginx:alpine)]</div><div style='font-size: 80%; margin-top:10px'>Single HTTP entry point.<br />Path-based reverse proxy,<br />CORS, rate limiting (30 r/s,<br />burst 50), security headers,<br />gzip, /health.</div>"]
+        style 99 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      end
+
+    end
+
+    99-. "<div>Proxies /api/auth,<br />/api/students, /api/semesters</div><div style='font-size: 70%'>[HTTP (proxy_pass :8080)]</div>" .->101
+    99-. "<div>Proxies /api/groups,<br />/api/matching</div><div style='font-size: 70%'>[HTTP (proxy_pass :8080)]</div>" .->104
+    99-. "<div>Proxies /api/mentors,<br />/api/mentor-requests</div><div style='font-size: 70%'>[HTTP (proxy_pass :8080)]</div>" .->107
+    101-. "<div>Creates schema + seed at<br />startup (EnsureCreated)</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->112
+    104-. "<div>Creates schema + seed at<br />startup (EnsureCreated)</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->114
+    107-. "<div>Creates schema + seed at<br />startup (EnsureCreated)</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->116
+    101-. "<div>Intended to publish<br />StudentImportedEvent<br />(publisher logs only; never<br />called)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->119
+    104-. "<div>Intended to publish<br />Group*/Leader/Topic events<br />(stub; never called)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->119
+    107-. "<div>Intended to publish Mentor*<br />events (stub; never called)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->119
+    110-. "<div>Intended to consume events<br />(TODO; no connection made)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->119
+
+  end

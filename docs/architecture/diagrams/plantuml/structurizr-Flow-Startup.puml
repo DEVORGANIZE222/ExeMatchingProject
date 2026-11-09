@@ -1,0 +1,33 @@
+@startuml
+title <size:24>Dynamic View: EXE Team Matching System</size>\n<size:24>Service start-up: schema creation and seed via EnsureCreated()</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+System_Boundary("EXETeamMatchingSystem_boundary", "EXE Team Matching System", $tags="") {
+  Container(EXETeamMatchingSystem.GroupMatchingAPI, "GroupMatching API", $techn="ASP.NET Core 8 Web API", $descr="Groups, members, leader vote, lock, random matching. All endpoints throw NotImplementedException (HTTP 501).", $tags="", $link="")
+  Container(EXETeamMatchingSystem.MentorAPI, "Mentor API", $techn="ASP.NET Core 8 Web API + gRPC", $descr="Mentor list/detail/quota and mentor requests/decisions over REST (stubs), plus a gRPC service returning hard-coded data.", $tags="", $link="")
+  ContainerDb(EXETeamMatchingSystem.identity_db, "identity_db", $techn="PostgreSQL 16", $descr="Tables: Users, Roles, Students, Semesters.", $tags="", $link="")
+  ContainerDb(EXETeamMatchingSystem.group_matching_db, "group_matching_db", $techn="PostgreSQL 16", $descr="Tables: Groups, GroupMembers, GroupInvitations, LeaderVotes.", $tags="", $link="")
+  ContainerDb(EXETeamMatchingSystem.mentor_db, "mentor_db", $techn="PostgreSQL 16", $descr="Tables: Mentors, MentorQuotas, MentorRequests.", $tags="", $link="")
+  Container(EXETeamMatchingSystem.IdentitySemesterAPI, "IdentitySemester API", $techn="ASP.NET Core 8 Web API", $descr="Auth (login), student import/query, semester management. Login returns a hard-coded skeleton token; other endpoints throw NotImplementedException (HTTP 501).", $tags="", $link="")
+}
+
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI, EXETeamMatchingSystem.identity_db, "1: EnsureCreated(): Users, Roles, Students, Semesters + seed", $techn="EF Core / Npgsql, TCP 5432", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI, EXETeamMatchingSystem.group_matching_db, "2: EnsureCreated(): Groups, GroupMembers, GroupInvitations, LeaderVotes + seed", $techn="EF Core / Npgsql, TCP 5432", $tags="", $link="")
+Rel(EXETeamMatchingSystem.MentorAPI, EXETeamMatchingSystem.mentor_db, "3: EnsureCreated(): Mentors, MentorQuotas, MentorRequests + seed", $techn="EF Core / Npgsql, TCP 5432", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

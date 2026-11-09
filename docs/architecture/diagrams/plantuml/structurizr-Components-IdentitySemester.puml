@@ -1,0 +1,50 @@
+@startuml
+title <size:24>Component View: EXE Team Matching System - IdentitySemester API</size>\n<size:24>C4 Level 3 — IdentitySemester API</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+System_Boundary("EXETeamMatchingSystem_boundary", "EXE Team Matching System", $tags="") {
+  Container_Boundary("EXETeamMatchingSystem.IdentitySemesterAPI_boundary", "IdentitySemester API", $tags="") {
+    Component(EXETeamMatchingSystem.IdentitySemesterAPI.StudentsController, "StudentsController", $techn="ASP.NET Core MVC controller", $descr="GET /api/students, GET /api/students/{id}, POST /api/students/import. All throw NotImplementedException.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.IdentitySemesterAPI.SemesterController, "SemesterController", $techn="ASP.NET Core MVC controller", $descr="GET/POST /api/semesters. Both throw NotImplementedException.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.IdentitySemesterAPI.GlobalExceptionHandler, "GlobalExceptionHandler", $techn="SharedKernel middleware", $descr="Middleware mapping exceptions to JSON ErrorResponse (NotImplemented→501, Argument→400, KeyNotFound→404, UnauthorizedAccess→401).", $tags="", $link="")
+    Component(EXETeamMatchingSystem.IdentitySemesterAPI.JwtService, "JwtService", $techn="C# class", $descr="IJwtService. Returns 'placeholder_jwt_token_{userId}'. Registered in DI but not injected anywhere.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.IdentitySemesterAPI.Programcompositionroot, "Program (composition root)", $techn="ASP.NET Core minimal hosting", $descr="Registers DI, Swagger, CORS AllowAll; calls Database.EnsureCreated() at startup.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.IdentitySemesterAPI.IdentitySemesterDbContext, "IdentitySemesterDbContext", $techn="EF Core 8 + Npgsql", $descr="EF Core model for Users, Roles, Students, Semesters with HasData seed.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.IdentitySemesterAPI.KafkaEventPublisher, "KafkaEventPublisher", $techn="BuildingBlocks.Messaging", $descr="IEventPublisher singleton. PublishAsync only logs; no producer. Never called.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.IdentitySemesterAPI.AuthController, "AuthController", $techn="ASP.NET Core MVC controller", $descr="POST /api/auth/login [AllowAnonymous]. Returns hard-coded 'sample_jwt_token' without checking credentials.", $tags="", $link="")
+  }
+
+  ContainerDb(EXETeamMatchingSystem.identity_db, "identity_db", $techn="PostgreSQL 16", $descr="Tables: Users, Roles, Students, Semesters.", $tags="", $link="")
+  ContainerQueue(EXETeamMatchingSystem.KafkaBroker, "Kafka Broker", $techn="Apache Kafka (cp-kafka 7.5.0)", $descr="Event broker provisioned in docker-compose (with Zookeeper). No code actually produces or consumes messages.", $tags="", $link="")
+  Container(EXETeamMatchingSystem.APIGateway, "API Gateway", $techn="Nginx (nginx:alpine)", $descr="Single HTTP entry point. Path-based reverse proxy, CORS, rate limiting (30 r/s, burst 50), security headers, gzip, /health.", $tags="", $link="")
+}
+
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.IdentitySemesterAPI.AuthController, "Routes POST /api/auth/login", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.IdentitySemesterAPI.StudentsController, "Routes /api/students*", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.IdentitySemesterAPI.SemesterController, "Routes /api/semesters", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI.GlobalExceptionHandler, EXETeamMatchingSystem.IdentitySemesterAPI.AuthController, "Wraps request pipeline", $techn="ASP.NET Core middleware", $tags="", $link="")
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI.GlobalExceptionHandler, EXETeamMatchingSystem.IdentitySemesterAPI.StudentsController, "Wraps pipeline; maps NotImplementedException to 501", $techn="ASP.NET Core middleware", $tags="", $link="")
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI.GlobalExceptionHandler, EXETeamMatchingSystem.IdentitySemesterAPI.SemesterController, "Wraps pipeline; maps NotImplementedException to 501", $techn="ASP.NET Core middleware", $tags="", $link="")
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI.Programcompositionroot, EXETeamMatchingSystem.IdentitySemesterAPI.IdentitySemesterDbContext, "Calls Database.EnsureCreated()", $techn="EF Core", $tags="", $link="")
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI.Programcompositionroot, EXETeamMatchingSystem.IdentitySemesterAPI.JwtService, "Registers (scoped) — not consumed", $techn="DI", $tags="", $link="")
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI.Programcompositionroot, EXETeamMatchingSystem.IdentitySemesterAPI.KafkaEventPublisher, "Registers (singleton) — not consumed", $techn="DI", $tags="", $link="")
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI.IdentitySemesterDbContext, EXETeamMatchingSystem.identity_db, "Creates tables and seed rows", $techn="Npgsql", $tags="", $link="")
+Rel(EXETeamMatchingSystem.IdentitySemesterAPI.KafkaEventPublisher, EXETeamMatchingSystem.KafkaBroker, "Would publish events (logs only)", $techn="Kafka (stub)", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

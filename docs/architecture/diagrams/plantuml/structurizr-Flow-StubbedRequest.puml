@@ -1,0 +1,35 @@
+@startuml
+title <size:24>Dynamic View: EXE Team Matching System - GroupMatching API</size>\n<size:24>Any Phase 2 endpoint, e.g. POST /api/groups → HTTP 501 via GlobalExceptionHandler</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+System_Boundary("EXETeamMatchingSystem_boundary", "EXE Team Matching System", $tags="") {
+  Container_Boundary("EXETeamMatchingSystem.GroupMatchingAPI_boundary", "GroupMatching API", $tags="") {
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.GroupsController, "GroupsController", $techn="ASP.NET Core MVC controller", $descr="GET/POST /api/groups, GET /api/groups/{id}, POST/DELETE members, POST /api/groups/{id}/lock. All stubs.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.GroupMatchingAPI.GlobalExceptionHandlerGroup, "GlobalExceptionHandler (Group)", $techn="SharedKernel middleware", $descr="Shared exception-to-JSON middleware.", $tags="", $link="")
+  }
+
+  Container(EXETeamMatchingSystem.APIGateway, "API Gateway", $techn="Nginx (nginx:alpine)", $descr="Single HTTP entry point. Path-based reverse proxy, CORS, rate limiting (30 r/s, burst 50), security headers, gzip, /health.", $tags="", $link="")
+}
+
+Container(EXETeamMatchingSystem.APIGateway, "API Gateway", $techn="Nginx (nginx:alpine)", $descr="Single HTTP entry point. Path-based reverse proxy, CORS, rate limiting (30 r/s, burst 50), security headers, gzip, /health.", $tags="", $link="")
+
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.GroupMatchingAPI.GroupsController, "1: POST /api/groups", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.GroupMatchingAPI.GlobalExceptionHandlerGroup, EXETeamMatchingSystem.GroupMatchingAPI.GroupsController, "2: Catches NotImplementedException → 501 JSON ErrorResponse", $techn="ASP.NET Core middleware", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

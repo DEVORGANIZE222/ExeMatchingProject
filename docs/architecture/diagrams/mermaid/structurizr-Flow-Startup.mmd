@@ -1,0 +1,28 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Dynamic View: EXE Team Matching System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 5 ["EXE Team Matching System"]
+      style 5 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      17["<div style='font-weight: bold'>GroupMatching API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API]</div><div style='font-size: 80%; margin-top:10px'>Groups, members, leader vote,<br />lock, random matching. All<br />endpoints throw<br />NotImplementedException (HTTP<br />501).</div>"]
+      style 17 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      25["<div style='font-weight: bold'>Mentor API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API + gRPC]</div><div style='font-size: 80%; margin-top:10px'>Mentor list/detail/quota and<br />mentor requests/decisions<br />over REST (stubs), plus a<br />gRPC service returning<br />hard-coded data.</div>"]
+      style 25 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      38[("<div style='font-weight: bold'>identity_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Users, Roles,<br />Students, Semesters.</div>")]
+      style 38 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      39[("<div style='font-weight: bold'>group_matching_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Groups, GroupMembers,<br />GroupInvitations,<br />LeaderVotes.</div>")]
+      style 39 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      40[("<div style='font-weight: bold'>mentor_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Mentors,<br />MentorQuotas, MentorRequests.</div>")]
+      style 40 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      8["<div style='font-weight: bold'>IdentitySemester API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API]</div><div style='font-size: 80%; margin-top:10px'>Auth (login), student<br />import/query, semester<br />management. Login returns a<br />hard-coded skeleton token;<br />other endpoints throw<br />NotImplementedException (HTTP<br />501).</div>"]
+      style 8 fill:#438dd5,stroke:#2e6295,color:#ffffff
+    end
+
+    8-. "<div>1. EnsureCreated(): Users,<br />Roles, Students, Semesters +<br />seed</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->38
+    17-. "<div>2. EnsureCreated(): Groups,<br />GroupMembers,<br />GroupInvitations, LeaderVotes<br />+ seed</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->39
+    25-. "<div>3. EnsureCreated(): Mentors,<br />MentorQuotas, MentorRequests<br />+ seed</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->40
+
+  end

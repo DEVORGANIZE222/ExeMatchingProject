@@ -130,3 +130,33 @@ public record CreateMentorRequest(
     [StringLength(1000)] string Topic,
     [Required, StringLength(2000)] string Message
 );
+
+public record UpdateMentorQuotaRequest([Range(1, 50)] int MaxQuota);
+
+public record MentorQuotaDto(Guid MentorId, int MaxQuota, int CurrentAssigned);
+
+/// <summary>
+/// Query-string filters for <c>GET /api/mentors</c>. Text filters are case-insensitive
+/// "contains" matches; blank values are ignored.
+/// </summary>
+public class MentorSearchQuery
+{
+    public const int DefaultPageIndex = 1;
+    public const int DefaultPageSize = 10;
+    public const int MaxPageSize = 100;
+
+    /// <summary>Matches mentor full name or email.</summary>
+    public string? Search { get; init; }
+    public string? Department { get; init; }
+    public string? Expertise { get; init; }
+    public int PageIndex { get; init; } = DefaultPageIndex;
+    public int PageSize { get; init; } = DefaultPageSize;
+}
+
+public record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int PageIndex, int PageSize)
+{
+    public int TotalPages => PageSize <= 0 ? 0 : (int)Math.Ceiling(TotalCount / (double)PageSize);
+}
+
+/// <summary>Authenticated caller details resolved from the JWT by the API layer.</summary>
+public record RequestActor(Guid UserId, string? Email, string? TokenVersion, string? AuthorizationHeader);

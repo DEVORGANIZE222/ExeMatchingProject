@@ -1,0 +1,59 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: EXE Team Matching System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>Student</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Capstone/EXE student. Seeded<br />role 'Student'. Forms/joins<br />groups, votes for a leader,<br />requests a mentor (all<br />endpoints are Phase 2 stubs).</div>"]
+    style 1 fill:#08427b,stroke:#052e56,color:#ffffff
+    2["<div style='font-weight: bold'>Admin</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Seeded role 'System<br />Administrator'.<br />Role-to-endpoint mapping is<br />NOT enforced (no<br />authorization configured).</div>"]
+    style 2 fill:#08427b,stroke:#052e56,color:#ffffff
+    3["<div style='font-weight: bold'>Mentor</div><div style='font-size: 70%; margin-top: 0px'>[Person]</div><div style='font-size: 80%; margin-top:10px'>Lecturer modelled as<br />MentorUser with a quota.<br />Accepts/rejects mentor<br />requests (stub). No 'Mentor'<br />role seeded.</div>"]
+    style 3 fill:#08427b,stroke:#052e56,color:#ffffff
+    4["<div style='font-weight: bold'>SMTP Email Server</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Configured via EmailSettings<br />(default smtp.gmail.com:587).<br />EmailService only logs; no<br />SMTP client is used.</div>"]
+    style 4 fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+    subgraph 5 ["EXE Team Matching System"]
+      style 5 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      17["<div style='font-weight: bold'>GroupMatching API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API]</div><div style='font-size: 80%; margin-top:10px'>Groups, members, leader vote,<br />lock, random matching. All<br />endpoints throw<br />NotImplementedException (HTTP<br />501).</div>"]
+      style 17 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      25["<div style='font-weight: bold'>Mentor API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API + gRPC]</div><div style='font-size: 80%; margin-top:10px'>Mentor list/detail/quota and<br />mentor requests/decisions<br />over REST (stubs), plus a<br />gRPC service returning<br />hard-coded data.</div>"]
+      style 25 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      33["<div style='font-weight: bold'>Notification Worker</div><div style='font-size: 70%; margin-top: 0px'>[Container: .NET 8 Worker Service]</div><div style='font-size: 80%; margin-top:10px'>Background worker intended to<br />consume Kafka events and send<br />email. Currently loops with<br />Task.Delay(5000) (TODO).</div>"]
+      style 33 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      38[("<div style='font-weight: bold'>identity_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Users, Roles,<br />Students, Semesters.</div>")]
+      style 38 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      39[("<div style='font-weight: bold'>group_matching_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Groups, GroupMembers,<br />GroupInvitations,<br />LeaderVotes.</div>")]
+      style 39 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      40[("<div style='font-weight: bold'>mentor_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Mentors,<br />MentorQuotas, MentorRequests.</div>")]
+      style 40 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      41["<div style='font-weight: bold'>Kafka Broker</div><div style='font-size: 70%; margin-top: 0px'>[Container: Apache Kafka (cp-kafka 7.5.0)]</div><div style='font-size: 80%; margin-top:10px'>Event broker provisioned in<br />docker-compose (with<br />Zookeeper). No code actually<br />produces or consumes<br />messages.</div>"]
+      style 41 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      42[("<div style='font-weight: bold'>Redis</div><div style='font-size: 70%; margin-top: 0px'>[Container: Redis 7 (redis:7-alpine)]</div><div style='font-size: 80%; margin-top:10px'>Provisioned in docker-compose<br />only. No service references<br />Redis.</div>")]
+      style 42 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      6["<div style='font-weight: bold'>Frontend (Vite template)</div><div style='font-size: 70%; margin-top: 0px'>[Container: React 19, Vite 8]</div><div style='font-size: 80%; margin-top:10px'>Default React + Vite starter<br />page. Makes no API calls and<br />is not part of<br />docker-compose.</div>"]
+      style 6 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      7["<div style='font-weight: bold'>API Gateway</div><div style='font-size: 70%; margin-top: 0px'>[Container: Nginx (nginx:alpine)]</div><div style='font-size: 80%; margin-top:10px'>Single HTTP entry point.<br />Path-based reverse proxy,<br />CORS, rate limiting (30 r/s,<br />burst 50), security headers,<br />gzip, /health.</div>"]
+      style 7 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      8["<div style='font-weight: bold'>IdentitySemester API</div><div style='font-size: 70%; margin-top: 0px'>[Container: ASP.NET Core 8 Web API]</div><div style='font-size: 80%; margin-top:10px'>Auth (login), student<br />import/query, semester<br />management. Login returns a<br />hard-coded skeleton token;<br />other endpoints throw<br />NotImplementedException (HTTP<br />501).</div>"]
+      style 8 fill:#438dd5,stroke:#2e6295,color:#ffffff
+    end
+
+    1-. "<div>Opens (template page only)</div><div style='font-size: 70%'>[HTTPS / browser]</div>" .->6
+    1-. "<div>Calls REST API (login,<br />groups, votes, mentor<br />requests)</div><div style='font-size: 70%'>[HTTP/JSON]</div>" .->7
+    2-. "<div>Calls REST API (student<br />import, semesters, random<br />matching)</div><div style='font-size: 70%'>[HTTP/JSON]</div>" .->7
+    3-. "<div>Calls REST API (mentor<br />requests & decisions)</div><div style='font-size: 70%'>[HTTP/JSON]</div>" .->7
+    7-. "<div>Proxies /api/auth,<br />/api/students, /api/semesters</div><div style='font-size: 70%'>[HTTP (proxy_pass :8080)]</div>" .->8
+    7-. "<div>Proxies /api/groups,<br />/api/matching</div><div style='font-size: 70%'>[HTTP (proxy_pass :8080)]</div>" .->17
+    7-. "<div>Proxies /api/mentors,<br />/api/mentor-requests</div><div style='font-size: 70%'>[HTTP (proxy_pass :8080)]</div>" .->25
+    8-. "<div>Creates schema + seed at<br />startup (EnsureCreated)</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->38
+    17-. "<div>Creates schema + seed at<br />startup (EnsureCreated)</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->39
+    25-. "<div>Creates schema + seed at<br />startup (EnsureCreated)</div><div style='font-size: 70%'>[EF Core / Npgsql, TCP 5432]</div>" .->40
+    8-. "<div>Intended to publish<br />StudentImportedEvent<br />(publisher logs only; never<br />called)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->41
+    17-. "<div>Intended to publish<br />Group*/Leader/Topic events<br />(stub; never called)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->41
+    25-. "<div>Intended to publish Mentor*<br />events (stub; never called)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->41
+    33-. "<div>Intended to consume events<br />(TODO; no connection made)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->41
+    33-. "<div>Intended to send notification<br />emails (EmailService logs<br />only)</div><div style='font-size: 70%'>[SMTP :587 (configured)]</div>" .->4
+
+  end

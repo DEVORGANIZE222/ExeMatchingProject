@@ -1,0 +1,47 @@
+@startuml
+title <size:24>Component View: EXE Team Matching System - Mentor API</size>\n<size:24>C4 Level 3 — Mentor API</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+System_Boundary("EXETeamMatchingSystem_boundary", "EXE Team Matching System", $tags="") {
+  Container_Boundary("EXETeamMatchingSystem.MentorAPI_boundary", "Mentor API", $tags="") {
+    Component(EXETeamMatchingSystem.MentorAPI.MentorsController, "MentorsController", $techn="ASP.NET Core MVC controller", $descr="GET /api/mentors, /api/mentors/{id}, /api/mentors/{id}/quota. Stubs.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.MentorAPI.MentorRequestsController, "MentorRequestsController", $techn="ASP.NET Core MVC controller", $descr="POST /api/mentor-requests, POST /api/mentor-requests/decision. Stubs.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.MentorAPI.MentorGrpcServiceImpl, "MentorGrpcServiceImpl", $techn="Grpc.AspNetCore 2.60", $descr="gRPC MentorGrpcService (GetMentor, GetMentors, GetMentorQuota) from proto/mentor.proto. Returns hard-coded mock data. No gRPC client exists in the repo.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.MentorAPI.GlobalExceptionHandlerMentor, "GlobalExceptionHandler (Mentor)", $techn="SharedKernel middleware", $descr="Shared exception-to-JSON middleware.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.MentorAPI.ProgramMentorcompositionroot, "Program (Mentor composition root)", $techn="ASP.NET Core minimal hosting", $descr="Registers DI, Swagger, CORS, AddGrpc/MapGrpcService; calls EnsureCreated() at startup.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.MentorAPI.MentorDbContext, "MentorDbContext", $techn="EF Core 8 + Npgsql", $descr="EF Core model for Mentors, MentorQuotas, MentorRequests with seed data.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.MentorAPI.KafkaEventPublisherMentor, "KafkaEventPublisher (Mentor)", $techn="BuildingBlocks.Messaging", $descr="Registered IEventPublisher; logs only; never called.", $tags="", $link="")
+  }
+
+  ContainerDb(EXETeamMatchingSystem.mentor_db, "mentor_db", $techn="PostgreSQL 16", $descr="Tables: Mentors, MentorQuotas, MentorRequests.", $tags="", $link="")
+  ContainerQueue(EXETeamMatchingSystem.KafkaBroker, "Kafka Broker", $techn="Apache Kafka (cp-kafka 7.5.0)", $descr="Event broker provisioned in docker-compose (with Zookeeper). No code actually produces or consumes messages.", $tags="", $link="")
+  Container(EXETeamMatchingSystem.APIGateway, "API Gateway", $techn="Nginx (nginx:alpine)", $descr="Single HTTP entry point. Path-based reverse proxy, CORS, rate limiting (30 r/s, burst 50), security headers, gzip, /health.", $tags="", $link="")
+}
+
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.MentorAPI.MentorsController, "Routes /api/mentors*", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.APIGateway, EXETeamMatchingSystem.MentorAPI.MentorRequestsController, "Routes /api/mentor-requests*", $techn="HTTP", $tags="", $link="")
+Rel(EXETeamMatchingSystem.MentorAPI.GlobalExceptionHandlerMentor, EXETeamMatchingSystem.MentorAPI.MentorsController, "Wraps pipeline; maps NotImplementedException to 501", $techn="ASP.NET Core middleware", $tags="", $link="")
+Rel(EXETeamMatchingSystem.MentorAPI.GlobalExceptionHandlerMentor, EXETeamMatchingSystem.MentorAPI.MentorRequestsController, "Wraps pipeline; maps NotImplementedException to 501", $techn="ASP.NET Core middleware", $tags="", $link="")
+Rel(EXETeamMatchingSystem.MentorAPI.ProgramMentorcompositionroot, EXETeamMatchingSystem.MentorAPI.MentorGrpcServiceImpl, "Maps gRPC service (MapGrpcService)", $techn="gRPC / HTTP2", $tags="", $link="")
+Rel(EXETeamMatchingSystem.MentorAPI.ProgramMentorcompositionroot, EXETeamMatchingSystem.MentorAPI.MentorDbContext, "Calls Database.EnsureCreated()", $techn="EF Core", $tags="", $link="")
+Rel(EXETeamMatchingSystem.MentorAPI.ProgramMentorcompositionroot, EXETeamMatchingSystem.MentorAPI.KafkaEventPublisherMentor, "Registers (singleton) — not consumed", $techn="DI", $tags="", $link="")
+Rel(EXETeamMatchingSystem.MentorAPI.MentorDbContext, EXETeamMatchingSystem.mentor_db, "Creates tables and seed rows", $techn="Npgsql", $tags="", $link="")
+Rel(EXETeamMatchingSystem.MentorAPI.KafkaEventPublisherMentor, EXETeamMatchingSystem.KafkaBroker, "Would publish events (logs only)", $techn="Kafka (stub)", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

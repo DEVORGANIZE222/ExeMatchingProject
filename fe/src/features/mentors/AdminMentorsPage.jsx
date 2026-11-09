@@ -31,7 +31,8 @@ export default function AdminMentorsPage() {
 
   useEffect(() => {
     let active = true
-    request('/api/mentors')
+    // Admin overview aggregates quota across every mentor, so load the largest page allowed.
+    request('/api/mentors?pageSize=100')
       .then((mentors) => {
         if (active) setMentorsList(mentors.map((mentor) => ({ ...mentor, avatar: mentor.fullName.charAt(0).toUpperCase() })))
       })

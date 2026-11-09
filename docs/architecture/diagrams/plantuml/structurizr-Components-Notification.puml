@@ -1,0 +1,40 @@
+@startuml
+title <size:24>Component View: EXE Team Matching System - Notification Worker</size>\n<size:24>C4 Level 3 — Notification Worker</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+System(SMTPEmailServer, "SMTP Email Server", $descr="Configured via EmailSettings (default smtp.gmail.com:587). EmailService only logs; no SMTP client is used.", $tags="", $link="")
+
+System_Boundary("EXETeamMatchingSystem_boundary", "EXE Team Matching System", $tags="") {
+  Container_Boundary("EXETeamMatchingSystem.NotificationWorker_boundary", "Notification Worker", $tags="") {
+    Component(EXETeamMatchingSystem.NotificationWorker.Worker, "Worker", $techn="BackgroundService", $descr="BackgroundService. Calls StartConsumingAsync then idles (// TODO: Consume Kafka events).", $tags="", $link="")
+    Component(EXETeamMatchingSystem.NotificationWorker.KafkaConsumer, "KafkaConsumer", $techn="C# class", $descr="IKafkaConsumer. StartConsumingAsync only logs; no Kafka connection.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.NotificationWorker.NotificationHandler, "NotificationHandler", $techn="C# class", $descr="INotificationService. HandleEventAsync only logs.", $tags="", $link="")
+    Component(EXETeamMatchingSystem.NotificationWorker.EmailService, "EmailService", $techn="C# class", $descr="IEmailService. SendEmailAsync only logs.", $tags="", $link="")
+  }
+
+  ContainerQueue(EXETeamMatchingSystem.KafkaBroker, "Kafka Broker", $techn="Apache Kafka (cp-kafka 7.5.0)", $descr="Event broker provisioned in docker-compose (with Zookeeper). No code actually produces or consumes messages.", $tags="", $link="")
+}
+
+Rel(EXETeamMatchingSystem.NotificationWorker.Worker, EXETeamMatchingSystem.NotificationWorker.KafkaConsumer, "Calls StartConsumingAsync()", $techn="In-process", $tags="", $link="")
+Rel(EXETeamMatchingSystem.NotificationWorker.KafkaConsumer, EXETeamMatchingSystem.NotificationWorker.NotificationHandler, "Injected (never invoked)", $techn="DI", $tags="", $link="")
+Rel(EXETeamMatchingSystem.NotificationWorker.NotificationHandler, EXETeamMatchingSystem.NotificationWorker.EmailService, "Injected (never invoked)", $techn="DI", $tags="", $link="")
+Rel(EXETeamMatchingSystem.NotificationWorker.KafkaConsumer, EXETeamMatchingSystem.KafkaBroker, "Would subscribe to topics (logs only)", $techn="Kafka (stub)", $tags="", $link="")
+Rel(EXETeamMatchingSystem.NotificationWorker.EmailService, SMTPEmailServer, "Would send email (logs only)", $techn="SMTP (stub)", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

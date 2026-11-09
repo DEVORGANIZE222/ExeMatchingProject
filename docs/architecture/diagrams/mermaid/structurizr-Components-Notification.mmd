@@ -1,0 +1,36 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Component View: EXE Team Matching System - Notification Worker"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    4["<div style='font-weight: bold'>SMTP Email Server</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div><div style='font-size: 80%; margin-top:10px'>Configured via EmailSettings<br />(default smtp.gmail.com:587).<br />EmailService only logs; no<br />SMTP client is used.</div>"]
+    style 4 fill:#999999,stroke:#6b6b6b,color:#ffffff
+
+    subgraph 5 ["EXE Team Matching System"]
+      style 5 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      subgraph 33 ["Notification Worker"]
+        style 33 fill:#ffffff,stroke:#2e6295,color:#2e6295
+
+        34["<div style='font-weight: bold'>Worker</div><div style='font-size: 70%; margin-top: 0px'>[Component: BackgroundService]</div><div style='font-size: 80%; margin-top:10px'>BackgroundService. Calls<br />StartConsumingAsync then<br />idles (// TODO: Consume Kafka<br />events).</div>"]
+        style 34 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        35["<div style='font-weight: bold'>KafkaConsumer</div><div style='font-size: 70%; margin-top: 0px'>[Component: C# class]</div><div style='font-size: 80%; margin-top:10px'>IKafkaConsumer.<br />StartConsumingAsync only<br />logs; no Kafka connection.</div>"]
+        style 35 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        36["<div style='font-weight: bold'>NotificationHandler</div><div style='font-size: 70%; margin-top: 0px'>[Component: C# class]</div><div style='font-size: 80%; margin-top:10px'>INotificationService.<br />HandleEventAsync only logs.</div>"]
+        style 36 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        37["<div style='font-weight: bold'>EmailService</div><div style='font-size: 70%; margin-top: 0px'>[Component: C# class]</div><div style='font-size: 80%; margin-top:10px'>IEmailService. SendEmailAsync<br />only logs.</div>"]
+        style 37 fill:#85bbf0,stroke:#5d82a8,color:#000000
+      end
+
+      41["<div style='font-weight: bold'>Kafka Broker</div><div style='font-size: 70%; margin-top: 0px'>[Container: Apache Kafka (cp-kafka 7.5.0)]</div><div style='font-size: 80%; margin-top:10px'>Event broker provisioned in<br />docker-compose (with<br />Zookeeper). No code actually<br />produces or consumes<br />messages.</div>"]
+      style 41 fill:#438dd5,stroke:#2e6295,color:#ffffff
+    end
+
+    34-. "<div>Calls StartConsumingAsync()</div><div style='font-size: 70%'>[In-process]</div>" .->35
+    35-. "<div>Injected (never invoked)</div><div style='font-size: 70%'>[DI]</div>" .->36
+    36-. "<div>Injected (never invoked)</div><div style='font-size: 70%'>[DI]</div>" .->37
+    35-. "<div>Would subscribe to topics<br />(logs only)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->41
+    37-. "<div>Would send email (logs only)</div><div style='font-size: 70%'>[SMTP (stub)]</div>" .->4
+
+  end

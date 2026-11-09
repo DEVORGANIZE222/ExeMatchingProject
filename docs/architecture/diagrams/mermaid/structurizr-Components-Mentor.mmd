@@ -1,0 +1,47 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Component View: EXE Team Matching System - Mentor API"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 5 ["EXE Team Matching System"]
+      style 5 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      subgraph 25 ["Mentor API"]
+        style 25 fill:#ffffff,stroke:#2e6295,color:#2e6295
+
+        26["<div style='font-weight: bold'>MentorsController</div><div style='font-size: 70%; margin-top: 0px'>[Component: ASP.NET Core MVC controller]</div><div style='font-size: 80%; margin-top:10px'>GET /api/mentors,<br />/api/mentors/{id},<br />/api/mentors/{id}/quota.<br />Stubs.</div>"]
+        style 26 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        27["<div style='font-weight: bold'>MentorRequestsController</div><div style='font-size: 70%; margin-top: 0px'>[Component: ASP.NET Core MVC controller]</div><div style='font-size: 80%; margin-top:10px'>POST /api/mentor-requests,<br />POST<br />/api/mentor-requests/decision.<br />Stubs.</div>"]
+        style 27 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        28["<div style='font-weight: bold'>MentorGrpcServiceImpl</div><div style='font-size: 70%; margin-top: 0px'>[Component: Grpc.AspNetCore 2.60]</div><div style='font-size: 80%; margin-top:10px'>gRPC MentorGrpcService<br />(GetMentor, GetMentors,<br />GetMentorQuota) from<br />proto/mentor.proto. Returns<br />hard-coded mock data. No gRPC<br />client exists in the repo.</div>"]
+        style 28 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        29["<div style='font-weight: bold'>GlobalExceptionHandler (Mentor)</div><div style='font-size: 70%; margin-top: 0px'>[Component: SharedKernel middleware]</div><div style='font-size: 80%; margin-top:10px'>Shared exception-to-JSON<br />middleware.</div>"]
+        style 29 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        30["<div style='font-weight: bold'>Program (Mentor composition root)</div><div style='font-size: 70%; margin-top: 0px'>[Component: ASP.NET Core minimal hosting]</div><div style='font-size: 80%; margin-top:10px'>Registers DI, Swagger, CORS,<br />AddGrpc/MapGrpcService; calls<br />EnsureCreated() at startup.</div>"]
+        style 30 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        31["<div style='font-weight: bold'>MentorDbContext</div><div style='font-size: 70%; margin-top: 0px'>[Component: EF Core 8 + Npgsql]</div><div style='font-size: 80%; margin-top:10px'>EF Core model for Mentors,<br />MentorQuotas, MentorRequests<br />with seed data.</div>"]
+        style 31 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        32["<div style='font-weight: bold'>KafkaEventPublisher (Mentor)</div><div style='font-size: 70%; margin-top: 0px'>[Component: BuildingBlocks.Messaging]</div><div style='font-size: 80%; margin-top:10px'>Registered IEventPublisher;<br />logs only; never called.</div>"]
+        style 32 fill:#85bbf0,stroke:#5d82a8,color:#000000
+      end
+
+      40[("<div style='font-weight: bold'>mentor_db</div><div style='font-size: 70%; margin-top: 0px'>[Container: PostgreSQL 16]</div><div style='font-size: 80%; margin-top:10px'>Tables: Mentors,<br />MentorQuotas, MentorRequests.</div>")]
+      style 40 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      41["<div style='font-weight: bold'>Kafka Broker</div><div style='font-size: 70%; margin-top: 0px'>[Container: Apache Kafka (cp-kafka 7.5.0)]</div><div style='font-size: 80%; margin-top:10px'>Event broker provisioned in<br />docker-compose (with<br />Zookeeper). No code actually<br />produces or consumes<br />messages.</div>"]
+      style 41 fill:#438dd5,stroke:#2e6295,color:#ffffff
+      7["<div style='font-weight: bold'>API Gateway</div><div style='font-size: 70%; margin-top: 0px'>[Container: Nginx (nginx:alpine)]</div><div style='font-size: 80%; margin-top:10px'>Single HTTP entry point.<br />Path-based reverse proxy,<br />CORS, rate limiting (30 r/s,<br />burst 50), security headers,<br />gzip, /health.</div>"]
+      style 7 fill:#438dd5,stroke:#2e6295,color:#ffffff
+    end
+
+    7-. "<div>Routes /api/mentors*</div><div style='font-size: 70%'>[HTTP]</div>" .->26
+    7-. "<div>Routes /api/mentor-requests*</div><div style='font-size: 70%'>[HTTP]</div>" .->27
+    29-. "<div>Wraps pipeline; maps<br />NotImplementedException to<br />501</div><div style='font-size: 70%'>[ASP.NET Core middleware]</div>" .->26
+    29-. "<div>Wraps pipeline; maps<br />NotImplementedException to<br />501</div><div style='font-size: 70%'>[ASP.NET Core middleware]</div>" .->27
+    30-. "<div>Maps gRPC service<br />(MapGrpcService)</div><div style='font-size: 70%'>[gRPC / HTTP2]</div>" .->28
+    30-. "<div>Calls<br />Database.EnsureCreated()</div><div style='font-size: 70%'>[EF Core]</div>" .->31
+    30-. "<div>Registers (singleton) — not<br />consumed</div><div style='font-size: 70%'>[DI]</div>" .->32
+    31-. "<div>Creates tables and seed rows</div><div style='font-size: 70%'>[Npgsql]</div>" .->40
+    32-. "<div>Would publish events (logs<br />only)</div><div style='font-size: 70%'>[Kafka (stub)]</div>" .->41
+
+  end

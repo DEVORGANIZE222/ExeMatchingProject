@@ -1,0 +1,29 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Dynamic View: EXE Team Matching System - GroupMatching API"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 5 ["EXE Team Matching System"]
+      style 5 fill:#ffffff,stroke:#0b4884,color:#0b4884
+
+      subgraph 17 ["GroupMatching API"]
+        style 17 fill:#ffffff,stroke:#2e6295,color:#2e6295
+
+        18["<div style='font-weight: bold'>GroupsController</div><div style='font-size: 70%; margin-top: 0px'>[Component: ASP.NET Core MVC controller]</div><div style='font-size: 80%; margin-top:10px'>GET/POST /api/groups, GET<br />/api/groups/{id}, POST/DELETE<br />members, POST<br />/api/groups/{id}/lock. All<br />stubs.</div>"]
+        style 18 fill:#85bbf0,stroke:#5d82a8,color:#000000
+        21["<div style='font-weight: bold'>GlobalExceptionHandler (Group)</div><div style='font-size: 70%; margin-top: 0px'>[Component: SharedKernel middleware]</div><div style='font-size: 80%; margin-top:10px'>Shared exception-to-JSON<br />middleware.</div>"]
+        style 21 fill:#85bbf0,stroke:#5d82a8,color:#000000
+      end
+
+      7["<div style='font-weight: bold'>API Gateway</div><div style='font-size: 70%; margin-top: 0px'>[Container: Nginx (nginx:alpine)]</div><div style='font-size: 80%; margin-top:10px'>Single HTTP entry point.<br />Path-based reverse proxy,<br />CORS, rate limiting (30 r/s,<br />burst 50), security headers,<br />gzip, /health.</div>"]
+      style 7 fill:#438dd5,stroke:#2e6295,color:#ffffff
+    end
+
+    7["<div style='font-weight: bold'>API Gateway</div><div style='font-size: 70%; margin-top: 0px'>[Container: Nginx (nginx:alpine)]</div><div style='font-size: 80%; margin-top:10px'>Single HTTP entry point.<br />Path-based reverse proxy,<br />CORS, rate limiting (30 r/s,<br />burst 50), security headers,<br />gzip, /health.</div>"]
+    style 7 fill:#438dd5,stroke:#2e6295,color:#ffffff
+
+    7-. "<div>1. POST /api/groups</div><div style='font-size: 70%'>[HTTP]</div>" .->18
+    21-. "<div>2. Catches<br />NotImplementedException → 501<br />JSON ErrorResponse</div><div style='font-size: 70%'>[ASP.NET Core middleware]</div>" .->18
+
+  end
