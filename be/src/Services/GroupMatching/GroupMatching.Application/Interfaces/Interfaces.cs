@@ -10,10 +10,12 @@ public interface IGroupRepository
     Task<Group?> GetStudentGroupAsync(Guid studentId, string semesterCode, CancellationToken ct = default);
     Task<HashSet<Guid>> GetSemesterMemberIdsAsync(string semesterCode, CancellationToken ct = default);
     Task<List<Group>> OpenGroupsAsync(string semesterCode, CancellationToken ct = default);
+    Task<int> CountLockedGroupsAsync(string semesterCode, CancellationToken ct = default);
     void Add(Group group);
     void AddMember(GroupMember member);
     void AddVote(LeaderVote vote);
     void Remove(Group group);
+    void RemoveRange(IEnumerable<Group> groups);
     void AddOutbox(GroupEventOutbox item);
     Task SaveAsync(CancellationToken ct = default);
     Task<IGroupTransaction> BeginSerializableTransactionAsync(CancellationToken ct = default);
@@ -43,6 +45,7 @@ public interface IGroupService
     Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default);
     Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<BulkDeleteGroupsResult> DeleteUnlockedBySemesterAsync(string semesterCode, CancellationToken ct = default);
     Task<GroupDto> JoinAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
     Task<GroupDto> InviteMemberAsync(Guid id, InviteMemberRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<IReadOnlyList<EnrollmentContext>> SearchInviteCandidatesAsync(Guid id, string query, Guid actorUserId, bool isAdmin, CancellationToken ct = default);

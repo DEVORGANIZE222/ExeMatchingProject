@@ -263,6 +263,51 @@ public class GroupMatchingServiceTests
         Assert.Equal(GroupStatus.Open, group.Status);
     }
 
+    [Fact]
+    public async Task Admin_bulk_delete_removes_open_groups_and_preserves_locked_groups()
+    {
+        var store = new MemoryStore();
+        var identity = new FakeIdentity();
+        var service = new GroupService(store, identity);
+
+        var openStudent1 = new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), "O1", "Open One", "FA26", false, "o1@fpt.edu.vn", "SE");
+        var openStudent2 = new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), "O2", "Open Two", "FA26", false, "o2@fpt.edu.vn", "SE");
+        var lockedStudent = new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), "L1", "Locked One", "FA26", false, "l1@fpt.edu.vn", "SE");
+        var otherSemesterStudent = new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), "SP1", "Spring One", "SP27", false, "sp1@fpt.edu.vn", "SE");
+
+        identity.Current = openStudent1;
+        var openGroup = await service.CreateAsync(new CreateGroupRequest { GroupName = "Open Partial", SemesterCode = "FA26", ProjectDescription = "Will be deleted" }, openStudent1.UserId);
+        await service.SeedDemoMembersAsync(openGroup.Id, openStudent1.UserId, false);
+
+        identity.Current = openStudent2;
+        await service.CreateAsync(new CreateGroupRequest { GroupName = "Open Two", SemesterCode = "FA26", ProjectDescription = "Also deleted" }, openStudent2.UserId);
+
+        store.Add(new Group
+        {
+            GroupCode = "GRP-FA26-LOCKED-1",
+            GroupName = "Locked Keep",
+            ProjectDescription = "Must stay untouched",
+            SemesterCode = "FA26",
+            Status = GroupStatus.Locked,
+            LeaderStudentId = lockedStudent.StudentId,
+            Members = [new GroupMember { StudentId = lockedStudent.StudentId, StudentCode = lockedStudent.StudentCode, FullName = lockedStudent.FullName, Role = MemberRole.Leader }]
+        });
+
+        identity.Current = otherSemesterStudent;
+        var otherSemesterGroup = await service.CreateAsync(new CreateGroupRequest { GroupName = "Spring Group", SemesterCode = "SP27", ProjectDescription = "Other semester" }, otherSemesterStudent.UserId);
+
+        store.Outbox.Clear();
+        var result = await service.DeleteUnlockedBySemesterAsync("fa26");
+
+        Assert.Equal(2, result.DeletedGroups);
+        Assert.Equal(1, result.SkippedLockedGroups);
+        Assert.Equal(2, result.ReleasedStudents);
+        Assert.Equal(2, store.Groups.Count);
+        Assert.Contains(store.Groups, g => g.GroupCode == "GRP-FA26-LOCKED-1");
+        Assert.Contains(store.Groups, g => g.Id == otherSemesterGroup.Id);
+        Assert.Equal(2, store.Outbox.Count);
+    }
+
     private sealed class FakeIdentity : IIdentitySemesterClient
     {
         public EnrollmentContext Current { get; set; } = null!;
@@ -300,10 +345,12 @@ public class GroupMatchingServiceTests
         public Task<HashSet<Guid>> GetSemesterMemberIdsAsync(string semesterCode, CancellationToken ct = default)
             => Task.FromResult(_groups.Where(x => x.SemesterCode == semesterCode).SelectMany(x => x.Members).Select(m => m.StudentId).ToHashSet());
         public Task<List<Group>> OpenGroupsAsync(string semesterCode, CancellationToken ct = default) => Task.FromResult(_groups.Where(x => x.SemesterCode == semesterCode && x.Status == GroupStatus.Open).ToList());
+        public Task<int> CountLockedGroupsAsync(string semesterCode, CancellationToken ct = default) => Task.FromResult(_groups.Count(x => x.SemesterCode == semesterCode && x.Status == GroupStatus.Locked));
         public void Add(Group group) => _groups.Add(group);
         public void AddMember(GroupMember member) { }
         public void AddVote(LeaderVote vote) { }
         public void Remove(Group group) => _groups.Remove(group);
+        public void RemoveRange(IEnumerable<Group> groups) { foreach (var group in groups.ToList()) _groups.Remove(group); }
         public void AddOutbox(GroupEventOutbox item) => Outbox.Add(item);
         public Task SaveAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task<IGroupTransaction> BeginSerializableTransactionAsync(CancellationToken ct = default) => Task.FromResult<IGroupTransaction>(new MemoryTransaction());

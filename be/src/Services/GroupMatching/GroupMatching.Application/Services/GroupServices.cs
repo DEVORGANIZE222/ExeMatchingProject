@@ -133,9 +133,35 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         var actor = isAdmin ? null : await Enrollment(actorUserId, group.SemesterCode, ct);
         if (group.Status != GroupStatus.Open) throw Conflict("A locked group cannot be deleted.");
         if (!isAdmin && group.CreatedByStudentId != actor!.StudentId) throw Forbidden("Only the group creator can delete an open group.");
-        foreach (var member in group.Members) MembershipEvent(member.StudentId, false);
+        foreach (var member in group.Members)
+            if (!member.IsDemo) MembershipEvent(member.StudentId, false);
         repository.Remove(group);
         await repository.SaveAsync(ct);
+    }
+
+    public async Task<BulkDeleteGroupsResult> DeleteUnlockedBySemesterAsync(string semesterCode, CancellationToken ct = default)
+    {
+        var code = Code(semesterCode);
+        await using var tx = await repository.BeginSerializableTransactionAsync(ct);
+        var openGroups = await repository.OpenGroupsAsync(code, ct);
+        var lockedCount = await repository.CountLockedGroupsAsync(code, ct);
+        if (openGroups.Count == 0)
+            return new BulkDeleteGroupsResult(0, lockedCount, 0);
+
+        var releasedStudentIds = openGroups
+            .SelectMany(g => g.Members)
+            .Where(m => !m.IsDemo)
+            .Select(m => m.StudentId)
+            .Distinct()
+            .ToList();
+
+        foreach (var studentId in releasedStudentIds)
+            MembershipEvent(studentId, false);
+
+        repository.RemoveRange(openGroups);
+        await repository.SaveAsync(ct);
+        await tx.CommitAsync(ct);
+        return new BulkDeleteGroupsResult(openGroups.Count, lockedCount, releasedStudentIds.Count);
     }
 
     public async Task<GroupDto> JoinAsync(Guid id, Guid actorUserId, CancellationToken ct = default)

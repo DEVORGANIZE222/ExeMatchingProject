@@ -63,6 +63,7 @@ public class MentorRecommendationServiceTests
         public Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<BulkDeleteGroupsResult> DeleteUnlockedBySemesterAsync(string semesterCode, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> JoinAsync(Guid id, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> InviteMemberAsync(Guid id, InviteMemberRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<EnrollmentContext>> SearchInviteCandidatesAsync(Guid id, string query, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();

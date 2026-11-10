@@ -48,10 +48,14 @@ public sealed class GroupRepository(GroupMatchingDbContext db) : IGroupRepositor
         .Where(x => x.SemesterCode == semesterCode && x.Status == Domain.Enums.GroupStatus.Open)
         .OrderBy(x => x.CreatedAt).ToListAsync(ct);
 
+    public Task<int> CountLockedGroupsAsync(string semesterCode, CancellationToken ct = default) => db.Groups
+        .CountAsync(x => x.SemesterCode == semesterCode && x.Status == Domain.Enums.GroupStatus.Locked, ct);
+
     public void Add(Group group) => db.Groups.Add(group);
     public void AddMember(GroupMember member) => db.GroupMembers.Add(member);
     public void AddVote(LeaderVote vote) => db.LeaderVotes.Add(vote);
     public void Remove(Group group) => db.Groups.Remove(group);
+    public void RemoveRange(IEnumerable<Group> groups) => db.Groups.RemoveRange(groups);
     public void AddOutbox(GroupEventOutbox item) => db.GroupEventOutbox.Add(item);
     public Task SaveAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 

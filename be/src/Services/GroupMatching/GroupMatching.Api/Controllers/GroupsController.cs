@@ -54,6 +54,12 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
         return NoContent();
     }
 
+    [HttpDelete("semester/{semesterCode}")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+    public async Task<ActionResult<ApiResponse<BulkDeleteGroupsResult>>> DeleteUnlockedGroupsBySemester(
+        string semesterCode, CancellationToken ct)
+        => Ok(ApiResponse<BulkDeleteGroupsResult>.Ok(await service.DeleteUnlockedBySemesterAsync(semesterCode, ct)));
+
     [HttpPost("{id:guid}/members")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> AddMember(Guid id, CancellationToken ct)
         => Ok(ApiResponse<GroupDto>.Ok(await service.JoinAsync(id, Actor, ct)));

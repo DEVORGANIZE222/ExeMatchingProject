@@ -614,6 +614,40 @@ export default function GroupsPage() {
     setShowRandomConfirm(true)
   }
 
+  // 10. Admin Bulk Delete All Unlocked Groups (preserves Locked groups)
+  const handleDeleteUnlockedGroups = () => {
+    if (!isAdmin || !semesterCode) return
+    const openCount = groups.filter((g) => !g.isLocked).length
+    const lockedCount = groups.filter((g) => g.isLocked).length
+    if (openCount === 0) {
+      toast.error(`Không có nhóm chưa khóa nào trong học kỳ ${semesterCode}.`)
+      return
+    }
+    setConfirmState({
+      title: 'Xóa tất cả nhóm chưa khóa',
+      message: `Xác nhận xóa toàn bộ ${openCount} nhóm chưa khóa trong học kỳ "${semesterCode}"? Hệ thống sẽ giữ nguyên ${lockedCount} nhóm đã khóa (Locked) và không thể hoàn tác với các nhóm đã xóa.`,
+      confirmLabel: `Xóa ${openCount} nhóm chưa khóa`,
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          const res = await request(`/api/groups/semester/${encodeURIComponent(semesterCode)}`, { method: 'DELETE' })
+          const deleted = res?.deletedGroups ?? 0
+          const released = res?.releasedStudents ?? 0
+          const skipped = res?.skippedLockedGroups ?? lockedCount
+          toast.success(`Đã xóa ${deleted} nhóm chưa khóa (giải phóng ${released} sinh viên); giữ nguyên ${skipped} nhóm đã khóa.`, { duration: 5000 })
+          setConfirmState(null)
+          setSelectedGroup((current) => (current?.isLocked ? current : null))
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể xóa danh sách nhóm chưa khóa.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
+  }
+
   const runRandomMatching = async () => {
     const targetCode = isAdmin ? semesterCode : studentSemesterCode
     if (!targetCode) return
@@ -669,6 +703,20 @@ export default function GroupsPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              style={{ color: 'var(--error)', borderColor: '#fecaca' }}
+              onClick={handleDeleteUnlockedGroups}
+              disabled={busy || !semesterCode || groups.filter((g) => !g.isLocked).length === 0}
+              title="Xóa tất cả nhóm chưa khóa trong học kỳ (không xóa nhóm đã khóa)"
+            >
+              <Trash2 size={16} />
+              <span>Xóa nhóm chưa khóa</span>
+            </button>
+          )}
+
           {isAdmin && (
             <button
               className="btn btn-outline"

@@ -76,6 +76,7 @@ public record GroupDto(Guid Id, string GroupCode, string GroupName, string Semes
 public record RecruitmentNeedDto(string RoleCode, int Slots);
 public record PageResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
 public record RandomMatchingResult(int AddedToExistingGroups, int CreatedGroups, int MatchedStudents);
+public record BulkDeleteGroupsResult(int DeletedGroups, int SkippedLockedGroups, int ReleasedStudents);
 public record MentorRecommendationDto(Guid Id, string FullName, string Email, string Department,
     int MaxQuota, int CurrentAssigned, int AvailableQuota);
 public record EnrollmentContext(Guid StudentId, Guid UserId, string StudentCode, string FullName, string SemesterCode, bool HasGroup,
