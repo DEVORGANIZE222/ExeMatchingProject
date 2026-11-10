@@ -83,7 +83,7 @@ public interface IMentorService
     // Mentor requests
     Task RequestMentorAsync(RequestActor actor, CreateMentorRequest request, CancellationToken cancellationToken = default);
     Task<GroupMentorStatusResponse> GetGroupMentorStatusAsync(Guid groupId, string? authorizationHeader, CancellationToken cancellationToken = default);
-    Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null);
+    Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null, string? tokenVersion = null);
     Task<List<MentorRequestDto>> GetMyRequestsAsync(Guid actorUserId, CancellationToken cancellationToken = default);
 
     // Mentor workspace

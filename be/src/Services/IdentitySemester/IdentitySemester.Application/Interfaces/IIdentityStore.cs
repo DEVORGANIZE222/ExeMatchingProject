@@ -3,9 +3,12 @@ using EXETeamMatching.IdentitySemester.Domain.Entities;
 
 namespace EXETeamMatching.IdentitySemester.Application.Interfaces;
 
+public record UserEnrollmentSummary(Guid UserId, Guid SemesterId, string StudentCode);
+
 public interface IIdentityStore
 {
     Task<User?> UserByEmail(string email, CancellationToken ct);
+    Task<Dictionary<string, User>> UsersByEmails(IEnumerable<string> lowerEmails, CancellationToken ct);
     Task<User?> UserByGoogleSubject(string subject, CancellationToken ct);
     Task<User?> UserById(Guid id, CancellationToken ct);
     Task<Student?> StudentById(Guid id, CancellationToken ct);
@@ -18,20 +21,25 @@ public interface IIdentityStore
     Task<PageResult<StudentResponse>> Students(ListQuery query, CancellationToken ct);
     Task<PageResult<SemesterDto>> Semesters(ListQuery query, CancellationToken ct);
     Task<bool> StudentExists(string code, Guid semesterId, CancellationToken ct);
+    Task<HashSet<string>> StudentCodesInSemester(Guid semesterId, CancellationToken ct);
     Task<bool> EnrollmentExists(Guid userId, Guid semesterId, CancellationToken ct);
+    Task<IReadOnlyList<UserEnrollmentSummary>> UserEnrollmentsByUserIds(IEnumerable<Guid> userIds, CancellationToken ct);
     Task<bool> SemesterHasStudents(Guid id, CancellationToken ct);
     Task<IReadOnlyList<StudentStrengthRole>> StudentStrengthRoles(Guid studentId, CancellationToken ct);
     Task<Role> RoleByName(string name, CancellationToken ct);
     Task<bool> GoogleEmailAllowed(string email, CancellationToken ct);
     Task<IReadOnlyList<GoogleAllowedEmail>> GoogleAllowedEmails(CancellationToken ct);
+    Task<HashSet<string>> ExistingAllowedGoogleEmails(IEnumerable<string> lowerEmails, CancellationToken ct);
     Task<int> DeleteStudentsBySemester(Guid semesterId, CancellationToken ct);
     Task DeleteStudentEnrollment(Guid studentId, CancellationToken ct);
     void AddStudent(Student student, bool emitImportEvent = true);
+    void AddStudentsRange(IReadOnlyList<Student> students);
     void AddUser(User user);
     void RemoveStudent(Student student);
     void AddSemester(Semester semester);
     void RemoveSemester(Semester semester);
     void AddGoogleAllowedEmail(GoogleAllowedEmail email);
+    void AddGoogleAllowedEmailsRange(IReadOnlyList<GoogleAllowedEmail> emails);
     void RemoveGoogleAllowedEmail(GoogleAllowedEmail email);
     void AddStudentStrengthRole(StudentStrengthRole role);
     void RemoveStudentStrengthRole(StudentStrengthRole role);

@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
+using System.Text;
 using EXETeamMatching.Notification.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,6 +10,9 @@ namespace EXETeamMatching.Notification.Infrastructure.Services;
 
 public class EmailService : IEmailService
 {
+    public const string BrandLogoContentId = "exematching-logo";
+    private static readonly Lazy<byte[]?> EmbeddedLogoBytes = new(LoadEmbeddedLogoBytes);
+
     private readonly EmailSettings _settings;
     private readonly ILogger<EmailService> _logger;
 
@@ -58,10 +63,29 @@ public class EmailService : IEmailService
             {
                 From = new MailAddress(_settings.SenderEmail, _settings.SenderName),
                 Subject = subject,
-                Body = body,
                 IsBodyHtml = isHtml
             };
             message.To.Add(to);
+
+            var logoBytes = EmbeddedLogoBytes.Value;
+            if (isHtml && logoBytes is { Length: > 0 }
+                && body.Contains($"cid:{BrandLogoContentId}", StringComparison.OrdinalIgnoreCase))
+            {
+                var htmlView = AlternateView.CreateAlternateViewFromString(body, Encoding.UTF8, MediaTypeNames.Text.Html);
+                var logoStream = new MemoryStream(logoBytes, writable: false);
+                var logoResource = new LinkedResource(logoStream, "image/png")
+                {
+                    ContentId = BrandLogoContentId,
+                    TransferEncoding = TransferEncoding.Base64
+                };
+                logoResource.ContentType.Name = "exematching-logo.png";
+                htmlView.LinkedResources.Add(logoResource);
+                message.AlternateViews.Add(htmlView);
+            }
+            else
+            {
+                message.Body = body;
+            }
 
             using var smtpClient = new SmtpClient(_settings.SmtpServer, _settings.SmtpPort)
             {
@@ -80,5 +104,22 @@ public class EmailService : IEmailService
             _logger.LogError(ex, "Failed to send email to {To} with subject '{Subject}'", to, subject);
             throw;
         }
+    }
+
+    private static byte[]? LoadEmbeddedLogoBytes()
+    {
+        var assembly = typeof(EmailService).Assembly;
+        var resourceName = assembly.GetManifestResourceNames()
+            .FirstOrDefault(name => name.EndsWith("Assets.logo.png", StringComparison.OrdinalIgnoreCase));
+        if (resourceName is null)
+            return null;
+
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream is null)
+            return null;
+
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
     }
 }

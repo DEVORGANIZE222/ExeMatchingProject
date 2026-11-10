@@ -44,7 +44,6 @@ public class KafkaConsumer : IKafkaConsumer
     {
         var consumerConfig = new ConsumerConfig
         {
-            BootstrapServers = _settings.BootstrapServers,
             GroupId = _settings.GroupId,
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false,
@@ -52,6 +51,7 @@ public class KafkaConsumer : IKafkaConsumer
             SessionTimeoutMs = 10000,
             MaxPollIntervalMs = 300000
         };
+        KafkaConfigHelper.ApplyTo(consumerConfig, _settings);
 
         _logger.LogInformation(
             "KafkaConsumer initializing with BootstrapServers={BootstrapServers}, GroupId={GroupId}",

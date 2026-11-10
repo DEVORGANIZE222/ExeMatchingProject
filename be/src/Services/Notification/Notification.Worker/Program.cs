@@ -2,23 +2,27 @@ using EXETeamMatching.Messaging.Settings;
 using EXETeamMatching.Notification.Application.Interfaces;
 using EXETeamMatching.Notification.Infrastructure.Services;
 using EXETeamMatching.Notification.Worker;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
-var host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices((context, services) =>
-    {
-        services.Configure<KafkaSettings>(context.Configuration.GetSection("KafkaSettings"));
-        services.Configure<EmailSettings>(context.Configuration.GetSection("EmailSettings"));
+var builder = WebApplication.CreateBuilder(args);
 
-        services.AddSingleton<IDeduplicationService, InMemoryDeduplicationService>();
-        services.AddSingleton<INotificationStore, InMemoryNotificationStore>();
-        services.AddSingleton<IEmailService, EmailService>();
-        services.AddSingleton<INotificationService, NotificationHandler>();
-        services.AddSingleton<IKafkaConsumer, KafkaConsumer>();
+var rawPort = Environment.GetEnvironmentVariable("PORT") ?? builder.Configuration["PORT"];
+var port = int.TryParse(rawPort?.Trim(), out var parsedPort) && parsedPort > 0 ? parsedPort : 8080;
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-        services.AddHostedService<Worker>();
-    })
-    .Build();
+builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection("KafkaSettings"));
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 
-await host.RunAsync();
+builder.Services.AddSingleton<IDeduplicationService, InMemoryDeduplicationService>();
+builder.Services.AddSingleton<INotificationStore, InMemoryNotificationStore>();
+builder.Services.AddSingleton<IEmailService, EmailService>();
+builder.Services.AddSingleton<INotificationService, NotificationHandler>();
+builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer>();
+
+builder.Services.AddHostedService<Worker>();
+
+var app = builder.Build();
+
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "NotificationWorker" }));
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "NotificationWorker" }));
+
+await app.RunAsync();

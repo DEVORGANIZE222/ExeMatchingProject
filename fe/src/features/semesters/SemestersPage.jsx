@@ -9,7 +9,8 @@ import SemesterTimelineProgress from '../../components/SemesterTimelineProgress'
 import ConfirmModal from '../../components/ConfirmModal'
 import '../../components/ServicePages.css'
 
-const toUtc = (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null)
+const toUtcStart = (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null)
+const toUtcEnd = (value) => (value ? new Date(`${value}T23:59:59.000Z`).toISOString() : null)
 const validateMilestones = ({ startDate, endDate, registrationDeadline, topicDeadline, mentorDeadline }) => {
   if (!startDate || !endDate) return 'Vui lòng chọn ngày bắt đầu và ngày kết thúc.'
   if (startDate >= endDate) return 'Ngày bắt đầu phải trước ngày kết thúc.'
@@ -115,11 +116,11 @@ export default function SemestersPage() {
         body: JSON.stringify({
           code: form.code.trim().toUpperCase(),
           name: form.name.trim(),
-          startDate: toUtc(form.startDate),
-          endDate: toUtc(form.endDate),
-          registrationDeadline: toUtc(form.registrationDeadline),
-          topicDeadline: toUtc(form.topicDeadline),
-          mentorDeadline: toUtc(form.mentorDeadline)
+          startDate: toUtcStart(form.startDate),
+          endDate: toUtcEnd(form.endDate),
+          registrationDeadline: toUtcEnd(form.registrationDeadline),
+          topicDeadline: toUtcEnd(form.topicDeadline),
+          mentorDeadline: toUtcEnd(form.mentorDeadline)
         })
       })
       toast.success(`Đã tạo học kỳ ${form.code} thành công.`)
@@ -166,12 +167,12 @@ export default function SemestersPage() {
         body: JSON.stringify({
           code: editForm.code.trim().toUpperCase(),
           name: editForm.name.trim(),
-          startDate: toUtc(editForm.startDate),
-          endDate: toUtc(editForm.endDate),
+          startDate: toUtcStart(editForm.startDate),
+          endDate: toUtcEnd(editForm.endDate),
           isActive: editForm.isActive,
-          registrationDeadline: toUtc(editForm.registrationDeadline),
-          topicDeadline: toUtc(editForm.topicDeadline),
-          mentorDeadline: toUtc(editForm.mentorDeadline)
+          registrationDeadline: toUtcEnd(editForm.registrationDeadline),
+          topicDeadline: toUtcEnd(editForm.topicDeadline),
+          mentorDeadline: toUtcEnd(editForm.mentorDeadline)
         })
       })
       toast.success(`Đã cập nhật học kỳ ${editForm.code} thành công.`)

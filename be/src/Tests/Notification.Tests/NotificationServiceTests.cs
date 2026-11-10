@@ -213,6 +213,39 @@ public class NotificationServiceTests
 
         Assert.Equal(2, emailService.SentEmails.Count);
         Assert.Equal(studentEmail, emailService.SentEmails[1].To);
+        Assert.Contains("đã chấp nhận", emailService.SentEmails[1].Subject);
+        Assert.DoesNotContain("đã đã", emailService.SentEmails[1].Subject);
         Assert.Contains("ĐÃ CHẤP NHẬN", emailService.SentEmails[1].Body);
+        Assert.Contains($"cid:{EmailService.BrandLogoContentId}", emailService.SentEmails[1].Body);
+    }
+
+    [Fact]
+    public async Task Mentor_Decision_Dispatches_To_All_Real_Group_Members_Without_Duplicates()
+    {
+        var emailService = new TestEmailService();
+        var store = new InMemoryNotificationStore();
+        var handler = new NotificationHandler(emailService, store, NullLogger<NotificationHandler>.Instance);
+
+        var decision = new MentorDecisionEvent(
+            RequestId: Guid.NewGuid(),
+            GroupId: Guid.NewGuid(),
+            MentorId: Guid.NewGuid(),
+            IsAccepted: false,
+            DecisionReason: "Đã đủ số lượng nhóm",
+            DecidedAt: DateTime.UtcNow,
+            RequesterEmail: "leader@fpt.edu.vn",
+            MentorEmail: "mentor@fpt.edu.vn",
+            GroupName: "Team Alpha",
+            MentorName: "ThS. Đặng Hùng",
+            RecipientEmails: ["leader@fpt.edu.vn", "member2@fpt.edu.vn", "member3@fpt.edu.vn", "LEADER@fpt.edu.vn", "demo@demo.internal"]
+        );
+
+        await handler.HandleEventAsync(decision);
+
+        Assert.Equal(3, emailService.SentEmails.Count);
+        Assert.Equal(["leader@fpt.edu.vn", "member2@fpt.edu.vn", "member3@fpt.edu.vn"],
+            emailService.SentEmails.Select(x => x.To));
+        Assert.Contains("TỪ CHỐI", emailService.SentEmails[0].Body);
+        Assert.Contains($"cid:{EmailService.BrandLogoContentId}", emailService.SentEmails[0].Body);
     }
 }

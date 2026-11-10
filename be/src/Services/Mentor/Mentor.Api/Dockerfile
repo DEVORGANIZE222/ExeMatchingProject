@@ -21,6 +21,7 @@ RUN dotnet publish "Mentor.Api.csproj" -c Release -o /app/publish /p:UseAppHost=
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 EXPOSE 8080
 EXPOSE 50051
 COPY --from=build /app/publish .

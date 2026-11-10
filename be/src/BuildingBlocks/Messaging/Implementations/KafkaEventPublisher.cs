@@ -21,11 +21,11 @@ public class KafkaEventPublisher : IEventPublisher, IDisposable
         {
             var config = new ProducerConfig
             {
-                BootstrapServers = _settings.BootstrapServers,
                 Acks = Acks.All,
                 MessageTimeoutMs = 10000,
                 EnableIdempotence = true
             };
+            KafkaConfigHelper.ApplyTo(config, _settings);
             return new ProducerBuilder<string, string>(config).Build();
         });
     }

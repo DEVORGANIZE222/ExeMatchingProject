@@ -12,6 +12,21 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
 {
     private IQueryable<Student> StudentQuery => db.Students.Include(s => s.User).ThenInclude(u => u.Role).Include(s => s.Semester).Include(s => s.StrengthRoles);
     public Task<User?> UserByEmail(string email, CancellationToken ct) => db.Users.Include(u => u.Role).SingleOrDefaultAsync(u => u.Email.ToLower() == email, ct);
+    public async Task<Dictionary<string, User>> UsersByEmails(IEnumerable<string> lowerEmails, CancellationToken ct)
+    {
+        var normalized = lowerEmails.Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var map = new Dictionary<string, User>(StringComparer.OrdinalIgnoreCase);
+        if (normalized.Count == 0) return map;
+
+        var users = await db.Users.Include(u => u.Role)
+            .Where(u => normalized.Contains(u.Email.ToLower()))
+            .ToListAsync(ct);
+        foreach (var user in users) map.TryAdd(user.Email.Trim().ToLowerInvariant(), user);
+        return map;
+    }
     public Task<User?> UserByGoogleSubject(string subject, CancellationToken ct) => db.Users.Include(u => u.Role).SingleOrDefaultAsync(u => u.GoogleSubject == subject, ct);
     public Task<User?> UserById(Guid id, CancellationToken ct) => db.Users.Include(u => u.Role).SingleOrDefaultAsync(u => u.Id == id, ct);
     public Task<Student?> StudentById(Guid id, CancellationToken ct) => StudentQuery.SingleOrDefaultAsync(s => s.Id == id, ct);
@@ -45,13 +60,44 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
     public Task<Semester?> SemesterById(Guid id, CancellationToken ct) => db.Semesters.SingleOrDefaultAsync(s => s.Id == id, ct);
     public Task<Semester?> SemesterByCode(string code, CancellationToken ct) => db.Semesters.SingleOrDefaultAsync(s => s.Code.ToUpper() == code, ct);
     public Task<bool> StudentExists(string code, Guid semesterId, CancellationToken ct) => db.Students.AnyAsync(s => s.StudentCode.ToUpper() == code && s.SemesterId == semesterId, ct);
+    public async Task<HashSet<string>> StudentCodesInSemester(Guid semesterId, CancellationToken ct)
+    {
+        var codes = await db.Students.AsNoTracking()
+            .Where(s => s.SemesterId == semesterId)
+            .Select(s => s.StudentCode)
+            .ToListAsync(ct);
+        return codes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
     public Task<bool> SemesterHasStudents(Guid id, CancellationToken ct) => db.Students.AnyAsync(s => s.SemesterId == id, ct);
     public async Task<IReadOnlyList<StudentStrengthRole>> StudentStrengthRoles(Guid studentId, CancellationToken ct)
         => await db.StudentStrengthRoles.Where(x => x.StudentId == studentId).OrderBy(x => x.RoleCode).ToListAsync(ct);
     public Task<bool> EnrollmentExists(Guid userId, Guid semesterId, CancellationToken ct) => db.Students.AnyAsync(s => s.UserId == userId && s.SemesterId == semesterId, ct);
+    public async Task<IReadOnlyList<UserEnrollmentSummary>> UserEnrollmentsByUserIds(IEnumerable<Guid> userIds, CancellationToken ct)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+        return await db.Students.AsNoTracking()
+            .Where(s => ids.Contains(s.UserId))
+            .OrderByDescending(s => s.Semester.StartDate)
+            .Select(s => new UserEnrollmentSummary(s.UserId, s.SemesterId, s.StudentCode))
+            .ToListAsync(ct);
+    }
     public Task<Role> RoleByName(string name, CancellationToken ct) => db.Roles.SingleAsync(r => r.Name == name, ct);
     public Task<bool> GoogleEmailAllowed(string email, CancellationToken ct) => db.GoogleAllowedEmails.AnyAsync(x => x.Email == email, ct);
     public async Task<IReadOnlyList<GoogleAllowedEmail>> GoogleAllowedEmails(CancellationToken ct) => await db.GoogleAllowedEmails.AsNoTracking().OrderBy(x => x.Email).ToListAsync(ct);
+    public async Task<HashSet<string>> ExistingAllowedGoogleEmails(IEnumerable<string> lowerEmails, CancellationToken ct)
+    {
+        var normalized = lowerEmails.Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (normalized.Count == 0) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existing = await db.GoogleAllowedEmails.AsNoTracking()
+            .Where(x => normalized.Contains(x.Email.ToLower()))
+            .Select(x => x.Email)
+            .ToListAsync(ct);
+        return existing.ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
 
     public async Task<PageResult<StudentResponse>> Students(ListQuery query, CancellationToken ct)
     {
@@ -112,6 +158,25 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
             AddOutboxEvent("student-imported", payload);
         }
     }
+    public void AddStudentsRange(IReadOnlyList<Student> students)
+    {
+        if (students.Count == 0) return;
+        var previousAutoDetect = db.ChangeTracker.AutoDetectChangesEnabled;
+        db.ChangeTracker.AutoDetectChangesEnabled = false;
+        try
+        {
+            foreach (var student in students)
+            {
+                if (db.Entry(student.User).State == EntityState.Detached)
+                    db.Entry(student.User).State = EntityState.Added;
+                db.Entry(student).State = EntityState.Added;
+            }
+        }
+        finally
+        {
+            db.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetect;
+        }
+    }
     public void AddUser(User user) => db.Users.Add(user);
     public void RemoveStudent(Student student) => db.Students.Remove(student);
     public async Task DeleteStudentEnrollment(Guid studentId, CancellationToken ct)
@@ -153,6 +218,20 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
     public void AddSemester(Semester semester) => db.Semesters.Add(semester);
     public void RemoveSemester(Semester semester) => db.Semesters.Remove(semester);
     public void AddGoogleAllowedEmail(GoogleAllowedEmail email) => db.GoogleAllowedEmails.Add(email);
+    public void AddGoogleAllowedEmailsRange(IReadOnlyList<GoogleAllowedEmail> emails)
+    {
+        if (emails.Count == 0) return;
+        var previousAutoDetect = db.ChangeTracker.AutoDetectChangesEnabled;
+        db.ChangeTracker.AutoDetectChangesEnabled = false;
+        try
+        {
+            db.GoogleAllowedEmails.AddRange(emails);
+        }
+        finally
+        {
+            db.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetect;
+        }
+    }
     public void RemoveGoogleAllowedEmail(GoogleAllowedEmail email) => db.GoogleAllowedEmails.Remove(email);
     public void AddStudentStrengthRole(StudentStrengthRole role) => db.StudentStrengthRoles.Add(role);
     public void RemoveStudentStrengthRole(StudentStrengthRole role) => db.StudentStrengthRoles.Remove(role);

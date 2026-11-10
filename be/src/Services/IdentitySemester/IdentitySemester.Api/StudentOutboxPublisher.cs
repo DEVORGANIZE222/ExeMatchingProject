@@ -1,5 +1,6 @@
 using Confluent.Kafka;
 using EXETeamMatching.IdentitySemester.Infrastructure.Persistence;
+using EXETeamMatching.Messaging.Settings;
 using Microsoft.EntityFrameworkCore;
 
 namespace EXETeamMatching.IdentitySemester.Api;
@@ -10,30 +11,47 @@ public class StudentOutboxPublisher(IServiceScopeFactory scopes, IConfiguration 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!config.GetValue("Outbox:Enabled", true)) return;
-        using var producer = new ProducerBuilder<string, string>(new ProducerConfig
+
+        IProducer<string, string>? producer = null;
+        try
         {
-            BootstrapServers = config["KafkaSettings:BootstrapServers"],
-            EnableIdempotence = true, Acks = Acks.All, MessageTimeoutMs = 10000
-        }).Build();
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                using var scope = scopes.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<IdentitySemesterDbContext>();
-                var pending = await db.StudentEventOutbox.Where(e => e.PublishedAt == null).OrderBy(e => e.CreatedAt).Take(50).ToListAsync(stoppingToken);
-                foreach (var item in pending)
+                try
                 {
-                    await producer.ProduceAsync(item.Topic, new Message<string, string> { Key = item.Id.ToString(), Value = item.Payload }, stoppingToken);
-                    item.PublishedAt = DateTime.UtcNow;
-                    await db.SaveChangesAsync(stoppingToken);
+                    if (producer is null)
+                    {
+                        var producerConfig = new ProducerConfig
+                        {
+                            EnableIdempotence = true,
+                            Acks = Acks.All,
+                            MessageTimeoutMs = 10000
+                        };
+                        KafkaConfigHelper.ApplyTo(producerConfig, KafkaConfigHelper.Resolve(config));
+                        producer = new ProducerBuilder<string, string>(producerConfig).Build();
+                    }
+
+                    using var scope = scopes.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<IdentitySemesterDbContext>();
+                    var pending = await db.StudentEventOutbox.Where(e => e.PublishedAt == null).OrderBy(e => e.CreatedAt).Take(50).ToListAsync(stoppingToken);
+                    foreach (var item in pending)
+                    {
+                        await producer.ProduceAsync(item.Topic, new Message<string, string> { Key = item.Id.ToString(), Value = item.Payload }, stoppingToken);
+                        item.PublishedAt = DateTime.UtcNow;
+                        await db.SaveChangesAsync(stoppingToken);
+                    }
+                    if (pending.Count > 0) logger.LogInformation("Published {Count} student events", pending.Count);
                 }
-                if (pending.Count > 0) logger.LogInformation("Published {Count} student events", pending.Count);
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+                catch (Exception ex) { logger.LogWarning(ex, "Student events remain in the outbox; retrying."); }
+
+                try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-            catch (Exception ex) { logger.LogWarning(ex, "Student events remain in the outbox; retrying."); }
-            try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+        }
+        finally
+        {
+            producer?.Dispose();
         }
     }
 }

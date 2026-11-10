@@ -84,5 +84,6 @@ public record MentorDecisionEvent(
     string? RequesterEmail = null,
     string? MentorEmail = null,
     string? GroupName = null,
-    string? MentorName = null
+    string? MentorName = null,
+    IReadOnlyList<string>? RecipientEmails = null
 );

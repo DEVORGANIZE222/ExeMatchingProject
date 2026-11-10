@@ -4,12 +4,18 @@ using EXETeamMatching.IdentitySemester.Application.Services;
 using EXETeamMatching.IdentitySemester.Infrastructure.Persistence;
 using EXETeamMatching.IdentitySemester.Infrastructure.Services;
 using EXETeamMatching.IdentitySemester.Api;
+using EXETeamMatching.Messaging.Settings;
+using EXETeamMatching.SharedKernel.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Configuration.GetRenderPort() is { } renderPort)
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{renderPort}");
+}
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -63,8 +69,9 @@ builder.Services.AddAuthorization(options =>
             .RequireClaim("scope", "mentor-team-contacts")
             .RequireClaim("group_id"));
 });
-builder.Services.AddDbContext<IdentitySemesterDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection("KafkaSettings"));
+builder.Services.AddDbContext<IdentitySemesterDbContext>((sp, options) =>
+    options.UseNpgsql(sp.GetRequiredService<IConfiguration>().ResolvePostgresConnectionString()));
 builder.Services.AddScoped<IIdentityStore, IdentityRepository>();
 builder.Services.AddScoped<IdentityService>();
 builder.Services.AddScoped<IAuthenticationService>(sp => sp.GetRequiredService<IdentityService>());

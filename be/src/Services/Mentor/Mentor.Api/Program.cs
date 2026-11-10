@@ -8,6 +8,7 @@ using EXETeamMatching.Mentor.Grpc.Services;
 using EXETeamMatching.Mentor.Api.Controllers;
 using EXETeamMatching.Mentor.Infrastructure.Persistence;
 using EXETeamMatching.Mentor.Infrastructure.Repositories;
+using EXETeamMatching.SharedKernel.Configuration;
 using EXETeamMatching.SharedKernel.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -17,8 +18,17 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var renderPort = builder.Configuration.GetRenderPort();
 builder.WebHost.ConfigureKestrel(options =>
 {
+    if (renderPort is { } port)
+    {
+        // Render terminates TLS at its edge proxy and forwards HTTP/1.1 to $PORT;
+        // both REST controllers and gRPC-Web share this single endpoint.
+        options.ListenAnyIP(port, endpoint => endpoint.Protocols = HttpProtocols.Http1);
+        return;
+    }
+
     options.ListenAnyIP(8080, endpoint => endpoint.Protocols = HttpProtocols.Http1);
     options.ListenAnyIP(50051, endpoint => endpoint.Protocols = HttpProtocols.Http2);
 });
@@ -76,11 +86,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 builder.Services.AddAuthorization();
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-                       ?? builder.Configuration["DATABASE_CONNECTION_STRING"];
-
-builder.Services.AddDbContext<MentorDbContext>(options =>
-    options.UseNpgsql(connectionString));
+builder.Services.AddDbContext<MentorDbContext>((sp, options) =>
+    options.UseNpgsql(sp.GetRequiredService<IConfiguration>().ResolvePostgresConnectionString()));
 builder.Services.AddHttpClient(MentorService.GroupsClientName, client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["GroupMatching:BaseUrl"] ?? "http://localhost:5002/");
@@ -110,7 +117,9 @@ if (!openApiExportOnly)
 }
 
 app.UseMiddleware<GlobalExceptionHandler>();
+app.UseRouting();
 app.UseCors("AllowAll");
+app.UseGrpcWeb();
 
 
 app.UseSwagger();
@@ -124,7 +133,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "Mentor" })).AllowAnonymous();
 app.MapControllers();
-app.MapGrpcService<MentorGrpcServiceImpl>();
+app.MapGrpcService<MentorGrpcServiceImpl>().EnableGrpcWeb();
 
 app.Run();
 

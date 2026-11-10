@@ -60,7 +60,7 @@ http {
     }
 
     server {
-        listen 80;
+        listen ${PORT};
         server_name _;
 
         # Dynamic upstream URLs and hosts configured via environment variables or defaults
@@ -81,6 +81,7 @@ http {
         add_header 'Access-Control-Allow-Origin' '*' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
         add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept, Origin, X-Requested-With' always;
+        add_header 'Access-Control-Expose-Headers' 'X-Total-Count, X-Page-Index, X-Page-Size, X-Total-Pages' always;
 
         if ($request_method = 'OPTIONS') {
             return 204;
