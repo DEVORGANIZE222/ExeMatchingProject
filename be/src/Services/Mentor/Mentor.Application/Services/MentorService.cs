@@ -161,14 +161,20 @@ public class MentorService(
         if (await repository.HasActiveRequestForGroupAsync(request.GroupId, cancellationToken))
             throw new ArgumentException("This group already has a pending or approved mentor request.");
 
+        var leaderMember = group.Members.FirstOrDefault(member => member.StudentId == group.LeaderStudentId);
+        var requesterEmail = !string.IsNullOrWhiteSpace(actor.Email)
+            ? actor.Email.Trim()
+            : (leaderMember?.Email?.Trim() ?? string.Empty);
+
         var mentorRequest = new MentorRequest
         {
             GroupId = request.GroupId,
             MentorId = request.MentorId,
             RequesterUserId = actor.UserId,
-            GroupName = group.GroupName,
-            Topic = group.TopicTitle ?? group.ProjectDescription,
-            RequesterName = group.Members.FirstOrDefault(member => member.StudentId == group.LeaderStudentId)?.FullName ?? "Trưởng nhóm",
+            RequesterEmail = Truncate(requesterEmail, 254),
+            GroupName = Truncate(group.GroupName, 200),
+            Topic = Truncate(group.TopicTitle ?? group.ProjectDescription, 1000),
+            RequesterName = Truncate(leaderMember?.FullName ?? "Trưởng nhóm", 200),
             Message = request.Message.Trim()
         };
         repository.AddRequest(mentorRequest);
@@ -190,7 +196,7 @@ public class MentorService(
                 Message: mentorRequest.Message,
                 RequestedAt: mentorRequest.CreatedAt,
                 MentorEmail: mentor.Email,
-                RequesterEmail: actor.Email,
+                RequesterEmail: string.IsNullOrWhiteSpace(requesterEmail) ? null : requesterEmail,
                 GroupName: group.GroupName,
                 Topic: mentorRequest.Topic
             );
@@ -216,7 +222,7 @@ public class MentorService(
             ?? new GroupMentorStatusResponse(false, null, null, null, null);
     }
 
-    public async Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default)
+    public async Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null)
     {
         await using var transaction = await repository.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var mentor = await repository.GetByUserIdForUpdateAsync(actorUserId, cancellationToken)
@@ -237,11 +243,11 @@ public class MentorService(
             {
                 MentorId = mentor.Id,
                 GroupId = request.GroupId,
-                GroupName = request.GroupName,
-                Topic = request.Topic,
+                GroupName = Truncate(request.GroupName, 200),
+                Topic = Truncate(request.Topic, 1000),
                 Milestone = "Khởi động dự án",
                 Progress = 0,
-                Feedback = decision.DecisionReason.Trim()
+                Feedback = Truncate(decision.DecisionReason.Trim(), 2000)
             });
         }
 
@@ -271,6 +277,10 @@ public class MentorService(
         await repository.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
+        var resolvedRequesterEmail = !string.IsNullOrWhiteSpace(request.RequesterEmail)
+            ? request.RequesterEmail.Trim()
+            : await TryResolveGroupLeaderEmailAsync(request.GroupId, authorizationHeader, cancellationToken);
+
         try
         {
             var decisionEvent = new MentorDecisionEvent(
@@ -280,9 +290,10 @@ public class MentorService(
                 IsAccepted: decision.IsAccepted,
                 DecisionReason: request.DecisionReason,
                 DecidedAt: request.DecidedAt.Value,
-                RequesterEmail: null,
+                RequesterEmail: string.IsNullOrWhiteSpace(resolvedRequesterEmail) ? null : resolvedRequesterEmail,
                 MentorEmail: mentor.Email,
-                GroupName: request.GroupName
+                GroupName: request.GroupName,
+                MentorName: mentor.FullName
             );
             await publisher.PublishAsync("mentor-decision", request.Id.ToString(), decisionEvent, cancellationToken);
             logger.LogInformation("Published mentor-decision event for RequestId {RequestId} to Kafka", request.Id);
@@ -545,6 +556,40 @@ public class MentorService(
         return groupResult?.Data?.Id;
     }
 
+    private async Task<string?> TryResolveGroupLeaderEmailAsync(
+        Guid groupId, string? authorizationHeader, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(authorizationHeader))
+            return null;
+
+        try
+        {
+            var client = clients.CreateClient(GroupsClientName);
+            using var groupRequest = new HttpRequestMessage(HttpMethod.Get, $"api/groups/{groupId}");
+            ApplyAuthorization(groupRequest, authorizationHeader);
+
+            using var response = await client.SendAsync(groupRequest, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var payload = await response.Content.ReadFromJsonAsync<ApiResponse<GroupDetailsPayload>>(cancellationToken: cancellationToken);
+            var group = payload?.Data;
+            if (group is null || group.Members is null)
+                return null;
+
+            var leader = group.Members.FirstOrDefault(m => m.StudentId == group.LeaderStudentId)
+                ?? group.Members.FirstOrDefault(m => !m.IsDemo && !string.IsNullOrWhiteSpace(m.Email));
+            return !string.IsNullOrWhiteSpace(leader?.Email) && leader.Email.Contains('@')
+                ? leader.Email.Trim()
+                : null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not fallback-resolve leader email for group {GroupId}", groupId);
+            return null;
+        }
+    }
+
     /// <summary>
     /// Mints a one-minute token scoped to this group's students and loads their contact
     /// emails from IdentitySemester's internal endpoint.
@@ -627,7 +672,7 @@ public class MentorService(
         Guid? LeaderStudentId,
         List<GroupRequestMember> Members);
 
-    private sealed record GroupRequestMember(Guid StudentId, string FullName);
+    private sealed record GroupRequestMember(Guid StudentId, string FullName, string? Email = null);
 
     private sealed record GroupDetailsPayload(
         Guid Id,
@@ -647,7 +692,8 @@ public class MentorService(
         string FullName,
         int Role,
         DateTime JoinedAt,
-        bool IsDemo);
+        bool IsDemo,
+        string? Email = null);
 
     private sealed record MentorTeamContactPayload(Guid StudentId, string Email);
     private sealed record StudentGroupPayload(Guid Id);

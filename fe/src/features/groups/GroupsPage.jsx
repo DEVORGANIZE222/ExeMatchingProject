@@ -793,13 +793,14 @@ export default function GroupsPage() {
   const myRoles = account?.student?.strengthRoles || []
   const activeSemester = semesters.find((s) => s.code === (isAdmin ? semesterCode : studentSemesterCode))
   const currentStudentGroup = myGroup || groups.find((g) => g.members.some((m) => m.studentId === currentStudentId)) || null
+  const studentHasGroup = isStudent && Boolean(currentStudentGroup)
 
   const matchingGroupsCount = isStudent && myRoles.length > 0
     ? groups.filter((g) => {
-        if (g.members.some((m) => m.studentId === currentStudentId)) return false
-        const { fit } = analyzeGroupRoles(g, myRoles, true, currentStudentId)
-        return fit?.status === 'match' || fit?.status === 'complement'
-      }).length
+      if (g.members.some((m) => m.studentId === currentStudentId)) return false
+      const { fit } = analyzeGroupRoles(g, myRoles, true, currentStudentId)
+      return fit?.status === 'match' || fit?.status === 'complement'
+    }).length
     : 0
 
   const filteredGroups = groups.filter((g) => {
@@ -852,10 +853,21 @@ export default function GroupsPage() {
 
           {/* Primary action placed prominently at top-right */}
           {(isAdmin || studentSemesterCode) && (
-            <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-              <Plus size={16} />
-              <span>Tạo nhóm mới</span>
-            </button>
+            <span
+              title={studentHasGroup ? 'Bạn đã tham gia một nhóm trong học kỳ này' : 'Tạo nhóm khởi nghiệp mới'}
+              style={studentHasGroup ? { cursor: 'not-allowed' } : undefined}
+            >
+              <button
+                type="button"
+                className={`btn ${studentHasGroup ? 'btn-outline' : 'btn-primary'}`}
+                disabled={studentHasGroup}
+                onClick={() => !studentHasGroup && setShowCreateModal(true)}
+                style={studentHasGroup ? { opacity: 0.6 } : undefined}
+              >
+                <Plus size={16} />
+                <span>Tạo nhóm mới</span>
+              </button>
+            </span>
           )}
         </div>
       </div>
@@ -886,99 +898,107 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* ── Semester Header / Filter Tabs & Right Search/Admin Menu ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 'var(--space-6)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {/* Admin and Mentor have Semester Dropdown; Student has Fixed Badge */}
-          {isAdmin || isMentor ? (
-            <select
-              className="select input-sm"
-              value={semesterCode}
-              onChange={(e) => {
-                setSemesterCode(e.target.value)
-                setCurrentPage(1)
-              }}
-              style={{ fontWeight: 600, width: 'auto', minWidth: 165, maxWidth: 240 }}
-            >
-              {semesters.map((s) => (
-                <option key={s.id} value={s.code}>
-                  {s.code} · {s.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <div className="badge badge-teal" style={{ fontSize: 13, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Calendar size={14} />
+      {/* ── Personal Context Chips (Separated from List Filters) ── */}
+      <div className="groups-context-bar">
+        {isAdmin || isMentor ? (
+          <select
+            className="select input-sm"
+            value={semesterCode}
+            onChange={(e) => {
+              setSemesterCode(e.target.value)
+              setCurrentPage(1)
+            }}
+            style={{ fontWeight: 600, width: 'auto', minWidth: 180, maxWidth: 260 }}
+          >
+            {semesters.map((s) => (
+              <option key={s.id} value={s.code}>
+                {s.code} - {s.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <>
+            <div className="groups-context-pill semester">
+              <Calendar size={14} />
+              <span>
+                Học kỳ:{' '}
+                <strong>
+                  {activeSemester
+                    ? (activeSemester.name && activeSemester.name.toLowerCase() !== activeSemester.code.toLowerCase()
+                      ? `${activeSemester.code} - ${activeSemester.name}`
+                      : activeSemester.code)
+                    : (studentSemesterCode || 'Chưa xếp kỳ')}
+                </strong>
+              </span>
+            </div>
+            {account?.student && (
+              <button
+                type="button"
+                className="groups-context-pill core-btn"
+                onClick={() => setShowCoreModal(true)}
+                title="Xem & chọn thế mạnh chuyên môn (Core) của bạn"
+              >
+                <Sparkles size={14} color="var(--primary)" />
                 <span>
-                  Học kỳ của bạn: <strong>{activeSemester ? `${activeSemester.code} · ${activeSemester.name}` : (studentSemesterCode || 'Chưa xếp kỳ')}</strong>
-                </span>
-              </div>
-              {account?.student && (
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setShowCoreModal(true)}
-                  title="Xem & chọn thế mạnh chuyên môn (Core) của bạn"
-                >
-                  <Sparkles size={14} color="var(--primary)" />
-                  <span>
-                    Core: {account.student.strengthRoles?.length
+                  Core cá nhân:{' '}
+                  <strong style={{ color: 'var(--text-main)' }}>
+                    {account.student.strengthRoles?.length
                       ? account.student.strengthRoles.map(getTeamRoleLabel).join(', ')
                       : 'Chưa chọn'}
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Filter Tabs */}
-          <div className="filter-tab-bar" style={{ margin: 0 }}>
-            <button
-              className={`tab-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => {
-                setFilter('all')
-                setCurrentPage(1)
-              }}
-            >
-              Tất cả ({groups.length})
-            </button>
-            <button
-              className={`tab-btn ${filter === 'recruiting' ? 'active' : ''}`}
-              onClick={() => {
-                setFilter('recruiting')
-                setCurrentPage(1)
-              }}
-            >
-              Đang tuyển ({groups.filter((g) => g.statusType === 'recruiting').length})
-            </button>
-            <button
-              className={`tab-btn ${filter === 'full' ? 'active' : ''}`}
-              onClick={() => {
-                setFilter('full')
-                setCurrentPage(1)
-              }}
-            >
-              Đã chốt / Đủ người ({groups.filter((g) => g.statusType === 'full').length})
-            </button>
-            {isStudent && myRoles.length > 0 && (
-              <button
-                className={`tab-btn ${filter === 'matching' ? 'active' : ''}`}
-                onClick={() => {
-                  setFilter('matching')
-                  setCurrentPage(1)
-                }}
-              >
-                Phù hợp Core ({matchingGroupsCount})
+                  </strong>
+                </span>
               </button>
             )}
-          </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Single-Row List Filter Tabs + Right Search Bar ── */}
+      <div className="groups-toolbar">
+        <div className="filter-tab-bar" style={{ margin: 0, flexWrap: 'wrap' }}>
+          <button
+            className={`tab-btn ${filter === 'all' ? 'active' : ''}`}
+            onClick={() => {
+              setFilter('all')
+              setCurrentPage(1)
+            }}
+          >
+            Tất cả ({groups.length})
+          </button>
+          <button
+            className={`tab-btn ${filter === 'recruiting' ? 'active' : ''}`}
+            onClick={() => {
+              setFilter('recruiting')
+              setCurrentPage(1)
+            }}
+          >
+            Đang tuyển ({groups.filter((g) => g.statusType === 'recruiting').length})
+          </button>
+          <button
+            className={`tab-btn ${filter === 'full' ? 'active' : ''}`}
+            onClick={() => {
+              setFilter('full')
+              setCurrentPage(1)
+            }}
+          >
+            Đã chốt / Đủ người ({groups.filter((g) => g.statusType === 'full').length})
+          </button>
+          {isStudent && myRoles.length > 0 && (
+            <button
+              className={`tab-btn ${filter === 'matching' ? 'active' : ''}`}
+              onClick={() => {
+                setFilter('matching')
+                setCurrentPage(1)
+              }}
+            >
+              Phù hợp Core ({matchingGroupsCount})
+            </button>
+          )}
         </div>
 
-        {/* Search & Admin Overflow Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flex: '1 1 280px', justifyContent: 'flex-end' }}>
-          <div style={{ position: 'relative', flex: '0 1 320px', width: '100%', minWidth: 220 }}>
-            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
+        <div className="groups-toolbar-search">
+          <div className="groups-search-wrap">
+            <Search size={15} className="groups-search-icon" />
             <input
               type="text"
               className="input input-sm"
@@ -988,7 +1008,6 @@ export default function GroupsPage() {
                 setSearch(e.target.value)
                 setCurrentPage(1)
               }}
-              style={{ paddingLeft: 34 }}
             />
           </div>
 
@@ -1065,39 +1084,6 @@ export default function GroupsPage() {
         </div>
       </div>
 
-      {/* Pinned My Group Strip for Student */}
-      {isStudent && currentStudentGroup && (
-        <div
-          className="card"
-          style={{
-            marginBottom: 'var(--space-5)',
-            backgroundColor: '#F0FDF4',
-            borderColor: '#BBF7D0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 12,
-            padding: '12px 16px'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span className="badge badge-green">Nhóm của bạn</span>
-            <strong style={{ fontSize: 14.5, color: 'var(--text-main)' }}>{currentStudentGroup.name}</strong>
-            <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
-              {currentStudentGroup.members.length}/5 thành viên · {currentStudentGroup.statusText}
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => openGroupDetails(currentStudentGroup)}
-          >
-            Xem & Quản lý nhóm
-          </button>
-        </div>
-      )}
-
       {/* ── Group Cards Grid ── */}
       <div className="groups-grid">
         {pagedGroups.map((group) => {
@@ -1105,64 +1091,80 @@ export default function GroupsPage() {
           const isInGroup = group.members.some((m) => m.studentId === currentStudentId)
           const roleAnalysis = analyzeGroupRoles(group, myRoles, isStudent, currentStudentId)
           const showFitBadge = isStudent && !isInGroup && roleAnalysis.isRecruiting && roleAnalysis.fit
+          const hasRealDescription = Boolean(group.projectDescription && group.projectDescription !== 'Chưa có mô tả dự án.')
+          const capacityPercent = Math.min(100, Math.round((group.members.length / group.maxMembers) * 100))
 
           return (
             <div className="group-clean-card" key={group.id} style={{ borderColor: isInGroup ? 'var(--primary)' : undefined }}>
-              <div className="group-status-header">
-                {group.isLocked ? (
-                  <span className="badge badge-teal">
-                    <Lock size={12} /> Đã khóa nhóm
-                  </span>
-                ) : isFull ? (
-                  <span className="badge badge-teal">
-                    <CheckCircle2 size={12} /> {group.statusText}
-                  </span>
-                ) : (
-                  <span className="badge badge-warning">
-                    <Users size={12} /> {group.statusText}
-                  </span>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* Line 1: Title + Semantic Badges (left) & Capacity Mini Meter (right) */}
+              <div className="group-card-head">
+                <div className="group-head-main">
+                  <h2 className="group-title">{group.name}</h2>
+                  {isInGroup && (
+                    <span className="badge badge-green" style={{ fontSize: 10.5 }}>Nhóm của bạn</span>
+                  )}
+                  {group.isLocked ? (
+                    <span className="badge badge-teal" style={{ fontSize: 10.5 }}>
+                      <Lock size={11} /> Đã chốt
+                    </span>
+                  ) : isFull ? (
+                    <span className="badge badge-teal" style={{ fontSize: 10.5 }}>
+                      <CheckCircle2 size={11} /> Đủ người
+                    </span>
+                  ) : (
+                    <span className="badge badge-warning" style={{ fontSize: 10.5 }}>
+                      <Users size={11} /> Cần {roleAnalysis.openSlots} TV
+                    </span>
+                  )}
                   {showFitBadge && (roleAnalysis.fit.status === 'match' || roleAnalysis.fit.status === 'complement') && (
                     <span className="badge badge-green" style={{ fontSize: 10.5 }} title={roleAnalysis.fit.detail}>
                       ✓ {roleAnalysis.fit.label}
                     </span>
                   )}
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    {group.members.length}/{group.maxMembers} thành viên
-                  </span>
+                </div>
+
+                <div className="group-capacity-pill" title={`${group.members.length}/${group.maxMembers} thành viên`}>
+                  <span className="group-capacity-text">{group.members.length}/{group.maxMembers}</span>
+                  <div className="group-capacity-track">
+                    <div
+                      className={`group-capacity-fill ${roleAnalysis.isRecruiting ? 'recruiting' : ''}`}
+                      style={{ width: `${capacityPercent}%` }}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <h2 className="group-title">{group.name}</h2>
-                {isInGroup && (
-                  <span className="badge badge-green" style={{ fontSize: 10 }}>Nhóm của bạn</span>
-                )}
-              </div>
-              <p className="group-topic">{group.topic}</p>
-              <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>{group.projectDescription}</p>
+              {/* Line 2: Topic with explicit label */}
+              <p className="group-card-topic">
+                <span className="group-card-meta-label">Đề tài: </span>
+                <strong style={{ fontWeight: 600 }}>{group.topic}</strong>
+              </p>
 
-              {/* Team Role Coverage & Needs / Compatibility */}
-              <div className="group-card-roles">
-                <div className="group-role-row">
-                  <span className="group-role-row-label">Đang có:</span>
-                  {roleAnalysis.coveredEntries.length > 0 ? (
-                    roleAnalysis.coveredEntries.map((item) => (
-                      <span
-                        className="group-role-chip covered"
-                        key={item.code}
-                        title={`${item.count} thành viên có role ${item.label}`}
-                      >
-                        {item.label}{item.count > 1 ? ` ×${item.count}` : ''}
-                      </span>
-                    ))
-                  ) : (
-                    <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Chưa có thành viên chọn Core</span>
-                  )}
-                </div>
+              {/* Line 3: Compact 2-line project description */}
+              {hasRealDescription && (
+                <p className="group-card-desc">{group.projectDescription}</p>
+              )}
 
-                {roleAnalysis.isRecruiting ? (
+              {/* Role Breakdown: Full box for Recruiting groups, ultra-compact covered row for Closed/Full groups */}
+              {roleAnalysis.isRecruiting ? (
+                <div className="group-card-roles">
+                  <div className="group-role-row">
+                    <span className="group-role-row-label">Đang có:</span>
+                    {roleAnalysis.coveredEntries.length > 0 ? (
+                      roleAnalysis.coveredEntries.map((item) => (
+                        <span
+                          className="group-role-chip covered"
+                          key={item.code}
+                          title={`${item.count} thành viên có role ${item.label}`}
+                        >
+                          {item.label}{item.count > 1 ? ` ×${item.count}` : ''}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Chưa có thành viên chọn Core</span>
+                    )}
+                  </div>
+
                   <div className="group-role-row">
                     <span className="group-role-row-label">Cần tuyển:</span>
                     {roleAnalysis.explicitNeeds.length > 0 ? (
@@ -1201,54 +1203,64 @@ export default function GroupsPage() {
                       </>
                     )}
                   </div>
-                ) : (
-                  <div className="group-role-row">
-                    <span className="group-role-row-label">Chưa có:</span>
-                    {roleAnalysis.missingStandardRoles.length > 0 ? (
-                      <>
-                        {roleAnalysis.missingStandardRoles.slice(0, 4).map((opt) => (
-                          <span className="group-role-chip missing" key={opt.code}>
-                            {opt.label}
-                          </span>
-                        ))}
-                        {roleAnalysis.missingStandardRoles.length > 4 && (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            +{roleAnalysis.missingStandardRoles.length - 4}
+
+                  {showFitBadge && roleAnalysis.fit.status === 'mismatch' && (
+                    <div style={{ fontSize: 11, color: '#92400E', marginTop: 2 }}>
+                      {roleAnalysis.fit.detail}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="group-skills-closed-row">
+                  <span className="group-role-row-label">Role hiện có:</span>
+                  {roleAnalysis.coveredEntries.length > 0 ? (
+                    roleAnalysis.coveredEntries.map((item) => (
+                      <span
+                        className="group-role-chip covered"
+                        key={item.code}
+                        title={`${item.count} thành viên có role ${item.label}`}
+                      >
+                        {item.label}{item.count > 1 ? ` ×${item.count}` : ''}
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Chưa có thành viên chọn Core</span>
+                  )}
+                </div>
+              )}
+
+              {/* Compact Overlapping Avatar Stack */}
+              <div className="group-members-row">
+                <div className="member-avatar-stack">
+                  {group.members.map((m, idx) => {
+                    const memberAvatar = m.avatarUrl || (m.studentId === currentStudentId ? (account?.avatarUrl || account?.googlePictureUrl) : '')
+                    const memberRoles = m.studentId === currentStudentId && isStudent ? myRoles : (m.strengthRoles || [])
+                    const memberRoleText = memberRoles.length ? ` · Core: ${memberRoles.map(getTeamRoleLabel).join(', ')}` : ''
+                    return (
+                      <span
+                        key={m.studentId || idx}
+                        className={`member-stack-item ${m.isLeader ? 'leader' : ''}`}
+                        style={{ zIndex: m.isLeader ? 10 : Math.max(1, group.members.length - idx) }}
+                        title={`${m.name} (${m.role})${memberRoleText}`}
+                      >
+                        <MemberAvatar src={memberAvatar} name={m.name} size={30} />
+                        {m.isLeader && (
+                          <span className="member-stack-crown" aria-label="Trưởng nhóm">
+                            <Crown size={9} />
                           </span>
                         )}
-                      </>
-                    ) : (
-                      <span style={{ fontSize: 11.5, color: '#15803D', fontWeight: 600 }}>Đủ các role cốt lõi</span>
-                    )}
-                  </div>
-                )}
-
-                {showFitBadge && roleAnalysis.fit.status === 'mismatch' && (
-                  <div style={{ fontSize: 11, color: '#92400E', marginTop: 2 }}>
-                    {roleAnalysis.fit.detail}
-                  </div>
-                )}
+                      </span>
+                    )
+                  })}
+                </div>
+                <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                  {group.members.length} thành viên
+                </span>
               </div>
 
-              {/* Members List */}
-              <div className="group-members-list">
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginRight: 2, flexShrink: 0 }}>Đội ngũ:</span>
-                {group.members.map((m, idx) => {
-                  const memberAvatar = m.avatarUrl || (m.studentId === currentStudentId ? (account?.avatarUrl || account?.googlePictureUrl) : '')
-                  const memberRoleText = m.strengthRoles?.length ? ` · Core: ${m.strengthRoles.map(getTeamRoleLabel).join(', ')}` : ''
-                  return (
-                    <span key={idx} className="member-avatar-pill" title={`${m.name} (${m.role})${memberRoleText}`}>
-                      <MemberAvatar src={memberAvatar} name={m.name} size={20} />
-                      <strong>{m.name.split(' ').pop()}</strong>
-                      {m.isLeader && <Crown size={12} color="#EAB308" style={{ marginLeft: 2 }} />}
-                    </span>
-                  )
-                })}
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              <div className="group-card-footer-meta">
                 <span>Trưởng nhóm: <strong style={{ color: 'var(--text-main)' }}>{group.leader}</strong></span>
-                <span className="badge badge-neutral" style={{ fontSize: 10.5 }}>{group.semesterCode}</span>
+                <span className="badge badge-neutral" style={{ fontSize: 11 }}>Kỳ: {group.semesterCode}</span>
               </div>
 
               {/* Action Buttons */}
@@ -1403,13 +1415,12 @@ export default function GroupsPage() {
                 return (
                   <div style={{ borderTop: '1px solid var(--border-default)', marginTop: 12, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {isStudent && detailRoles.fit && (!viewerInGroup || detailRoles.fit.status === 'no-core') && (
-                      <div className={`group-fit-banner ${
-                        detailRoles.fit.status === 'match' || detailRoles.fit.status === 'complement'
+                      <div className={`group-fit-banner ${detailRoles.fit.status === 'match' || detailRoles.fit.status === 'complement'
                           ? 'match'
                           : detailRoles.fit.status === 'mismatch' || detailRoles.fit.status === 'no-core'
                             ? 'mismatch'
                             : ''
-                      }`} style={{ marginBottom: 2 }}>
+                        }`} style={{ marginBottom: 2 }}>
                         <div>
                           <strong style={{ display: 'block', marginBottom: 2 }}>
                             {detailRoles.fit.status === 'match' || detailRoles.fit.status === 'complement'
@@ -1515,15 +1526,15 @@ export default function GroupsPage() {
                   {selectedGroup.canRequestMentor && selectedGroup.isCurrentLeader &&
                     !loadingMentorStatus && !mentorStatusError &&
                     !(mentorStatus?.groupId === selectedGroup.id && mentorStatus.data.hasActiveRequest) && (
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      disabled={loadingMentors}
-                      onClick={() => openMentorRequest(selectedGroup)}
-                    >
-                      <Search size={14} /> {loadingMentors ? 'Đang tải mentor...' : 'Tìm mentor'}
-                    </button>
-                  )}
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        disabled={loadingMentors}
+                        onClick={() => openMentorRequest(selectedGroup)}
+                      >
+                        <Search size={14} /> {loadingMentors ? 'Đang tải mentor...' : 'Tìm mentor'}
+                      </button>
+                    )}
                 </div>
               )}
             </div>
@@ -1536,16 +1547,16 @@ export default function GroupsPage() {
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Bỏ phiếu bầu Nhóm trưởng</span>
                   {(isAdmin || (isStudent && selectedGroup.members.some((member) => member.studentId === currentStudentId))) &&
                     demoSeedEnabled && !selectedGroup.isLocked && selectedGroup.members.length < 5 && (
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      disabled={seedingDemoMembers}
-                      onClick={() => handleSeedDemoMembers(selectedGroup)}
-                      title="Thêm nhanh thành viên demo để test bầu Leader & khóa nhóm"
-                    >
-                      <Plus size={13} /> {seedingDemoMembers ? 'Đang seed...' : `Seed SV test (+${5 - selectedGroup.members.length})`}
-                    </button>
-                  )}
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        disabled={seedingDemoMembers}
+                        onClick={() => handleSeedDemoMembers(selectedGroup)}
+                        title="Thêm nhanh thành viên demo để test bầu Leader & khóa nhóm"
+                      >
+                        <Plus size={13} /> {seedingDemoMembers ? 'Đang seed...' : `Seed SV test (+${5 - selectedGroup.members.length})`}
+                      </button>
+                    )}
                 </div>
               </div>
 
@@ -1639,16 +1650,16 @@ export default function GroupsPage() {
                         {/* Kick Button (Admin or first member of group for later members) */}
                         {!selectedGroup.isLocked &&
                           (isAdmin || (selectedGroup.firstMemberId === currentStudentId && m.studentId !== currentStudentId)) && (
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ color: 'var(--error)', padding: '3px 6px' }}
-                            disabled={busy}
-                            onClick={() => handleKickMember(selectedGroup.id, m.studentId, m.name)}
-                            title="Xóa thành viên khỏi nhóm"
-                          >
-                            <UserMinus size={13} />
-                          </button>
-                        )}
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ color: 'var(--error)', padding: '3px 6px' }}
+                              disabled={busy}
+                              onClick={() => handleKickMember(selectedGroup.id, m.studentId, m.name)}
+                              title="Xóa thành viên khỏi nhóm"
+                            >
+                              <UserMinus size={13} />
+                            </button>
+                          )}
                       </div>
                     </div>
                   )
@@ -1657,92 +1668,92 @@ export default function GroupsPage() {
 
               {(isAdmin || selectedGroup.members.some((x) => x.studentId === currentStudentId)) &&
                 !selectedGroup.isLocked && selectedGroup.members.length < 5 && (
-                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-default)' }}>
-                  <form onSubmit={handleInviteMember} style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      className="input input-sm"
-                      placeholder="Tìm hoặc nhập Email / MSSV bạn (VD: SE196620, tên, email...)"
-                      value={inviteIdentifier}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setInviteIdentifier(val)
-                        if (val.trim().length < 2) setInviteCandidates([])
-                      }}
-                      disabled={inviting}
-                    />
-                    <button
-                      type="submit"
-                      className="btn btn-primary btn-sm"
-                      disabled={inviting || !inviteIdentifier.trim()}
-                      style={{ whiteSpace: 'nowrap' }}
-                    >
-                      <UserPlus size={14} /> {inviting ? 'Đang thêm...' : 'Mời vào nhóm'}
-                    </button>
-                  </form>
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-default)' }}>
+                    <form onSubmit={handleInviteMember} style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        className="input input-sm"
+                        placeholder="Tìm hoặc nhập Email / MSSV"
+                        value={inviteIdentifier}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setInviteIdentifier(val)
+                          if (val.trim().length < 2) setInviteCandidates([])
+                        }}
+                        disabled={inviting}
+                      />
+                      <button
+                        type="submit"
+                        className="btn btn-primary btn-sm"
+                        disabled={inviting || !inviteIdentifier.trim()}
+                        style={{ whiteSpace: 'nowrap' }}
+                      >
+                        <UserPlus size={14} /> {inviting ? 'Đang thêm...' : 'Mời vào nhóm'}
+                      </button>
+                    </form>
 
-                  {inviteIdentifier.trim().length >= 2 && (
-                    <div style={{ marginTop: 8, border: '1px solid var(--border-default)', borderRadius: 8, backgroundColor: 'var(--bg-card)', maxHeight: 210, overflowY: 'auto' }}>
-                      {searchingCandidates ? (
-                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
-                          Đang tìm kiếm sinh viên trong học kỳ...
-                        </div>
-                      ) : inviteCandidates.length === 0 ? (
-                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
-                          Không tìm thấy sinh viên phù hợp trong học kỳ {selectedGroup.semesterCode}.
-                        </div>
-                      ) : (
-                        inviteCandidates.map((cand) => (
-                          <div
-                            key={cand.studentId}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              gap: 10,
-                              padding: '8px 12px',
-                              borderBottom: '1px solid var(--border-default)'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                              <MemberAvatar src={cand.avatarUrl} name={cand.fullName} size={26} />
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                  <strong style={{ fontSize: 12.5, color: 'var(--text-main)' }}>{cand.fullName}</strong>
-                                  <span className="badge badge-neutral" style={{ fontSize: 10 }}>{cand.studentCode}</span>
-                                  <span className={`badge ${cand.hasGroup ? 'badge-neutral' : 'badge-green'}`} style={{ fontSize: 10 }}>
-                                    {cand.hasGroup ? 'Đã có nhóm' : 'Chưa có nhóm'}
-                                  </span>
-                                </div>
-                                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
-                                  {cand.email}{cand.major ? ` · ${cand.major}` : ''}
-                                </div>
-                                {cand.strengthRoles?.length > 0 && (
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                                    {cand.strengthRoles.map((r) => (
-                                      <span key={r} className="badge badge-teal" style={{ fontSize: 9.5 }}>
-                                        {getTeamRoleLabel(r)}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="btn btn-outline btn-sm"
-                              style={{ whiteSpace: 'nowrap', fontSize: 11.5 }}
-                              disabled={inviting || cand.hasGroup}
-                              onClick={() => inviteStudentByIdentifier(cand.studentCode)}
-                            >
-                              {cand.hasGroup ? 'Đã vào nhóm' : 'Chọn & Mời'}
-                            </button>
+                    {inviteIdentifier.trim().length >= 2 && (
+                      <div style={{ marginTop: 8, border: '1px solid var(--border-default)', borderRadius: 8, backgroundColor: 'var(--bg-card)', maxHeight: 210, overflowY: 'auto' }}>
+                        {searchingCandidates ? (
+                          <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                            Đang tìm kiếm sinh viên trong học kỳ...
                           </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+                        ) : inviteCandidates.length === 0 ? (
+                          <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                            Không tìm thấy sinh viên phù hợp trong học kỳ {selectedGroup.semesterCode}.
+                          </div>
+                        ) : (
+                          inviteCandidates.map((cand) => (
+                            <div
+                              key={cand.studentId}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 10,
+                                padding: '8px 12px',
+                                borderBottom: '1px solid var(--border-default)'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                <MemberAvatar src={cand.avatarUrl} name={cand.fullName} size={26} />
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <strong style={{ fontSize: 12.5, color: 'var(--text-main)' }}>{cand.fullName}</strong>
+                                    <span className="badge badge-neutral" style={{ fontSize: 10 }}>{cand.studentCode}</span>
+                                    <span className={`badge ${cand.hasGroup ? 'badge-neutral' : 'badge-green'}`} style={{ fontSize: 10 }}>
+                                      {cand.hasGroup ? 'Đã có nhóm' : 'Chưa có nhóm'}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                    {cand.email}{cand.major ? ` · ${cand.major}` : ''}
+                                  </div>
+                                  {cand.strengthRoles?.length > 0 && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                                      {cand.strengthRoles.map((r) => (
+                                        <span key={r} className="badge badge-teal" style={{ fontSize: 9.5 }}>
+                                          {getTeamRoleLabel(r)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                style={{ whiteSpace: 'nowrap', fontSize: 11.5 }}
+                                disabled={inviting || cand.hasGroup}
+                                onClick={() => inviteStudentByIdentifier(cand.studentCode)}
+                              >
+                                {cand.hasGroup ? 'Đã vào nhóm' : 'Chọn & Mời'}
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
             </div>
 
             {/* Modal Actions Footer */}

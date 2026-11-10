@@ -55,6 +55,13 @@ public record SemesterCodeChangedEvent(
     DateTime ChangedAt
 );
 
+/// <summary>Published by IdentitySemester whenever a student updates their strength roles.</summary>
+public record StudentStrengthRolesChangedEvent(
+    Guid StudentId,
+    IReadOnlyList<string> RoleCodes,
+    DateTime ChangedAt
+);
+
 public record MentorRequestedEvent(
     Guid RequestId,
     Guid GroupId,
@@ -76,5 +83,6 @@ public record MentorDecisionEvent(
     DateTime DecidedAt,
     string? RequesterEmail = null,
     string? MentorEmail = null,
-    string? GroupName = null
+    string? GroupName = null,
+    string? MentorName = null
 );

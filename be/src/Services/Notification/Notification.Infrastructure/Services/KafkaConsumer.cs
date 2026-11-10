@@ -93,7 +93,7 @@ public class KafkaConsumer : IKafkaConsumer
 
                         var dedupKey = string.IsNullOrWhiteSpace(key)
                             ? $"{topic}_{consumeResult.Partition.Value}_{consumeResult.Offset.Value}"
-                            : key;
+                            : $"{topic}:{key}";
 
                         if (!_deduplicationService.TryAcquire(dedupKey))
                         {

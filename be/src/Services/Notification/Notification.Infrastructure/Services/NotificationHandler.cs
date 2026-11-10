@@ -191,7 +191,8 @@ public class NotificationHandler : INotificationService
             recipient: @event.Email,
             subject: subject,
             body: body,
-            cancellationToken: ct);
+            cancellationToken: ct,
+            allowDefaultFallback: false);
     }
 
     private async Task ProcessGroupCreatedAsync(GroupCreatedEvent @event, string? key, CancellationToken ct)
@@ -214,18 +215,15 @@ public class NotificationHandler : INotificationService
             </html>
             """;
 
-        var recipient = !string.IsNullOrWhiteSpace(@event.CreatorEmail)
-            ? @event.CreatorEmail
-            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "team@exeteammatching.com");
-
         await SendAndRecordAsync(
             topic: "group-created",
             eventKey: key ?? @event.GroupId.ToString(),
             eventType: nameof(GroupCreatedEvent),
-            recipient: recipient,
+            recipient: @event.CreatorEmail,
             subject: subject,
             body: body,
-            cancellationToken: ct);
+            cancellationToken: ct,
+            allowDefaultFallback: false);
     }
 
     private async Task ProcessGroupLockedAsync(GroupLockedEvent @event, string? key, CancellationToken ct)
@@ -238,18 +236,15 @@ public class NotificationHandler : INotificationService
             </div>
             """;
 
-        var recipient = !string.IsNullOrWhiteSpace(@event.ContactEmail)
-            ? @event.ContactEmail
-            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "team@exeteammatching.com");
-
         await SendAndRecordAsync(
             topic: "group-locked",
             eventKey: key ?? @event.GroupId.ToString(),
             eventType: nameof(GroupLockedEvent),
-            recipient: recipient,
+            recipient: @event.ContactEmail,
             subject: subject,
             body: body,
-            cancellationToken: ct);
+            cancellationToken: ct,
+            allowDefaultFallback: false);
     }
 
     private async Task ProcessLeaderElectedAsync(LeaderElectedEvent @event, string? key, CancellationToken ct)
@@ -262,18 +257,15 @@ public class NotificationHandler : INotificationService
             </div>
             """;
 
-        var recipient = !string.IsNullOrWhiteSpace(@event.LeaderEmail)
-            ? @event.LeaderEmail
-            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "leader@exeteammatching.com");
-
         await SendAndRecordAsync(
             topic: "leader-elected",
             eventKey: key ?? @event.GroupId.ToString(),
             eventType: nameof(LeaderElectedEvent),
-            recipient: recipient,
+            recipient: @event.LeaderEmail,
             subject: subject,
             body: body,
-            cancellationToken: ct);
+            cancellationToken: ct,
+            allowDefaultFallback: false);
     }
 
     private async Task ProcessTopicRegisteredAsync(TopicRegisteredEvent @event, string? key, CancellationToken ct)
@@ -287,18 +279,15 @@ public class NotificationHandler : INotificationService
             </div>
             """;
 
-        var recipient = !string.IsNullOrWhiteSpace(@event.ContactEmail)
-            ? @event.ContactEmail
-            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "team@exeteammatching.com");
-
         await SendAndRecordAsync(
             topic: "topic-registered",
             eventKey: key ?? @event.GroupId.ToString(),
             eventType: nameof(TopicRegisteredEvent),
-            recipient: recipient,
+            recipient: @event.ContactEmail,
             subject: subject,
             body: body,
-            cancellationToken: ct);
+            cancellationToken: ct,
+            allowDefaultFallback: false);
     }
 
     private async Task ProcessMentorRequestedAsync(MentorRequestedEvent @event, string? key, CancellationToken ct)
@@ -320,15 +309,11 @@ public class NotificationHandler : INotificationService
             </div>
             """;
 
-        var recipient = !string.IsNullOrWhiteSpace(@event.MentorEmail)
-            ? @event.MentorEmail
-            : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "mentor@exeteammatching.com");
-
         await SendAndRecordAsync(
             topic: "mentor-requested",
             eventKey: key ?? @event.RequestId.ToString(),
             eventType: nameof(MentorRequestedEvent),
-            recipient: recipient,
+            recipient: @event.MentorEmail,
             subject: subject,
             body: body,
             cancellationToken: ct);
@@ -338,15 +323,19 @@ public class NotificationHandler : INotificationService
     {
         var decisionText = @event.IsAccepted ? "ĐÃ CHẤP NHẬN" : "TỪ CHỐI";
         var groupName = !string.IsNullOrWhiteSpace(@event.GroupName) ? @event.GroupName : $"Nhóm {@event.GroupId}";
-        var subject = $"[EXE Matching] Giảng viên đã {decisionText.ToLower()} yêu cầu hướng dẫn của {groupName}";
+        var mentorLabel = !string.IsNullOrWhiteSpace(@event.MentorName) ? @event.MentorName : "Giảng viên hướng dẫn";
+        var reasonText = string.IsNullOrWhiteSpace(@event.DecisionReason)
+            ? "Không có ghi chú thêm."
+            : @event.DecisionReason;
+        var subject = $"[EXE Matching] {mentorLabel} đã {decisionText.ToLower()} yêu cầu hướng dẫn của {groupName}";
         var body = $"""
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <h3 style="color: #2b5797;">Kết Quả Yêu Cầu Hướng Dẫn: <span style="color: {(@event.IsAccepted ? "green" : "red")};">{decisionText}</span></h3>
                 <p>Xin chào nhóm <strong>{groupName}</strong>,</p>
-                <p>Giảng viên hướng dẫn đã đưa ra quyết định đối với yêu cầu của nhóm:</p>
+                <p><strong>{mentorLabel}</strong> đã đưa ra quyết định đối với yêu cầu hướng dẫn của nhóm:</p>
                 <div style="background-color: #f8f9fa; border-left: 4px solid {(@event.IsAccepted ? "green" : "red")}; padding: 12px; margin: 15px 0;">
                     <p style="margin: 0;"><strong>Kết quả:</strong> {decisionText}</p>
-                    <p style="margin: 5px 0 0 0;"><strong>Lý do / Phản hồi:</strong> {@event.DecisionReason}</p>
+                    <p style="margin: 5px 0 0 0;"><strong>Lý do / Phản hồi:</strong> {reasonText}</p>
                     <p style="margin: 8px 0 0 0; font-size: 12px; color: #666;">Thời gian: {@event.DecidedAt:yyyy-MM-dd HH:mm:ss} UTC</p>
                 </div>
             </div>
@@ -354,7 +343,7 @@ public class NotificationHandler : INotificationService
 
         var recipient = !string.IsNullOrWhiteSpace(@event.RequesterEmail)
             ? @event.RequesterEmail
-            : (!string.IsNullOrWhiteSpace(@event.MentorEmail) ? @event.MentorEmail : (!string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail) ? _emailSettings.DefaultRecipientEmail : "student@exeteammatching.com"));
+            : @event.MentorEmail;
 
         await SendAndRecordAsync(
             topic: "mentor-decision",
@@ -370,16 +359,26 @@ public class NotificationHandler : INotificationService
         string topic,
         string? eventKey,
         string eventType,
-        string recipient,
+        string? recipient,
         string subject,
         string body,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowDefaultFallback = true)
     {
-        if (string.IsNullOrWhiteSpace(recipient) || recipient.EndsWith(".internal", StringComparison.OrdinalIgnoreCase))
+        var resolvedRecipient = !string.IsNullOrWhiteSpace(recipient) && !recipient.EndsWith(".internal", StringComparison.OrdinalIgnoreCase)
+            ? recipient.Trim()
+            : (allowDefaultFallback && !string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail)
+                ? _emailSettings.DefaultRecipientEmail.Trim()
+                : null);
+
+        if (string.IsNullOrWhiteSpace(resolvedRecipient))
         {
-            recipient = !string.IsNullOrWhiteSpace(_emailSettings.DefaultRecipientEmail)
-                ? _emailSettings.DefaultRecipientEmail
-                : "notification@exeteammatching.com";
+            _logger.LogInformation(
+                "Skipping email for topic '{Topic}' ({EventType}, key '{Key}'): recipient email is null.",
+                topic,
+                eventType,
+                eventKey);
+            return;
         }
 
         var record = new NotificationRecord
@@ -387,7 +386,7 @@ public class NotificationHandler : INotificationService
             Topic = topic,
             EventKey = eventKey,
             EventType = eventType,
-            Recipient = recipient,
+            Recipient = resolvedRecipient,
             Subject = subject,
             Body = body,
             ProcessedAt = DateTime.UtcNow
@@ -395,15 +394,15 @@ public class NotificationHandler : INotificationService
 
         try
         {
-            await _emailService.SendEmailAsync(recipient, subject, body, isHtml: true, cancellationToken);
+            await _emailService.SendEmailAsync(resolvedRecipient, subject, body, isHtml: true, cancellationToken);
             record.IsSuccess = true;
-            _logger.LogInformation("Notification handled successfully for event {EventType} to {Recipient}", eventType, recipient);
+            _logger.LogInformation("Notification handled successfully for event {EventType} to {Recipient}", eventType, resolvedRecipient);
         }
         catch (Exception ex)
         {
             record.IsSuccess = false;
             record.ErrorMessage = ex.Message;
-            _logger.LogError(ex, "Failed to send notification for event {EventType} to {Recipient}", eventType, recipient);
+            _logger.LogError(ex, "Failed to send notification for event {EventType} to {Recipient}", eventType, resolvedRecipient);
         }
         finally
         {

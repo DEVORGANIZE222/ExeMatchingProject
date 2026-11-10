@@ -46,7 +46,7 @@ public class MentorRequestsController(IMentorService mentorService) : Controller
     [Authorize(Roles = "Mentor")]
     public async Task<ActionResult<ApiResponse<bool>>> DecisionMentor([FromBody] MentorDecisionDto decision, CancellationToken ct)
     {
-        await mentorService.ProcessDecisionAsync(this.ActorId(), decision, ct);
+        await mentorService.ProcessDecisionAsync(this.ActorId(), decision, ct, this.AuthorizationHeader());
         return Ok(ApiResponse<bool>.Ok(true));
     }
 
