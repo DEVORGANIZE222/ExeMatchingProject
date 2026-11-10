@@ -75,6 +75,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddHostedService<GroupOutboxPublisher>();
 builder.Services.AddHostedService<GroupOutboxCleanupWorker>();
 builder.Services.AddHostedService<SemesterCodeChangedConsumer>();
+builder.Services.AddHostedService<StudentStrengthRolesChangedConsumer>();
 
 var app = builder.Build();
 

@@ -240,6 +240,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         foreach (var role in existing) store.RemoveStudentStrengthRole(role);
         foreach (var role in normalized) store.AddStudentStrengthRole(new StudentStrengthRole { StudentId = id, RoleCode = role });
         student.UpdatedAt = DateTime.UtcNow;
+        store.AddOutboxEvent("student-strength-roles-changed",
+            new StudentStrengthRolesChangedEvent(id, normalized, DateTime.UtcNow));
         await store.Save(ct);
         student.StrengthRoles = normalized.Select(role => new StudentStrengthRole { StudentId = id, RoleCode = role }).ToList();
         return Map(student);
