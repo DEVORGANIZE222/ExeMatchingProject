@@ -135,3 +135,7 @@ services:
         sync: false
       - key: EmailSettings__SenderName
         value: ExeMatching Team
+      - key: EmailSettings__WebhookUrl
+        sync: false
+      - key: EmailSettings__WebhookSecret
+        sync: false
