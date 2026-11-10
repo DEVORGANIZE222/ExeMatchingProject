@@ -21,6 +21,11 @@ public class MentorDbContext : DbContext
         modelBuilder.Entity<MentorUser>().HasIndex(x => x.UserId).IsUnique();
         modelBuilder.Entity<MentorQuota>().HasIndex(x => x.MentorId).IsUnique();
         modelBuilder.Entity<MentorRequest>().HasIndex(x => x.GroupId).HasFilter("\"Status\" = 0").IsUnique();
+        modelBuilder.Entity<MentorRequest>().Property(x => x.RequesterEmail).HasMaxLength(254);
+        modelBuilder.Entity<MentorRequest>().Property(x => x.RequesterName).HasMaxLength(200);
+        modelBuilder.Entity<MentorRequest>().Property(x => x.GroupName).HasMaxLength(200);
+        modelBuilder.Entity<MentorRequest>().Property(x => x.Topic).HasMaxLength(1000);
+        modelBuilder.Entity<MentorRequest>().Property(x => x.DecisionReason).HasMaxLength(2000);
         modelBuilder.Entity<MentorUser>().Property(x => x.Phone).HasMaxLength(40);
         modelBuilder.Entity<MentorGroupProgress>().HasIndex(x => new { x.MentorId, x.GroupId }).IsUnique();
         modelBuilder.Entity<MentorGroupProgress>().Property(x => x.GroupName).HasMaxLength(200);
@@ -95,7 +100,7 @@ public class MentorDbContext : DbContext
                 MentorId = mentorId,
                 Message = "Dear Dr. Le Van C, we would love to have you as our EXE mentor.",
                 Status = RequestStatus.Pending,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }
         );
     }

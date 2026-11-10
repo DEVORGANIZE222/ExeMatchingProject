@@ -172,9 +172,9 @@ public class MentorService(
             MentorId = request.MentorId,
             RequesterUserId = actor.UserId,
             RequesterEmail = Truncate(requesterEmail, 254),
-            GroupName = group.GroupName,
-            Topic = group.TopicTitle ?? group.ProjectDescription,
-            RequesterName = leaderMember?.FullName ?? "Trưởng nhóm",
+            GroupName = Truncate(group.GroupName, 200),
+            Topic = Truncate(group.TopicTitle ?? group.ProjectDescription, 1000),
+            RequesterName = Truncate(leaderMember?.FullName ?? "Trưởng nhóm", 200),
             Message = request.Message.Trim()
         };
         repository.AddRequest(mentorRequest);
@@ -243,11 +243,11 @@ public class MentorService(
             {
                 MentorId = mentor.Id,
                 GroupId = request.GroupId,
-                GroupName = request.GroupName,
-                Topic = request.Topic,
+                GroupName = Truncate(request.GroupName, 200),
+                Topic = Truncate(request.Topic, 1000),
                 Milestone = "Khởi động dự án",
                 Progress = 0,
-                Feedback = decision.DecisionReason.Trim()
+                Feedback = Truncate(decision.DecisionReason.Trim(), 2000)
             });
         }
 

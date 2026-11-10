@@ -59,7 +59,9 @@ builder.Services.AddGrpcClient<EXETeamMatching.Mentor.Grpc.MentorGrpcService.Men
     client.Address = new Uri(builder.Configuration["MentorGrpc:Address"] ?? "http://mentor:50051"));
 builder.Services.AddScoped<IMentorRecommendationClient, MentorGrpcRecommendationClient>();
 var jwt = builder.Configuration.GetSection("JwtSettings");
-var secret = jwt["Secret"] ?? throw new InvalidOperationException("JwtSettings:Secret is required.");
+var secret = jwt["Secret"] ?? string.Empty;
+if (Encoding.UTF8.GetByteCount(secret) < 32)
+    throw new InvalidOperationException("JwtSettings:Secret must be at least 32 bytes.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
     options.MapInboundClaims = false;
@@ -101,3 +103,5 @@ app.MapGet("/health", () => Results.Ok(new { status = "Healthy", service = "Grou
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

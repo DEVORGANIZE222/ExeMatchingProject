@@ -8,6 +8,7 @@
 --   mentor_group_progress -> "MentorGroupProgress"
 --   mentor_appointments   -> "MentorAppointments"
 --   mentor_notifications  -> "MentorNotifications"
+--   student_notifications -> "StudentNotifications"
 -- User and group identifiers are opaque values owned by IdentitySemester / GroupMatching:
 -- no cross-service database foreign keys are created.
 -- RequestStatus enum is stored as integer: 0 = Pending, 1 = Approved, 2 = Rejected.
@@ -45,12 +46,13 @@ CREATE TABLE IF NOT EXISTS "MentorRequests" (
     "GroupId" uuid NOT NULL,
     "MentorId" uuid NOT NULL REFERENCES "Mentors" ("Id") ON DELETE CASCADE,
     "RequesterUserId" uuid NULL,
-    "RequesterName" text NOT NULL DEFAULT '',
-    "GroupName" text NOT NULL DEFAULT '',
-    "Topic" text NOT NULL DEFAULT '',
+    "RequesterEmail" character varying(254) NOT NULL DEFAULT '',
+    "RequesterName" character varying(200) NOT NULL DEFAULT '',
+    "GroupName" character varying(200) NOT NULL DEFAULT '',
+    "Topic" character varying(1000) NOT NULL DEFAULT '',
     "Message" text NOT NULL,
     "Status" integer NOT NULL DEFAULT 0,
-    "DecisionReason" text NULL,
+    "DecisionReason" character varying(2000) NULL,
     "DecidedAt" timestamp with time zone NULL,
     "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
     "UpdatedAt" timestamp with time zone NULL,
@@ -99,6 +101,22 @@ CREATE TABLE IF NOT EXISTS "MentorNotifications" (
 );
 CREATE INDEX IF NOT EXISTS "IX_MentorNotifications_MentorId_CreatedAt" ON "MentorNotifications" ("MentorId", "CreatedAt" DESC);
 
+CREATE TABLE IF NOT EXISTS "StudentNotifications" (
+    "Id" uuid NOT NULL PRIMARY KEY,
+    "GroupId" uuid NOT NULL,
+    "RequestId" uuid NULL,
+    "MentorName" character varying(200) NOT NULL DEFAULT '',
+    "GroupName" character varying(200) NOT NULL DEFAULT '',
+    "Type" character varying(40) NOT NULL,
+    "Title" character varying(200) NOT NULL,
+    "Message" character varying(2500) NOT NULL,
+    "IsRead" boolean NOT NULL DEFAULT FALSE,
+    "CreatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
+    "UpdatedAt" timestamp with time zone NULL
+);
+CREATE INDEX IF NOT EXISTS "IX_StudentNotifications_GroupId_CreatedAt" ON "StudentNotifications" ("GroupId", "CreatedAt" DESC);
+CREATE INDEX IF NOT EXISTS "IX_StudentNotifications_RequestId" ON "StudentNotifications" ("RequestId");
+
 -- Seed data (mirrors MentorDbContext.HasData).
 INSERT INTO "Mentors" ("Id", "UserId", "FullName", "Email", "Department", "Expertise", "Phone", "CreatedAt") VALUES
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'Dr. Le Van C', 'clevan@fpt.edu.vn',
@@ -114,7 +132,7 @@ ON CONFLICT ("Id") DO NOTHING;
 
 INSERT INTO "MentorRequests" ("Id", "GroupId", "MentorId", "Message", "Status", "CreatedAt") VALUES
   ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '66666666-6666-6666-6666-666666666666', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-   'Dear Dr. Le Van C, we would love to have you as our EXE mentor.', 0, NOW())
+   'Dear Dr. Le Van C, we would love to have you as our EXE mentor.', 0, '2026-01-01 00:00:00+00')
 ON CONFLICT ("Id") DO NOTHING;
 
 COMMIT;
