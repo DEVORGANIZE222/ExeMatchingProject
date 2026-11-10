@@ -53,6 +53,12 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
     public async Task<ActionResult<ApiResponse<GroupDto>>> AddMember(Guid id, CancellationToken ct)
         => Ok(ApiResponse<GroupDto>.Ok(await service.JoinAsync(id, Actor, ct)));
 
+    [HttpGet("{id:guid}/invite-candidates")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<EnrollmentContext>>>> SearchInviteCandidates(
+        Guid id, [FromQuery] string q, CancellationToken ct)
+        => Ok(ApiResponse<IReadOnlyList<EnrollmentContext>>.Ok(await service.SearchInviteCandidatesAsync(id, q, Actor, IsAdmin, ct)));
+
     [HttpPost("{id:guid}/invite")]
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> InviteMember(Guid id, InviteMemberRequest request, CancellationToken ct)

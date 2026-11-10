@@ -16,7 +16,7 @@ public class CreateGroupRequest
     [Required, StringLength(120, MinimumLength = 2)] public string GroupName { get; set; } = string.Empty;
     [Required, StringLength(30)] public string SemesterCode { get; set; } = string.Empty;
     [Required, StringLength(1200, MinimumLength = 3)] public string ProjectDescription { get; set; } = string.Empty;
-    [MaxLength(4)] public List<RecruitmentNeedRequest> RecruitmentNeeds { get; set; } = [];
+    [MaxLength(4)] public List<RecruitmentNeedRequest>? RecruitmentNeeds { get; set; }
 }
 
 public class UpdateGroupRequest
@@ -27,7 +27,7 @@ public class UpdateGroupRequest
     [Required, StringLength(120, MinimumLength = 2)] public string GroupName { get; set; } = string.Empty;
     [Required, StringLength(1200, MinimumLength = 3)] public string ProjectDescription { get; set; } = string.Empty;
     [StringLength(300)] public string? TopicTitle { get; set; }
-    [MaxLength(4)] public List<RecruitmentNeedRequest> RecruitmentNeeds { get; set; } = [];
+    [MaxLength(4)] public List<RecruitmentNeedRequest>? RecruitmentNeeds { get; set; }
 }
 
 public class InviteMemberRequest

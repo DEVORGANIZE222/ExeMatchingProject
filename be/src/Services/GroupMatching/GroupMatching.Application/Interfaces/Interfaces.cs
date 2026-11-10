@@ -27,6 +27,7 @@ public interface IIdentitySemesterClient
 {
     Task<EnrollmentContext> CurrentEnrollmentAsync(string semesterCode, CancellationToken ct = default);
     Task<EnrollmentContext> LookupEnrollmentAsync(string semesterCode, string identifier, CancellationToken ct = default);
+    Task<IReadOnlyList<EnrollmentContext>> SearchEnrollmentsAsync(string semesterCode, string query, CancellationToken ct = default);
     Task<SemesterWorkflowContext> WorkflowAsync(string semesterCode, CancellationToken ct = default);
     Task<IReadOnlyList<EnrollmentContext>> UnmatchedEnrollmentsAsync(string semesterCode, CancellationToken ct = default);
 }
@@ -42,6 +43,7 @@ public interface IGroupService
     Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> JoinAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
     Task<GroupDto> InviteMemberAsync(Guid id, InviteMemberRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<IReadOnlyList<EnrollmentContext>> SearchInviteCandidatesAsync(Guid id, string query, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task LeaveAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default);
     Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default, bool allowDemoVotes = false);

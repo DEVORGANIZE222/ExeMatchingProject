@@ -17,6 +17,9 @@ public sealed class IdentitySemesterClient(HttpClient client, IRequestAccessToke
     public Task<EnrollmentContext> LookupEnrollmentAsync(string semesterCode, string identifier, CancellationToken ct = default)
         => GetAsync<EnrollmentContext>($"api/internal/students/lookup?semesterCode={Uri.EscapeDataString(semesterCode)}&identifier={Uri.EscapeDataString(identifier)}", ct);
 
+    public async Task<IReadOnlyList<EnrollmentContext>> SearchEnrollmentsAsync(string semesterCode, string query, CancellationToken ct = default)
+        => await GetAsync<List<EnrollmentContext>>($"api/internal/students/search?semesterCode={Uri.EscapeDataString(semesterCode)}&q={Uri.EscapeDataString(query)}", ct);
+
     public Task<SemesterWorkflowContext> WorkflowAsync(string semesterCode, CancellationToken ct = default)
         => GetAsync<SemesterWorkflowContext>($"api/internal/semesters/{Uri.EscapeDataString(semesterCode)}/workflow", ct);
 

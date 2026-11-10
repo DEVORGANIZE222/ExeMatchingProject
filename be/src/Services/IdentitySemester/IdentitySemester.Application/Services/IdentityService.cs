@@ -171,6 +171,13 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
             ?? throw new IdentityException(404, $"Không tìm thấy sinh viên với Email hoặc MSSV '{target}' trong học kỳ {code}.");
         return MapEnrollment(student);
     }
+    public async Task<IReadOnlyList<GroupEnrollmentResponse>> SearchEnrollments(string semesterCode, string query, CancellationToken ct)
+    {
+        var code = Required(semesterCode).ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2) return [];
+        var matches = await store.SearchStudentsBySemester(code, query, 8, ct);
+        return matches.Select(MapEnrollment).ToList();
+    }
     private static GroupEnrollmentResponse MapEnrollment(Student student) => new(
         student.Id, student.UserId, student.StudentCode, student.FullName, student.Semester.Code, student.HasGroup,
         student.User.Email, student.Major, student.StrengthRoles.OrderBy(x => x.RoleCode).Select(x => x.RoleCode).ToList());

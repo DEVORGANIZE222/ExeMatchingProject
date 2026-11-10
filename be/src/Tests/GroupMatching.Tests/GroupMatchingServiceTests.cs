@@ -78,8 +78,15 @@ public class GroupMatchingServiceTests
 
         var group = await service.CreateAsync(new CreateGroupRequest
         {
-            GroupName = "Alpha", SemesterCode = "FA26", ProjectDescription = "Initial description."
+            GroupName = "Alpha",
+            SemesterCode = "FA26",
+            ProjectDescription = "Initial description.",
+            RecruitmentNeeds = [new RecruitmentNeedRequest { RoleCode = "Backend", Slots = 1 }, new RecruitmentNeedRequest { RoleCode = "Marketing", Slots = 1 }]
         }, s1.UserId);
+
+        var candidates = await service.SearchInviteCandidatesAsync(group.Id, "SE1002", s1.UserId, false);
+        Assert.Single(candidates);
+        Assert.Equal("Student Two", candidates[0].FullName);
 
         group = await service.InviteMemberAsync(group.Id, new InviteMemberRequest("s2@fpt.edu.vn"), s1.UserId, false);
         Assert.Equal(2, group.MemberCount);
@@ -90,10 +97,12 @@ public class GroupMatchingServiceTests
         {
             GroupName = "Beta Team",
             ProjectDescription = "Updated project description.",
-            TopicTitle = "New Startup Topic"
+            TopicTitle = "New Startup Topic",
+            RecruitmentNeeds = [new RecruitmentNeedRequest { RoleCode = "Backend", Slots = 1 }, new RecruitmentNeedRequest { RoleCode = "Marketing", Slots = 1 }]
         }, s2.UserId, false);
         Assert.Equal("Beta Team", group.GroupName);
         Assert.Equal("New Startup Topic", group.TopicTitle);
+        Assert.Equal(2, group.RecruitmentNeeds!.Count);
     }
 
     [Fact]
@@ -152,6 +161,14 @@ public class GroupMatchingServiceTests
             var found = Unmatched.SingleOrDefault(x => x.SemesterCode == semesterCode &&
                 (x.Email.Equals(identifier, StringComparison.OrdinalIgnoreCase) || x.StudentCode.Equals(identifier, StringComparison.OrdinalIgnoreCase)));
             return found is not null ? Task.FromResult(found) : throw new GroupException(404, "Student not found.");
+        }
+        public Task<IReadOnlyList<EnrollmentContext>> SearchEnrollmentsAsync(string semesterCode, string query, CancellationToken ct = default)
+        {
+            var list = Unmatched.Where(x => x.SemesterCode == semesterCode &&
+                (x.Email.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                 x.StudentCode.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                 x.FullName.Contains(query, StringComparison.OrdinalIgnoreCase))).ToList();
+            return Task.FromResult<IReadOnlyList<EnrollmentContext>>(list);
         }
         public Task<SemesterWorkflowContext> WorkflowAsync(string semesterCode, CancellationToken ct = default) => Task.FromResult(MatchingWindow
             ? new SemesterWorkflowContext(semesterCode, true, DateTime.UtcNow.AddDays(-10), DateTime.UtcNow.AddDays(10), DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(5), DateTime.UtcNow.AddDays(7))

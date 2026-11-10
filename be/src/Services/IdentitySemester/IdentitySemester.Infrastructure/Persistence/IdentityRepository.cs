@@ -27,6 +27,21 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
                  (s.User.Email.ToLower() == normalizedLower || s.StudentCode.ToUpper() == normalizedUpper),
             ct);
     }
+    public async Task<IReadOnlyList<Student>> SearchStudentsBySemester(string semesterCode, string query, int limit, CancellationToken ct)
+    {
+        var term = query.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(term)) return [];
+        var cappedLimit = Math.Clamp(limit, 1, 20);
+        return await StudentQuery.AsNoTracking()
+            .Where(s => s.Semester.Code == semesterCode &&
+                        (s.StudentCode.ToLower().Contains(term) ||
+                         s.User.Email.ToLower().Contains(term) ||
+                         s.FullName.ToLower().Contains(term)))
+            .OrderBy(s => s.HasGroup)
+            .ThenBy(s => s.FullName)
+            .Take(cappedLimit)
+            .ToListAsync(ct);
+    }
     public Task<Semester?> SemesterById(Guid id, CancellationToken ct) => db.Semesters.SingleOrDefaultAsync(s => s.Id == id, ct);
     public Task<Semester?> SemesterByCode(string code, CancellationToken ct) => db.Semesters.SingleOrDefaultAsync(s => s.Code.ToUpper() == code, ct);
     public Task<bool> StudentExists(string code, Guid semesterId, CancellationToken ct) => db.Students.AnyAsync(s => s.StudentCode.ToUpper() == code && s.SemesterId == semesterId, ct);

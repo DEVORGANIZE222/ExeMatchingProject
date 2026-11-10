@@ -46,6 +46,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
                 StudentId = Guid.NewGuid(),
                 StudentCode = $"DEMO-{Guid.NewGuid():N}"[..13].ToUpperInvariant(),
                 FullName = $"Demo Member {index}",
+                Major = "Thành viên Test",
                 IsDemo = true,
                 JoinedAt = DateTime.UtcNow
             };
@@ -110,7 +111,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
             if (group.Status == GroupStatus.Locked && !string.IsNullOrWhiteSpace(group.TopicTitle))
                 group.TopicRegisteredAt ??= DateTime.UtcNow;
         }
-        if (group.Status == GroupStatus.Open)
+        if (group.Status == GroupStatus.Open && request.RecruitmentNeeds is not null)
             ApplyRecruitmentNeeds(group, request.RecruitmentNeeds);
         group.UpdatedAt = DateTime.UtcNow;
         await repository.SaveAsync(ct);
@@ -175,6 +176,21 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         await repository.SaveAsync(ct);
         await tx.CommitAsync(ct);
         return Map(group);
+    }
+
+    public async Task<IReadOnlyList<EnrollmentContext>> SearchInviteCandidatesAsync(Guid id, string query, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
+    {
+        var group = await Group(id, ct);
+        if (!isAdmin)
+        {
+            var actor = await Enrollment(actorUserId, group.SemesterCode, ct);
+            if (!group.Members.Any(x => x.StudentId == actor.StudentId) && group.CreatedByStudentId != actor.StudentId)
+                throw Forbidden("Chỉ thành viên trong nhóm mới có thể tìm kiếm bạn bè để mời.");
+        }
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2) return [];
+        var matches = await identity.SearchEnrollmentsAsync(group.SemesterCode, query.Trim(), ct);
+        var currentMemberIds = group.Members.Select(m => m.StudentId).ToHashSet();
+        return matches.Where(m => !currentMemberIds.Contains(m.StudentId)).ToList();
     }
 
     public async Task LeaveAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
@@ -326,9 +342,25 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
             throw BadRequest("Recruitment roles must not contain duplicates.");
         if (normalized.Sum(x => x.Slots) > 5 - group.Members.Count)
             throw BadRequest("Recruitment slots cannot exceed the group's available capacity.");
-        group.RecruitmentNeeds.Clear();
+        // Diff existing recruitment needs in-place to avoid EF Core INSERT/DELETE ordering collisions on UX_GroupRecruitmentNeeds_Group_Role.
+        var toRemove = group.RecruitmentNeeds
+            .Where(existing => !normalized.Any(item => item.RoleCode.Equals(existing.RoleCode, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        foreach (var item in toRemove) group.RecruitmentNeeds.Remove(item);
+
         foreach (var item in normalized)
-            group.RecruitmentNeeds.Add(new GroupRecruitmentNeed { RoleCode = item.RoleCode, Slots = item.Slots });
+        {
+            var existing = group.RecruitmentNeeds.FirstOrDefault(x => x.RoleCode.Equals(item.RoleCode, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                existing.Slots = item.Slots;
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                group.RecruitmentNeeds.Add(new GroupRecruitmentNeed { RoleCode = item.RoleCode, Slots = item.Slots });
+            }
+        }
     }
     private static string Code(string value) => Required(value).ToUpperInvariant();
     private static string NewCode(string semester)

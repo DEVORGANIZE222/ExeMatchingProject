@@ -36,6 +36,8 @@ export default function GroupsPage() {
   const [showRandomConfirm, setShowRandomConfirm] = useState(false)
   const [inviteIdentifier, setInviteIdentifier] = useState('')
   const [inviting, setInviting] = useState(false)
+  const [inviteCandidates, setInviteCandidates] = useState([])
+  const [searchingCandidates, setSearchingCandidates] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupTopic, setNewGroupTopic] = useState('')
   const [newRecruitmentNeeds, setNewRecruitmentNeeds] = useState([])
@@ -84,7 +86,7 @@ export default function GroupsPage() {
         isDemo: Boolean(member.isDemo),
         isLeader: member.role === 1 || member.role === 'Leader',
         role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
-        major: member.studentCode
+        major: member.major || ''
       })),
       maxMembers: 5,
       statusText: isLocked
@@ -160,6 +162,31 @@ export default function GroupsPage() {
       .catch((error) => toast.error(error.message || 'Không thể kiểm tra chế độ demo.'))
   }, [isAdmin, isStudent, request])
 
+  useEffect(() => {
+    const q = inviteIdentifier.trim()
+    if (!selectedGroup || selectedGroup.isLocked || selectedGroup.members.length >= 5 || q.length < 2) {
+      return
+    }
+    let active = true
+    const timer = setTimeout(() => {
+      setSearchingCandidates(true)
+      request(`/api/groups/${selectedGroup.id}/invite-candidates?q=${encodeURIComponent(q)}`)
+        .then((list) => {
+          if (active) setInviteCandidates(Array.isArray(list) ? list : [])
+        })
+        .catch(() => {
+          if (active) setInviteCandidates([])
+        })
+        .finally(() => {
+          if (active) setSearchingCandidates(false)
+        })
+    }, 250)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [inviteIdentifier, request, selectedGroup])
+
   const handleSeedDemoMembers = async (group) => {
     const emptySlots = 5 - group.members.length
     if (emptySlots <= 0) {
@@ -200,6 +227,8 @@ export default function GroupsPage() {
 
   const openGroupDetails = async (group) => {
     setSelectedGroup(group)
+    setInviteIdentifier('')
+    setInviteCandidates([])
     setMentorStatus(null)
     setMentorStatusError('')
     if (!isStudent || !group.isCurrentLeader || !group.canRequestMentor) return
@@ -359,6 +388,11 @@ export default function GroupsPage() {
   const handleSaveEdit = async (e) => {
     e.preventDefault()
     if (!selectedGroup) return
+    const cleanTopic = editGroupTopic.trim()
+    if (cleanTopic.length > 0 && cleanTopic.length < 3) {
+      toast.error('Tên đề tài phải có ít nhất 3 ký tự.')
+      return
+    }
     try {
       setBusy(true)
       const updated = await request(`/api/groups/${selectedGroup.id}`, {
@@ -367,8 +401,8 @@ export default function GroupsPage() {
         body: JSON.stringify({
           groupName: editGroupName.trim(),
           projectDescription: editGroupDescription.trim(),
-          topicTitle: editGroupTopic.trim(),
-          recruitmentNeeds: selectedGroup.isLocked ? [] : selectedGroup.recruitmentNeeds
+          topicTitle: cleanTopic,
+          recruitmentNeeds: null
         })
       })
       setSelectedGroup(mapGroup(updated))
@@ -383,18 +417,19 @@ export default function GroupsPage() {
   }
 
   // 6b. Invite / Add friend to group by Email or StudentCode
-  const handleInviteMember = async (e) => {
-    e.preventDefault()
-    if (!selectedGroup || !inviteIdentifier.trim()) return
+  const inviteStudentByIdentifier = async (rawIdentifier) => {
+    const clean = (rawIdentifier || '').trim()
+    if (!selectedGroup || !clean) return
     try {
       setInviting(true)
       const updatedGroup = await request(`/api/groups/${selectedGroup.id}/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: inviteIdentifier.trim() })
+        body: JSON.stringify({ identifier: clean })
       })
       setSelectedGroup(mapGroup(updatedGroup))
       setInviteIdentifier('')
+      setInviteCandidates([])
       toast.success('Đã thêm bạn vào nhóm thành công!')
       await loadGroups()
     } catch (error) {
@@ -402,6 +437,11 @@ export default function GroupsPage() {
     } finally {
       setInviting(false)
     }
+  }
+
+  const handleInviteMember = async (e) => {
+    e.preventDefault()
+    await inviteStudentByIdentifier(inviteIdentifier)
   }
 
   // 7. Delete Group
@@ -840,9 +880,9 @@ export default function GroupsPage() {
                       className="btn btn-outline btn-sm"
                       disabled={seedingDemoMembers}
                       onClick={() => handleSeedDemoMembers(selectedGroup)}
-                      title="Thêm thành viên demo; chỉ hoạt động khi Demo Mode được bật"
+                      title="Thêm nhanh thành viên demo để test bầu Leader & khóa nhóm"
                     >
-                      <Plus size={13} /> {seedingDemoMembers ? 'Đang seed...' : `Seed member (+${5 - selectedGroup.members.length})`}
+                      <Plus size={13} /> {seedingDemoMembers ? 'Đang seed...' : `Seed SV test (+${5 - selectedGroup.members.length})`}
                     </button>
                   )}
                 </div>
@@ -884,7 +924,7 @@ export default function GroupsPage() {
                           </div>
                           <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
                             {memberEmail ? `${memberEmail} · ${m.studentCode}` : m.studentCode}
-                            {m.major ? ` · ${m.major}` : ''}
+                            {m.major && m.major !== m.studentCode ? ` · ${m.major}` : ''}
                           </span>
                         </div>
                       </div>
@@ -924,23 +964,88 @@ export default function GroupsPage() {
 
               {(isAdmin || selectedGroup.members.some((x) => x.studentId === currentStudentId)) &&
                 !selectedGroup.isLocked && selectedGroup.members.length < 5 && (
-                <form onSubmit={handleInviteMember} style={{ display: 'flex', gap: 8, marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-default)' }}>
-                  <input
-                    className="input input-sm"
-                    placeholder="Mời bạn bằng Email hoặc MSSV (VD: SE196624 hoặc ten@fpt.edu.vn)"
-                    value={inviteIdentifier}
-                    onChange={(e) => setInviteIdentifier(e.target.value)}
-                    disabled={inviting}
-                  />
-                  <button
-                    type="submit"
-                    className="btn btn-primary btn-sm"
-                    disabled={inviting || !inviteIdentifier.trim()}
-                    style={{ whiteSpace: 'nowrap' }}
-                  >
-                    <UserPlus size={14} /> {inviting ? 'Đang thêm...' : 'Mời vào nhóm'}
-                  </button>
-                </form>
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-default)' }}>
+                  <form onSubmit={handleInviteMember} style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      className="input input-sm"
+                      placeholder="Tìm hoặc nhập Email / MSSV bạn (VD: SE196620, tên, email...)"
+                      value={inviteIdentifier}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setInviteIdentifier(val)
+                        if (val.trim().length < 2) setInviteCandidates([])
+                      }}
+                      disabled={inviting}
+                    />
+                    <button
+                      type="submit"
+                      className="btn btn-primary btn-sm"
+                      disabled={inviting || !inviteIdentifier.trim()}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      <UserPlus size={14} /> {inviting ? 'Đang thêm...' : 'Mời vào nhóm'}
+                    </button>
+                  </form>
+
+                  {inviteIdentifier.trim().length >= 2 && (
+                    <div style={{ marginTop: 8, border: '1px solid var(--border-default)', borderRadius: 8, backgroundColor: 'var(--bg-card)', maxHeight: 210, overflowY: 'auto' }}>
+                      {searchingCandidates ? (
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                          Đang tìm kiếm sinh viên trong học kỳ...
+                        </div>
+                      ) : inviteCandidates.length === 0 ? (
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                          Không tìm thấy sinh viên phù hợp trong học kỳ {selectedGroup.semesterCode}.
+                        </div>
+                      ) : (
+                        inviteCandidates.map((cand) => (
+                          <div
+                            key={cand.studentId}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              gap: 10,
+                              padding: '8px 12px',
+                              borderBottom: '1px solid var(--border-default)'
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <strong style={{ fontSize: 12.5, color: 'var(--text-main)' }}>{cand.fullName}</strong>
+                                <span className="badge badge-neutral" style={{ fontSize: 10 }}>{cand.studentCode}</span>
+                                <span className={`badge ${cand.hasGroup ? 'badge-neutral' : 'badge-green'}`} style={{ fontSize: 10 }}>
+                                  {cand.hasGroup ? 'Đã có nhóm' : 'Chưa có nhóm'}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                {cand.email}{cand.major ? ` · ${cand.major}` : ''}
+                              </div>
+                              {cand.strengthRoles?.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                                  {cand.strengthRoles.map((r) => (
+                                    <span key={r} className="badge badge-teal" style={{ fontSize: 9.5 }}>
+                                      {getTeamRoleLabel(r)}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              style={{ whiteSpace: 'nowrap', fontSize: 11.5 }}
+                              disabled={inviting || cand.hasGroup}
+                              onClick={() => inviteStudentByIdentifier(cand.studentCode)}
+                            >
+                              {cand.hasGroup ? 'Đã vào nhóm' : 'Chọn & Mời'}
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -1009,7 +1114,7 @@ export default function GroupsPage() {
 
       {/* ── Edit Group Modal ── */}
       {editGroupModal && (
-        <div className="modal-backdrop" onClick={() => setEditGroupModal(false)}>
+        <div className="modal-backdrop" style={{ zIndex: 1050 }} onClick={() => setEditGroupModal(false)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>
@@ -1038,7 +1143,6 @@ export default function GroupsPage() {
                 </label>
                 <input
                   required={Boolean(selectedGroup?.isLocked)}
-                  minLength={3}
                   maxLength={300}
                   className="input"
                   placeholder="Nhập tên đề tài khởi nghiệp của nhóm..."
