@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS "GroupMembers" (
     "StudentId" uuid NOT NULL,
     "StudentCode" character varying(30) NOT NULL,
     "FullName" character varying(200) NOT NULL,
+    "Email" character varying(254) NOT NULL DEFAULT '',
+    "Major" character varying(100) NOT NULL DEFAULT '',
     "Role" integer NOT NULL,
     "JoinedAt" timestamp with time zone NOT NULL,
     "CreatedAt" timestamp with time zone NOT NULL,

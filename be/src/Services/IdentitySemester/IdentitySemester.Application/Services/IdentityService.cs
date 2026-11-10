@@ -85,20 +85,36 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         email = Required(email).ToLowerInvariant();
         if (!new EmailAddressAttribute().IsValid(email))
             throw new IdentityException(400, "A valid email address is required.");
-        var user = await store.UserByEmail(email, ct)
-            ?? throw new IdentityException(404, "The user must sign in with Google before being activated as a mentor.");
-        if (user.Role.Name == "Admin")
-            throw new IdentityException(409, "Administrator accounts cannot be changed to mentor accounts.");
         var mentorRole = await store.RoleByName("Mentor", ct);
-        if (user.RoleId != mentorRole.Id)
+        var user = await store.UserByEmail(email, ct);
+        if (user is null)
         {
-            user.RoleId = mentorRole.Id;
-            user.Role = mentorRole;
-            user.TokenVersion++;
-            user.UpdatedAt = DateTime.UtcNow;
-            await store.Save(ct);
+            user = new User
+            {
+                Email = email,
+                Username = email.Split('@')[0],
+                RoleId = mentorRole.Id,
+                Role = mentorRole
+            };
+            // Mentor accounts created by Admin authenticate via Google Sign-In; assign a random unguessable password hash.
+            user.PasswordHash = passwords.Hash(user, Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+            store.AddUser(user);
         }
-        return new(user.Id, user.Username, user.Email, mentorRole.Name);
+        else
+        {
+            if (user.Role.Name == "Admin")
+                throw new IdentityException(409, "Administrator accounts cannot be changed to mentor accounts.");
+            if (user.RoleId != mentorRole.Id)
+            {
+                user.RoleId = mentorRole.Id;
+                user.Role = mentorRole;
+                user.TokenVersion++;
+                user.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        await AddRosterEmailsToGoogleAccess([email], ct);
+        await store.Save(ct);
+        return new(user.Id, user.Username, user.Email, mentorRole.Name, user.GooglePictureUrl);
     }
 
     public async Task ChangePassword(Guid id, ChangePasswordRequest request, CancellationToken ct)
@@ -145,8 +161,19 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     {
         var code = Required(semesterCode).ToUpperInvariant();
         var student = await store.StudentByUserSemester(actor, code, ct) ?? throw new IdentityException(404, "No enrollment found for this semester.");
-        return new(student.Id, student.UserId, student.StudentCode, student.FullName, student.Semester.Code, student.HasGroup);
+        return MapEnrollment(student);
     }
+    public async Task<GroupEnrollmentResponse> LookupEnrollment(string semesterCode, string identifier, CancellationToken ct)
+    {
+        var code = Required(semesterCode).ToUpperInvariant();
+        var target = Required(identifier);
+        var student = await store.StudentByIdentifierSemester(code, target, ct)
+            ?? throw new IdentityException(404, $"Không tìm thấy sinh viên với Email hoặc MSSV '{target}' trong học kỳ {code}.");
+        return MapEnrollment(student);
+    }
+    private static GroupEnrollmentResponse MapEnrollment(Student student) => new(
+        student.Id, student.UserId, student.StudentCode, student.FullName, student.Semester.Code, student.HasGroup,
+        student.User.Email, student.Major, student.StrengthRoles.OrderBy(x => x.RoleCode).Select(x => x.RoleCode).ToList());
     public async Task<SemesterWorkflowResponse> Workflow(string semesterCode, CancellationToken ct)
     {
         var semester = await store.SemesterByCode(Required(semesterCode).ToUpperInvariant(), ct) ?? throw new IdentityException(404, "Semester not found.");

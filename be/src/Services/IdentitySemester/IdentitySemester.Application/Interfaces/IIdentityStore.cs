@@ -11,6 +11,7 @@ public interface IIdentityStore
     Task<Student?> StudentById(Guid id, CancellationToken ct);
     Task<Student?> StudentByUser(Guid id, CancellationToken ct);
     Task<Student?> StudentByUserSemester(Guid userId, string semesterCode, CancellationToken ct);
+    Task<Student?> StudentByIdentifierSemester(string semesterCode, string identifier, CancellationToken ct);
     Task<Semester?> SemesterById(Guid id, CancellationToken ct);
     Task<Semester?> SemesterByCode(string code, CancellationToken ct);
     Task<PageResult<StudentResponse>> Students(ListQuery query, CancellationToken ct);

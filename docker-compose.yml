@@ -105,6 +105,9 @@ services:
       - JwtSettings__ExpirationInMinutes=${JWT_EXPIRATION_IN_MINUTES:-120}
       - BootstrapAdmin__Email=${BOOTSTRAP_ADMIN_EMAIL:-}
       - BootstrapAdmin__Password=${BOOTSTRAP_ADMIN_PASSWORD:-}
+      - BootstrapMentor__Email=${BOOTSTRAP_MENTOR_EMAIL:-}
+      - BootstrapMentor__Password=${BOOTSTRAP_MENTOR_PASSWORD:-}
+      - BootstrapMentor__UserId=${BOOTSTRAP_MENTOR_USER_ID:-}
       - GoogleAuth__ClientIds__0=${GOOGLE_CLIENT_ID:-}
     depends_on:
       - postgres

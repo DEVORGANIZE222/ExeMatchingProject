@@ -248,10 +248,33 @@ export function AuthProvider({ children }) {
     } catch {
       // ignore
     }
-    const next = { ...body.data, student: student || savedStudent }
+    let resolvedStudent = student || savedStudent
+    if (!student && body.data?.role === 'Student' && savedStudent?.id) {
+      try {
+        const studentRes = await fetch(`${apiBase}/api/students/${savedStudent.id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        })
+        if (studentRes.ok) {
+          const studentBody = await studentRes.json().catch(() => ({}))
+          if (studentBody?.data) resolvedStudent = studentBody.data
+        }
+      } catch {
+        // ignore network hiccup and keep cached student payload
+      }
+    }
+    const next = { ...body.data, student: resolvedStudent }
     setAccount(next)
     localStorage.setItem('exe_account', JSON.stringify(next))
     return next
+  }, [])
+
+  const updateStudentProfile = useCallback((updatedStudent) => {
+    setAccount((current) => {
+      if (!current) return current
+      const next = { ...current, student: updatedStudent }
+      localStorage.setItem('exe_account', JSON.stringify(next))
+      return next
+    })
   }, [])
 
   useEffect(() => {
@@ -445,7 +468,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       token, account, loading, loginError,
       setLoginError, googleLogin, logout,
-      request, loadAccount,
+      request, loadAccount, updateStudentProfile,
       isAdmin, isMentor, isStudent,
       // Mentor & Quota exports
       mentorProfile,

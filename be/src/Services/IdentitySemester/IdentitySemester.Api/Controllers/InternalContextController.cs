@@ -21,6 +21,13 @@ public sealed class InternalContextController(IdentityService service, IdentityS
     public async Task<ActionResult<ApiResponse<GroupEnrollmentResponse>>> Current([FromQuery] string semesterCode, CancellationToken ct)
         => Ok(ApiResponse<GroupEnrollmentResponse>.Ok(await service.CurrentEnrollment(Actor, semesterCode, ct)));
 
+    [HttpGet("students/lookup")]
+    public async Task<ActionResult<ApiResponse<GroupEnrollmentResponse>>> Lookup(
+        [FromQuery] string semesterCode,
+        [FromQuery] string identifier,
+        CancellationToken ct)
+        => Ok(ApiResponse<GroupEnrollmentResponse>.Ok(await service.LookupEnrollment(semesterCode, identifier, ct)));
+
     [HttpGet("semesters/{semesterCode}/workflow")]
     public async Task<ActionResult<ApiResponse<SemesterWorkflowResponse>>> Workflow(string semesterCode, CancellationToken ct)
         => Ok(ApiResponse<SemesterWorkflowResponse>.Ok(await service.Workflow(semesterCode, ct)));

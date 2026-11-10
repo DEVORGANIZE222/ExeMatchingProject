@@ -3,13 +3,14 @@ import {
   GraduationCap, Layers, Users, Plus, Search,
   CheckCircle2, X, Crown,
   LogOut, Lock, Shuffle,
-  Trash2, Edit3, UserMinus, Calendar, AlertCircle
+  Trash2, Edit3, UserMinus, UserPlus, Sparkles, Calendar, AlertCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 import { useAuth } from '../../hooks/useAuth'
+import { TEAM_ROLES, getTeamRoleLabel } from '../../config/teamRoles'
+import StudentCoreModal from '../../components/StudentCoreModal'
 
-const TEAM_ROLES = ['Frontend', 'Backend', 'Mobile', 'UIUX', 'BusinessAnalysis', 'QualityAssurance', 'DataAI']
 const normalizeSearchText = (value) => value
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -31,6 +32,10 @@ export default function GroupsPage() {
   // Modals state
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCoreModal, setShowCoreModal] = useState(false)
+  const [showRandomConfirm, setShowRandomConfirm] = useState(false)
+  const [inviteIdentifier, setInviteIdentifier] = useState('')
+  const [inviting, setInviting] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupTopic, setNewGroupTopic] = useState('')
   const [newRecruitmentNeeds, setNewRecruitmentNeeds] = useState([])
@@ -350,36 +355,52 @@ export default function GroupsPage() {
     }
   }
 
-  // 6. Update group details or register its official topic after locking.
+  // 6. Update group name, topic, and project description.
   const handleSaveEdit = async (e) => {
     e.preventDefault()
     if (!selectedGroup) return
     try {
       setBusy(true)
-      if (selectedGroup.isLocked) {
-        await request(`/api/groups/${selectedGroup.id}/topic`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topicTitle: editGroupTopic.trim() })
+      const updated = await request(`/api/groups/${selectedGroup.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupName: editGroupName.trim(),
+          projectDescription: editGroupDescription.trim(),
+          topicTitle: editGroupTopic.trim(),
+          recruitmentNeeds: selectedGroup.isLocked ? [] : selectedGroup.recruitmentNeeds
         })
-      } else {
-        await request(`/api/groups/${selectedGroup.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            groupName: editGroupName.trim(),
-            projectDescription: editGroupDescription.trim(),
-            recruitmentNeeds: selectedGroup.recruitmentNeeds
-          })
-        })
-      }
-      toast.success(selectedGroup.isLocked ? 'Đã đăng ký đề tài cho nhóm.' : 'Đã cập nhật thông tin nhóm.')
+      })
+      setSelectedGroup(mapGroup(updated))
+      toast.success('Đã cập nhật tên nhóm và đề tài.')
       setEditGroupModal(false)
       await loadGroups()
     } catch (error) {
       toast.error(error.message || 'Không thể cập nhật nhóm.')
     } finally {
       setBusy(false)
+    }
+  }
+
+  // 6b. Invite / Add friend to group by Email or StudentCode
+  const handleInviteMember = async (e) => {
+    e.preventDefault()
+    if (!selectedGroup || !inviteIdentifier.trim()) return
+    try {
+      setInviting(true)
+      const updatedGroup = await request(`/api/groups/${selectedGroup.id}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: inviteIdentifier.trim() })
+      })
+      setSelectedGroup(mapGroup(updatedGroup))
+      setInviteIdentifier('')
+      toast.success('Đã thêm bạn vào nhóm thành công!')
+      await loadGroups()
+    } catch (error) {
+      toast.error(error.message || 'Không thể mời sinh viên vào nhóm.')
+    } finally {
+      setInviting(false)
     }
   }
 
@@ -415,15 +436,21 @@ export default function GroupsPage() {
   }
 
   // 9. Admin Trigger Random Matching
-  const handleRandomMatching = async () => {
+  const handleRandomMatching = () => {
     const targetCode = isAdmin ? semesterCode : studentSemesterCode
     if (!targetCode) return
-    if (!window.confirm(`Chạy thuật toán tự động ghép nhóm cho các sinh viên chưa có nhóm trong kỳ ${targetCode}?`)) return
+    setShowRandomConfirm(true)
+  }
+
+  const runRandomMatching = async () => {
+    const targetCode = isAdmin ? semesterCode : studentSemesterCode
+    if (!targetCode) return
     try {
       setBusy(true)
       const res = await request(`/api/matching/random?semesterCode=${encodeURIComponent(targetCode)}`, {
         method: 'POST'
       })
+      setShowRandomConfirm(false)
       toast.success(`Ghép nhóm ngẫu nhiên thành công! Ghép ${res?.matchedStudents || 0} sinh viên (${res?.createdGroups || 0} nhóm mới tạo, ${res?.addedToExistingGroups || 0} bổ sung vào nhóm cũ).`, { duration: 5000 })
       await loadGroups()
     } catch (error) {
@@ -529,11 +556,28 @@ export default function GroupsPage() {
               ))}
             </select>
           ) : (
-            <div className="badge badge-teal" style={{ fontSize: 13, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Calendar size={14} />
-              <span>
-                Học kỳ của bạn: <strong>{activeSemester ? `${activeSemester.code} · ${activeSemester.name}` : (studentSemesterCode || 'Chưa xếp kỳ')}</strong>
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div className="badge badge-teal" style={{ fontSize: 13, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Calendar size={14} />
+                <span>
+                  Học kỳ của bạn: <strong>{activeSemester ? `${activeSemester.code} · ${activeSemester.name}` : (studentSemesterCode || 'Chưa xếp kỳ')}</strong>
+                </span>
+              </div>
+              {account?.student && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setShowCoreModal(true)}
+                  title="Xem & chọn thế mạnh chuyên môn (Core) của bạn"
+                >
+                  <Sparkles size={14} color="var(--primary)" />
+                  <span>
+                    Core: {account.student.strengthRoles?.length
+                      ? account.student.strengthRoles.map(getTeamRoleLabel).join(', ')
+                      : 'Chưa chọn'}
+                  </span>
+                </button>
+              )}
             </div>
           )}
 
@@ -625,9 +669,9 @@ export default function GroupsPage() {
                 ))}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
                 <span>Trưởng nhóm: <strong style={{ color: 'var(--text-main)' }}>{group.leader}</strong></span>
-                <span>Mã: <code style={{ fontSize: 11 }}>{group.groupCode}</code></span>
+                <span className="badge badge-neutral" style={{ fontSize: 10.5 }}>{group.semesterCode}</span>
               </div>
 
               {/* Action Buttons */}
@@ -648,6 +692,17 @@ export default function GroupsPage() {
                     onClick={() => handleJoin(group)}
                   >
                     Xin gia nhập
+                  </button>
+                )}
+
+                {(isAdmin || isInGroup) && !isFull && !group.isLocked && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={busy}
+                    onClick={() => openGroupDetails(group)}
+                  >
+                    <UserPlus size={14} /> Mời bạn
                   </button>
                 )}
               </div>
@@ -678,7 +733,7 @@ export default function GroupsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span className="badge badge-neutral" style={{ fontSize: 11 }}>Mã: {selectedGroup.groupCode}</span>
+                  <span className="badge badge-neutral" style={{ fontSize: 11 }}>{selectedGroup.semesterCode}</span>
                   {selectedGroup.isLocked ? (
                     <span className="badge badge-teal"><Lock size={12} /> Đã khóa nhóm</span>
                   ) : (
@@ -698,29 +753,18 @@ export default function GroupsPage() {
             <div style={{ backgroundColor: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>ĐỀ TÀI KHỞI NGHIỆP:</span>
-                {(isAdmin || selectedGroup.isCurrentLeader) && !selectedGroup.isLocked && (
+                {(isAdmin || selectedGroup.members.some((m) => m.studentId === currentStudentId)) && (
                   <button
                     className="btn btn-ghost btn-sm"
-                    style={{ fontSize: 11, padding: '2px 8px' }}
+                    style={{ fontSize: 11.5, padding: '3px 8px' }}
                     onClick={() => {
                       setEditGroupName(selectedGroup.name)
+                      setEditGroupTopic(selectedGroup.topicTitle || '')
                       setEditGroupDescription(selectedGroup.projectDescription || '')
                       setEditGroupModal(true)
                     }}
                   >
-                    <Edit3 size={12} /> Chỉnh sửa nhóm
-                  </button>
-                )}
-                {account?.role === 'Student' && selectedGroup.isCurrentLeader && selectedGroup.isLocked && !selectedGroup.topicTitle && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    style={{ fontSize: 11, padding: '2px 8px' }}
-                    onClick={() => {
-                      setEditGroupTopic('')
-                      setEditGroupModal(true)
-                    }}
-                  >
-                    <Edit3 size={12} /> Đăng ký đề tài
+                    <Edit3 size={12} /> Chỉnh sửa tên & đề tài
                   </button>
                 )}
               </div>
@@ -808,6 +852,7 @@ export default function GroupsPage() {
                 {selectedGroup.members.map((m) => {
                   const isThisMemberMe = m.studentId === currentStudentId
                   const amIInGroup = selectedGroup.members.some((x) => x.studentId === currentStudentId)
+                  const memberEmail = m.email || (isThisMemberMe ? account?.email : '')
 
                   return (
                     <div
@@ -827,7 +872,7 @@ export default function GroupsPage() {
                           {m.name.charAt(0)}
                         </div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <strong style={{ fontSize: 13, color: 'var(--text-main)' }}>{m.name}</strong>
                             {isThisMemberMe && <span className="badge badge-neutral" style={{ fontSize: 10 }}>Bạn</span>}
                             {m.isDemo && <span className="badge badge-neutral" style={{ fontSize: 10 }}>DEMO</span>}
@@ -837,7 +882,10 @@ export default function GroupsPage() {
                               </span>
                             )}
                           </div>
-                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{m.studentCode}</span>
+                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                            {memberEmail ? `${memberEmail} · ${m.studentCode}` : m.studentCode}
+                            {m.major ? ` · ${m.major}` : ''}
+                          </span>
                         </div>
                       </div>
 
@@ -873,6 +921,27 @@ export default function GroupsPage() {
                   )
                 })}
               </div>
+
+              {(isAdmin || selectedGroup.members.some((x) => x.studentId === currentStudentId)) &&
+                !selectedGroup.isLocked && selectedGroup.members.length < 5 && (
+                <form onSubmit={handleInviteMember} style={{ display: 'flex', gap: 8, marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-default)' }}>
+                  <input
+                    className="input input-sm"
+                    placeholder="Mời bạn bằng Email hoặc MSSV (VD: SE196624 hoặc ten@fpt.edu.vn)"
+                    value={inviteIdentifier}
+                    onChange={(e) => setInviteIdentifier(e.target.value)}
+                    disabled={inviting}
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={inviting || !inviteIdentifier.trim()}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    <UserPlus size={14} /> {inviting ? 'Đang thêm...' : 'Mời vào nhóm'}
+                  </button>
+                </form>
+              )}
             </div>
 
             {/* Modal Actions Footer */}
@@ -944,7 +1013,7 @@ export default function GroupsPage() {
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>
-                {selectedGroup?.isLocked ? 'Đăng ký đề tài chính thức' : 'Chỉnh sửa thông tin nhóm'}
+                Chỉnh sửa tên nhóm & đề tài
               </h2>
               <button className="btn btn-ghost btn-sm" onClick={() => setEditGroupModal(false)} style={{ padding: 4 }}>
                 <X size={18} />
@@ -952,44 +1021,43 @@ export default function GroupsPage() {
             </div>
 
             <form onSubmit={handleSaveEdit}>
-              {selectedGroup?.isLocked ? (
-                <div style={{ marginBottom: 18 }}>
-                  <label className="input-label">Tên đề tài khởi nghiệp chính thức *</label>
-                  <textarea
-                    required
-                    minLength={3}
-                    maxLength={300}
-                    rows={3}
-                    className="textarea"
-                    value={editGroupTopic}
-                    onChange={(e) => setEditGroupTopic(e.target.value)}
-                  />
-                </div>
-              ) : (
-                <>
-                  <div style={{ marginBottom: 14 }}>
-                    <label className="input-label">Tên nhóm *</label>
-                    <input
-                      required
-                      className="input"
-                      value={editGroupName}
-                      onChange={(e) => setEditGroupName(e.target.value)}
-                    />
-                  </div>
-                  <div style={{ marginBottom: 18 }}>
-                    <label className="input-label">Mô tả dự án *</label>
-                    <textarea
-                      required
-                      minLength={3}
-                      maxLength={1200}
-                      rows={3}
-                      className="textarea"
-                      value={editGroupDescription}
-                      onChange={(e) => setEditGroupDescription(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
+              <div style={{ marginBottom: 14 }}>
+                <label className="input-label">Tên nhóm *</label>
+                <input
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  className="input"
+                  value={editGroupName}
+                  onChange={(e) => setEditGroupName(e.target.value)}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label className="input-label">
+                  Tên đề tài khởi nghiệp {selectedGroup?.isLocked ? '*' : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(tùy chọn)</span>}
+                </label>
+                <input
+                  required={Boolean(selectedGroup?.isLocked)}
+                  minLength={3}
+                  maxLength={300}
+                  className="input"
+                  placeholder="Nhập tên đề tài khởi nghiệp của nhóm..."
+                  value={editGroupTopic}
+                  onChange={(e) => setEditGroupTopic(e.target.value)}
+                />
+              </div>
+              <div style={{ marginBottom: 18 }}>
+                <label className="input-label">Mô tả dự án *</label>
+                <textarea
+                  required
+                  minLength={3}
+                  maxLength={1200}
+                  rows={3}
+                  className="textarea"
+                  value={editGroupDescription}
+                  onChange={(e) => setEditGroupDescription(e.target.value)}
+                />
+              </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button
@@ -1000,7 +1068,7 @@ export default function GroupsPage() {
                   Hủy
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {selectedGroup?.isLocked ? 'Đăng ký đề tài' : 'Lưu thay đổi'}
+                  {busy ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>
@@ -1127,6 +1195,33 @@ export default function GroupsPage() {
           </form>
         </div>
       )}
+      {showRandomConfirm && (
+        <div className="modal-backdrop" onClick={() => !busy && setShowRandomConfirm(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Shuffle size={18} color="var(--primary)" /> Ghép nhóm ngẫu nhiên
+              </h2>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowRandomConfirm(false)} disabled={busy} style={{ padding: 4 }}>
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 18 }}>
+              Chạy ghép nhóm tự động cho toàn bộ sinh viên chưa có nhóm trong học kỳ <strong>{isAdmin ? semesterCode : studentSemesterCode}</strong>?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowRandomConfirm(false)} disabled={busy}>
+                Hủy
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={runRandomMatching} disabled={busy}>
+                {busy ? 'Đang ghép...' : 'Xác nhận ghép ngay'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCoreModal && <StudentCoreModal onClose={() => setShowCoreModal(false)} />}
     </div>
   )
 }

@@ -7,7 +7,7 @@ namespace EXETeamMatching.Contracts.TeamRoles;
 public static class TeamRoleCatalog
 {
     public static readonly IReadOnlyList<string> All =
-        ["Frontend", "Backend", "Mobile", "UIUX", "BusinessAnalysis", "QualityAssurance", "DataAI"];
+        ["Frontend", "Backend", "Mobile", "UIUX", "BusinessAnalysis", "QualityAssurance", "DataAI", "Marketing"];
 
     public static bool IsValid(string? value) => !string.IsNullOrWhiteSpace(value) &&
         All.Contains(value.Trim(), StringComparer.OrdinalIgnoreCase);

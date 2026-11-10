@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 
-const TEAM_ROLES = ['Frontend', 'Backend', 'Mobile', 'UIUX', 'BusinessAnalysis', 'QualityAssurance', 'DataAI']
+import { TEAM_ROLES } from '../../config/teamRoles'
 
 export default function StudentsPage() {
   const { request, isAdmin } = useAuth()

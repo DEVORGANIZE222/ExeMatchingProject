@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Users, Layers, FileText, Calendar,
-  ChevronRight, ArrowRight, CheckCircle2, AlertCircle
+  ChevronRight, ArrowRight, CheckCircle2, AlertCircle, Sparkles, Edit3
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import SemesterTimelineProgress from '../../components/SemesterTimelineProgress'
+import StudentCoreModal from '../../components/StudentCoreModal'
+import { getTeamRoleLabel } from '../../config/teamRoles'
 import './DashboardPage.css'
 
 function getMilestoneCountdown(dateStr) {
@@ -64,6 +66,7 @@ export default function DashboardPage() {
   })
   const [currentSemester, setCurrentSemester] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [showCoreModal, setShowCoreModal] = useState(false)
 
   // Determine fixed student semester or selectable admin semester
   const studentSemesterCode = account?.student?.semesterCode
@@ -479,8 +482,52 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right Column: Quick Shortcuts */}
+        {/* Right Column: Quick Shortcuts & Student Core */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+          {isStudent && account?.student && (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Sparkles size={16} color="var(--primary)" /> Hồ sơ & Core của bạn
+                  </h2>
+                  <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, marginBottom: 0 }}>
+                    {account.student.fullName} · <strong>{account.student.studentCode}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setShowCoreModal(true)}
+                >
+                  <Edit3 size={13} /> Chọn Core
+                </button>
+              </div>
+
+              <div style={{ backgroundColor: 'var(--bg-subtle)', padding: '10px 12px', borderRadius: 8, marginBottom: 10 }}>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginBottom: 2 }}>Ngành đào tạo</div>
+                <strong style={{ fontSize: 13.5, color: 'var(--text-main)' }}>{account.student.major || 'Chưa phân ngành'}</strong>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  Thế mạnh / Core chuyên môn:
+                </div>
+                {account.student.strengthRoles?.length ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {account.student.strengthRoles.map((role) => (
+                      <span className="badge badge-teal" key={role}>{getTeamRoleLabel(role)}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 12.5, color: '#B45309', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', padding: '8px 10px', borderRadius: 6, margin: 0 }}>
+                    Bạn chưa chọn Core chuyên môn. Hãy bấm "Chọn Core" để các nhóm dễ tìm đồng đội phù hợp!
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="card">
             <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>
               Truy cập nhanh
@@ -512,6 +559,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      {showCoreModal && <StudentCoreModal onClose={() => setShowCoreModal(false)} />}
     </div>
   )
 }
