@@ -87,35 +87,35 @@ public class NotificationServiceTests
     }
 
     [Fact]
-    public async Task GroupEvents_And_MentorEvents_Are_Dispatched_Correctly()
+    public async Task GroupEvents_With_Null_Emails_Are_Skipped_Even_When_DefaultRecipient_Configured()
+    {
+        var emailService = new TestEmailService();
+        var store = new InMemoryNotificationStore();
+        var settings = Options.Create(new EmailSettings { DefaultRecipientEmail = "fallback@university.edu" });
+        var handler = new NotificationHandler(emailService, store, settings, NullLogger<NotificationHandler>.Instance);
+
+        await handler.HandleEventAsync(new GroupCreatedEvent(Guid.NewGuid(), "GRP001", "The Pioneers", Guid.NewGuid(), DateTime.UtcNow));
+        await handler.HandleEventAsync(new GroupLockedEvent(Guid.NewGuid(), "GRP001", 5, DateTime.UtcNow));
+        await handler.HandleEventAsync(new LeaderElectedEvent(Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow));
+        await handler.HandleEventAsync(new TopicRegisteredEvent(Guid.NewGuid(), "TOPIC01", "AI Matching Platform", DateTime.UtcNow));
+
+        Assert.Empty(emailService.SentEmails);
+        Assert.Empty(store.GetRecent(10));
+    }
+
+    [Fact]
+    public async Task GroupEvents_And_MentorEvents_With_Recipients_Are_Dispatched_Correctly()
     {
         var emailService = new TestEmailService();
         var store = new InMemoryNotificationStore();
         var handler = new NotificationHandler(emailService, store, NullLogger<NotificationHandler>.Instance);
 
-        // Group Created
-        var groupCreated = new GroupCreatedEvent(Guid.NewGuid(), "GRP001", "The Pioneers", Guid.NewGuid(), DateTime.UtcNow);
-        await handler.HandleEventAsync(groupCreated);
-
-        // Group Locked
-        var groupLocked = new GroupLockedEvent(Guid.NewGuid(), "GRP001", 5, DateTime.UtcNow);
-        await handler.HandleEventAsync(groupLocked);
-
-        // Leader Elected
-        var leaderElected = new LeaderElectedEvent(Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
-        await handler.HandleEventAsync(leaderElected);
-
-        // Topic Registered
-        var topicRegistered = new TopicRegisteredEvent(Guid.NewGuid(), "TOPIC01", "AI Matching Platform", DateTime.UtcNow);
-        await handler.HandleEventAsync(topicRegistered);
-
-        // Mentor Requested
-        var mentorRequested = new MentorRequestedEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Please mentor us", DateTime.UtcNow);
-        await handler.HandleEventAsync(mentorRequested);
-
-        // Mentor Decision
-        var mentorDecision = new MentorDecisionEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), true, "Strong proposal", DateTime.UtcNow);
-        await handler.HandleEventAsync(mentorDecision);
+        await handler.HandleEventAsync(new GroupCreatedEvent(Guid.NewGuid(), "GRP001", "The Pioneers", Guid.NewGuid(), DateTime.UtcNow, "creator@university.edu"));
+        await handler.HandleEventAsync(new GroupLockedEvent(Guid.NewGuid(), "GRP001", 5, DateTime.UtcNow, "leader@university.edu"));
+        await handler.HandleEventAsync(new LeaderElectedEvent(Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow, "leader@university.edu"));
+        await handler.HandleEventAsync(new TopicRegisteredEvent(Guid.NewGuid(), "TOPIC01", "AI Matching Platform", DateTime.UtcNow, "leader@university.edu"));
+        await handler.HandleEventAsync(new MentorRequestedEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Please mentor us", DateTime.UtcNow, MentorEmail: "mentor@university.edu"));
+        await handler.HandleEventAsync(new MentorDecisionEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), true, "Strong proposal", DateTime.UtcNow, RequesterEmail: "student@university.edu"));
 
         Assert.Equal(6, emailService.SentEmails.Count);
         var recent = store.GetRecent(10);
