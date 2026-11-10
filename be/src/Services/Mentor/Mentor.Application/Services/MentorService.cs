@@ -245,10 +245,29 @@ public class MentorService(
             });
         }
 
+        var decisionReason = decision.DecisionReason.Trim();
         request.Status = decision.IsAccepted ? RequestStatus.Approved : RequestStatus.Rejected;
-        request.DecisionReason = decision.DecisionReason.Trim();
+        request.DecisionReason = decisionReason;
         request.DecidedAt = DateTime.UtcNow;
         request.UpdatedAt = DateTime.UtcNow;
+        repository.AddStudentNotification(new StudentNotification
+        {
+            GroupId = request.GroupId,
+            RequestId = request.Id,
+            MentorName = Truncate(mentor.FullName, 200),
+            GroupName = Truncate(request.GroupName, 200),
+            Type = decision.IsAccepted ? "decision-approved" : "decision-rejected",
+            Title = Truncate(decision.IsAccepted
+                ? $"GVHD {mentor.FullName} đã chấp thuận hướng dẫn"
+                : $"GVHD {mentor.FullName} đã từ chối lời mời", 200),
+            Message = Truncate(decision.IsAccepted
+                ? (string.IsNullOrWhiteSpace(decisionReason)
+                    ? $"Giảng viên {mentor.FullName} đã đồng ý hướng dẫn nhóm {request.GroupName}."
+                    : $"Lời nhắn từ giảng viên: {decisionReason}")
+                : (string.IsNullOrWhiteSpace(decisionReason)
+                    ? $"Giảng viên {mentor.FullName} đã từ chối yêu cầu hướng dẫn của nhóm {request.GroupName}."
+                    : $"Lý do từ chối: {decisionReason}"), 2500)
+        });
         await repository.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -331,13 +350,24 @@ public class MentorService(
 
     public async Task<MentorProgressResponse> UpdateGroupProgressAsync(Guid actorUserId, Guid groupId, MentorProgressRequest request, CancellationToken cancellationToken = default)
     {
-        var mentorId = await MentorIdAsync(actorUserId, cancellationToken);
-        var group = await repository.GetGroupProgressForUpdateAsync(mentorId, groupId, cancellationToken)
+        var mentor = await FindMineAsync(actorUserId, cancellationToken);
+        var group = await repository.GetGroupProgressForUpdateAsync(mentor.Id, groupId, cancellationToken)
             ?? throw new KeyNotFoundException("Assigned group not found.");
         group.Milestone = request.Milestone.Trim();
         group.Progress = request.Progress;
         group.Feedback = request.Feedback.Trim();
         group.UpdatedAt = DateTime.UtcNow;
+        repository.AddStudentNotification(new StudentNotification
+        {
+            GroupId = groupId,
+            MentorName = Truncate(mentor.FullName, 200),
+            GroupName = Truncate(group.GroupName, 200),
+            Type = "progress-feedback",
+            Title = Truncate($"GVHD {mentor.FullName} cập nhật tiến độ ({group.Progress}%)", 200),
+            Message = Truncate(string.IsNullOrWhiteSpace(group.Feedback)
+                ? $"Mốc hiện tại: {group.Milestone}."
+                : $"Mốc \"{group.Milestone}\": {group.Feedback}", 2500)
+        });
         await repository.SaveChangesAsync(cancellationToken);
         return ToResponse(group);
     }
@@ -405,6 +435,39 @@ public class MentorService(
         => await repository.MarkAllNotificationsReadAsync(await MentorIdAsync(actorUserId, cancellationToken), cancellationToken);
 
     // ------------------------------------------------------------------
+    // Student notifications (responses from mentors)
+    // ------------------------------------------------------------------
+
+    public async Task<List<StudentNotificationResponse>> GetMyGroupNotificationsAsync(
+        RequestActor actor, string? semesterCode, CancellationToken cancellationToken = default)
+    {
+        var groupId = await ResolveStudentGroupIdAsync(actor.AuthorizationHeader, semesterCode, cancellationToken);
+        return groupId is null
+            ? []
+            : await repository.GetStudentNotificationsAsync(groupId.Value, NotificationPageSize, cancellationToken);
+    }
+
+    public async Task MarkMyGroupNotificationReadAsync(
+        RequestActor actor, string? semesterCode, Guid id, CancellationToken cancellationToken = default)
+    {
+        var groupId = await ResolveStudentGroupIdAsync(actor.AuthorizationHeader, semesterCode, cancellationToken)
+            ?? throw new KeyNotFoundException("Notification not found.");
+        var notification = await repository.GetStudentNotificationForUpdateAsync(id, groupId, cancellationToken)
+            ?? throw new KeyNotFoundException("Notification not found.");
+        notification.IsRead = true;
+        notification.UpdatedAt = DateTime.UtcNow;
+        await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task MarkAllMyGroupNotificationsReadAsync(
+        RequestActor actor, string? semesterCode, CancellationToken cancellationToken = default)
+    {
+        var groupId = await ResolveStudentGroupIdAsync(actor.AuthorizationHeader, semesterCode, cancellationToken);
+        if (groupId is null) return;
+        await repository.MarkAllStudentNotificationsReadAsync(groupId.Value, cancellationToken);
+    }
+
+    // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
 
@@ -456,6 +519,30 @@ public class MentorService(
         var groupResult = await groupResponse.Content.ReadFromJsonAsync<ApiResponse<GroupRequestContext>>(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("The group service returned an empty response.");
         return groupResult.Data ?? throw new InvalidOperationException("The group service returned no group details.");
+    }
+
+    private async Task<Guid?> ResolveStudentGroupIdAsync(
+        string? authorizationHeader, string? semesterCode, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(semesterCode))
+            return null;
+
+        var client = clients.CreateClient(GroupsClientName);
+        using var groupRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"api/groups/my?semesterCode={Uri.EscapeDataString(semesterCode.Trim())}");
+        ApplyAuthorization(groupRequest, authorizationHeader);
+
+        using var groupResponse = await client.SendAsync(groupRequest, cancellationToken);
+        if (groupResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.BadRequest)
+            return null;
+        if (groupResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            throw new GroupValidationException(GroupValidationFailure.Forbidden, "Only members of a group can view group notifications.");
+        if (!groupResponse.IsSuccessStatusCode)
+            throw new HttpRequestException($"Group matching service returned {(int)groupResponse.StatusCode} while resolving student group.");
+
+        var groupResult = await groupResponse.Content.ReadFromJsonAsync<ApiResponse<StudentGroupPayload?>>(cancellationToken: cancellationToken);
+        return groupResult?.Data?.Id;
     }
 
     /// <summary>
@@ -512,6 +599,9 @@ public class MentorService(
     private static string? Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static string Truncate(string value, int maxLength)
+        => value.Length <= maxLength ? value : value[..maxLength];
+
     private static MentorResponse Map(MentorUser mentor) => new(
         mentor.Id,
         mentor.UserId,
@@ -560,4 +650,5 @@ public class MentorService(
         bool IsDemo);
 
     private sealed record MentorTeamContactPayload(Guid StudentId, string Email);
+    private sealed record StudentGroupPayload(Guid Id);
 }

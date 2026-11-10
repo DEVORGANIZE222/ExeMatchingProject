@@ -183,6 +183,8 @@
 }
 
 .proposal-card {
+  position: relative;
+  overflow: hidden;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -196,12 +198,27 @@
   box-shadow: var(--shadow-md);
 }
 
-.proposal-card.approved {
-  border-left: 4px solid var(--primary);
+.proposal-card.approved,
+.proposal-card.rejected {
+  padding-left: calc(var(--space-6) + 4px);
 }
 
-.proposal-card.rejected {
-  border-left: 4px solid #DC2626;
+.proposal-card.approved::before,
+.proposal-card.rejected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+}
+
+.proposal-card.approved::before {
+  background-color: var(--primary);
+}
+
+.proposal-card.rejected::before {
+  background-color: #EF4444;
 }
 
 .dashboard-metrics-grid.mentor-metrics-grid {
@@ -545,8 +562,10 @@
 }
 
 .mentor-feedback-box {
+  position: relative;
+  overflow: hidden;
   margin-top: 12px;
-  padding: 10px 14px;
+  padding: 10px 14px 10px 16px;
   border-radius: var(--radius-sm);
   font-size: 12.5px;
   line-height: 1.5;
@@ -558,15 +577,31 @@
 .mentor-feedback-box.rejected {
   background-color: #FEF2F2;
   border-color: #FECACA;
-  border-left: 3px solid #DC2626;
   color: #7F1D1D;
 }
 
 .mentor-feedback-box.approved {
   background-color: #F0FDF4;
   border-color: #BBF7D0;
-  border-left: 3px solid var(--primary);
   color: #14532D;
+}
+
+.mentor-feedback-box.rejected::before,
+.mentor-feedback-box.approved::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+.mentor-feedback-box.rejected::before {
+  background-color: #EF4444;
+}
+
+.mentor-feedback-box.approved::before {
+  background-color: var(--primary);
 }
 
 .mentor-feedback-label {
@@ -741,14 +776,26 @@
 
 /* Message from Group to Mentor */
 .team-pitch-quote {
+  position: relative;
+  overflow: hidden;
   background-color: #F0FDF4;
-  border-left: 3px solid var(--primary);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  padding: 10px 14px;
+  border: 1px solid #BBF7D0;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px 10px 16px;
   font-size: 13px;
   color: #14532D;
   line-height: 1.5;
   margin-bottom: 4px;
+}
+
+.team-pitch-quote::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: var(--primary);
 }
 
 .team-pitch-label {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
 import {
   Bell, Check, LayoutDashboard, Users, Calendar,
@@ -10,13 +10,19 @@ import { useAuth } from '../hooks/useAuth'
 import logoImg from '../assets/logo.png'
 import './layout.css'
 
+const notificationTypeMeta = {
+  'decision-approved': { label: 'Đã chấp thuận', className: 'badge-green' },
+  'decision-rejected': { label: 'Từ chối', className: 'badge-error' },
+  'progress-feedback': { label: 'Cập nhật tiến độ', className: 'badge-teal' },
+}
+
 function formatNotificationDate(value) {
   if (!value) return ''
   return new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 export default function AppLayout() {
-  const { account, logout, isAdmin, isMentor, request } = useAuth()
+  const { account, logout, isAdmin, isMentor, isStudent, request } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -27,6 +33,15 @@ export default function AppLayout() {
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const location = useLocation()
   const [failedAvatarUrl, setFailedAvatarUrl] = useState(null)
+
+  const studentSemesterCode = account?.student?.semesterCode || ''
+  const hasNotificationBell = isMentor || isStudent
+
+  const notificationsEndpoint = isMentor
+    ? '/api/mentors/me/notifications'
+    : isStudent && studentSemesterCode
+      ? `/api/mentor-requests/student/notifications?semesterCode=${encodeURIComponent(studentSemesterCode)}`
+      : null
 
   useEffect(() => {
     if (!userMenuOpen && !notificationsOpen) return
@@ -42,21 +57,44 @@ export default function AppLayout() {
     return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [userMenuOpen, notificationsOpen])
 
+  const loadNotifications = useCallback(() => {
+    if (!notificationsEndpoint) return Promise.resolve([])
+    return request(notificationsEndpoint)
+      .then((alerts) => (Array.isArray(alerts) ? alerts : []))
+      .catch(() => [])
+  }, [notificationsEndpoint, request])
+
   useEffect(() => {
-    if (!isMentor) return
+    if (!isMentor && !isStudent) return
     let active = true
-    Promise.all([
-      request('/api/mentor-requests/mine'),
-      request('/api/mentors/me/notifications').catch(() => [])
-    ])
-      .then(([items, alerts]) => {
-        if (!active) return
-        setPendingRequestsCount(items.filter((item) => item.status === 0).length)
-        setNotifications(Array.isArray(alerts) ? alerts : [])
+
+    const refresh = () => {
+      if (isMentor) {
+        Promise.all([
+          request('/api/mentor-requests/mine'),
+          loadNotifications()
+        ])
+          .then(([items, alerts]) => {
+            if (!active) return
+            setPendingRequestsCount(items.filter((item) => item.status === 0).length)
+            setNotifications(alerts)
+          })
+          .catch((error) => toast.error(error.message || 'Không thể cập nhật số yêu cầu mentor.'))
+        return
+      }
+
+      loadNotifications().then((alerts) => {
+        if (active) setNotifications(alerts)
       })
-      .catch((error) => toast.error(error.message || 'Không thể cập nhật số yêu cầu mentor.'))
-    return () => { active = false }
-  }, [isMentor, location.pathname, request])
+    }
+
+    refresh()
+    window.addEventListener('focus', refresh)
+    return () => {
+      active = false
+      window.removeEventListener('focus', refresh)
+    }
+  }, [isMentor, isStudent, loadNotifications, location.pathname, request])
 
   const unreadNotificationsCount = notifications.filter((item) => !item.isRead).length
 
@@ -64,11 +102,11 @@ export default function AppLayout() {
     const nextOpen = !notificationsOpen
     setUserMenuOpen(false)
     setNotificationsOpen(nextOpen)
-    if (!nextOpen || !isMentor) return
+    if (!nextOpen || !notificationsEndpoint) return
 
     setNotificationsLoading(true)
     try {
-      const alerts = await request('/api/mentors/me/notifications')
+      const alerts = await request(notificationsEndpoint)
       setNotifications(Array.isArray(alerts) ? alerts : [])
     } catch {
       // Keep cached list if background refresh fails
@@ -78,8 +116,15 @@ export default function AppLayout() {
   }
 
   const markNotificationRead = async (id) => {
+    const url = isMentor
+      ? `/api/mentors/me/notifications/${id}/read`
+      : isStudent && studentSemesterCode
+        ? `/api/mentor-requests/student/notifications/${id}/read?semesterCode=${encodeURIComponent(studentSemesterCode)}`
+        : null
+    if (!url) return
+
     try {
-      await request(`/api/mentors/me/notifications/${id}/read`, { method: 'PUT' })
+      await request(url, { method: 'PUT' })
       setNotifications((current) => current.map((item) => (
         item.id === id ? { ...item, isRead: true } : item
       )))
@@ -89,8 +134,15 @@ export default function AppLayout() {
   }
 
   const markAllNotificationsRead = async () => {
+    const url = isMentor
+      ? '/api/mentors/me/notifications/read-all'
+      : isStudent && studentSemesterCode
+        ? `/api/mentor-requests/student/notifications/read-all?semesterCode=${encodeURIComponent(studentSemesterCode)}`
+        : null
+    if (!url) return
+
     try {
-      await request('/api/mentors/me/notifications/read-all', { method: 'PUT' })
+      await request(url, { method: 'PUT' })
       setNotifications((current) => current.map((item) => ({ ...item, isRead: true })))
     } catch (error) {
       toast.error(error.message || 'Không thể đánh dấu thông báo đã đọc.')
@@ -179,7 +231,7 @@ export default function AppLayout() {
 
           {/* Right: Notification Bell + User Profile Dropdown & Mobile Toggle */}
           <div className="topbar-actions">
-            {isMentor && (
+            {hasNotificationBell && (
               <div className="notifications-menu-wrap" ref={notificationsRef}>
                 <button
                   type="button"
@@ -202,14 +254,14 @@ export default function AppLayout() {
                   <div className="notifications-dropdown" role="dialog" aria-label="Danh sách thông báo">
                     <div className="notifications-dropdown-header">
                       <div className="notifications-dropdown-title-wrap">
-                        <strong>Thông báo</strong>
+                        <strong>{isStudent ? 'Phản hồi từ Giảng viên' : 'Thông báo'}</strong>
                         {unreadNotificationsCount > 0 ? (
                           <span className="badge badge-warning" style={{ fontSize: 11, padding: '1px 7px' }}>
                             {unreadNotificationsCount} chưa đọc
                           </span>
-                        ) : (
+                        ) : notifications.length > 0 ? (
                           <span className="notifications-all-read">Đã đọc hết</span>
-                        )}
+                        ) : null}
                       </div>
                       {unreadNotificationsCount > 0 && (
                         <button
@@ -233,27 +285,49 @@ export default function AppLayout() {
                           <div className="notifications-empty-icon">
                             <Bell size={18} />
                           </div>
-                          <strong>Chưa có thông báo mới</strong>
-                          <span>Thông báo khi có nhóm gửi lời mời hoặc cập nhật mới sẽ hiển thị tại đây.</span>
+                          <strong>{isStudent ? 'Chưa có phản hồi từ giảng viên' : 'Chưa có thông báo mới'}</strong>
+                          <span>
+                            {isStudent
+                              ? 'Phản hồi duyệt lời mời hoặc nhận xét tiến độ từ Giảng viên hướng dẫn sẽ hiển thị tại đây.'
+                              : 'Thông báo khi có nhóm gửi lời mời hoặc cập nhật mới sẽ hiển thị tại đây.'}
+                          </span>
                         </div>
                       ) : (
-                        notifications.slice(0, 12).map((notification) => (
-                          <button
-                            type="button"
-                            key={notification.id}
-                            className={`notification-popover-item ${notification.isRead ? '' : 'unread'}`}
-                            onClick={() => !notification.isRead && markNotificationRead(notification.id)}
-                          >
-                            <div className="notification-popover-top">
-                              <strong>{notification.title}</strong>
-                              {!notification.isRead && <span className="notification-unread-dot" aria-hidden="true" />}
-                            </div>
-                            <p>{notification.message}</p>
-                            <small>{formatNotificationDate(notification.createdAt)}</small>
-                          </button>
-                        ))
+                        notifications.slice(0, 12).map((notification) => {
+                          const typeMeta = notificationTypeMeta[notification.type]
+                          return (
+                            <button
+                              type="button"
+                              key={notification.id}
+                              className={`notification-popover-item ${notification.isRead ? '' : 'unread'} ${notification.type === 'decision-rejected' ? 'rejected' : ''}`}
+                              onClick={() => !notification.isRead && markNotificationRead(notification.id)}
+                            >
+                              <div className="notification-popover-top">
+                                <div className="notification-popover-heading">
+                                  {typeMeta && (
+                                    <span className={`badge ${typeMeta.className}`} style={{ fontSize: 10.5, padding: '1px 7px' }}>
+                                      {typeMeta.label}
+                                    </span>
+                                  )}
+                                  <strong>{notification.title}</strong>
+                                </div>
+                                {!notification.isRead && <span className="notification-unread-dot" aria-hidden="true" />}
+                              </div>
+                              <p>{notification.message}</p>
+                              <small>{formatNotificationDate(notification.createdAt)}</small>
+                            </button>
+                          )
+                        })
                       )}
                     </div>
+
+                    {isStudent && location.pathname !== '/groups' && (
+                      <div className="notifications-dropdown-footer">
+                        <Link to="/groups" className="notifications-footer-link" onClick={() => setNotificationsOpen(false)}>
+                          Đến trang Nhóm & Đề tài
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

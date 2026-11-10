@@ -13,6 +13,7 @@ public class MentorDbContext : DbContext
     public DbSet<MentorGroupProgress> MentorGroupProgress => Set<MentorGroupProgress>();
     public DbSet<MentorAppointment> MentorAppointments => Set<MentorAppointment>();
     public DbSet<MentorNotification> MentorNotifications => Set<MentorNotification>();
+    public DbSet<StudentNotification> StudentNotifications => Set<StudentNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -31,6 +32,13 @@ public class MentorDbContext : DbContext
         modelBuilder.Entity<MentorNotification>().Property(x => x.Type).HasMaxLength(40);
         modelBuilder.Entity<MentorNotification>().Property(x => x.Title).HasMaxLength(200);
         modelBuilder.Entity<MentorNotification>().Property(x => x.Message).HasMaxLength(1000);
+        modelBuilder.Entity<StudentNotification>().HasIndex(x => new { x.GroupId, x.CreatedAt });
+        modelBuilder.Entity<StudentNotification>().HasIndex(x => x.RequestId);
+        modelBuilder.Entity<StudentNotification>().Property(x => x.MentorName).HasMaxLength(200);
+        modelBuilder.Entity<StudentNotification>().Property(x => x.GroupName).HasMaxLength(200);
+        modelBuilder.Entity<StudentNotification>().Property(x => x.Type).HasMaxLength(40);
+        modelBuilder.Entity<StudentNotification>().Property(x => x.Title).HasMaxLength(200);
+        modelBuilder.Entity<StudentNotification>().Property(x => x.Message).HasMaxLength(2500);
 
         var mentorId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
         var userId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
