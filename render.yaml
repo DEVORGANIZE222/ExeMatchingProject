@@ -7,6 +7,14 @@ services:
     dockerContext: be/src/Gateway/nginx
     plan: free
     region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: IDENTITY_SERVICE_URL
+        sync: false
+      - key: GROUP_MATCHING_SERVICE_URL
+        sync: false
+      - key: MENTOR_SERVICE_URL
+        sync: false
 
   # 2. Identity & Semester Service
   - type: web
@@ -16,15 +24,24 @@ services:
     dockerContext: be
     plan: free
     region: singapore
+    healthCheckPath: /health
     envVars:
       - key: ConnectionStrings__DefaultConnection
-        fromDatabase:
-          name: exe-postgres-db
-          property: connectionString
-      - key: KafkaSettings__BootstrapServers
-        value: exe-kafka:9092
+        sync: false
       - key: JwtSettings__Secret
-        generateValue: true
+        sync: false
+      - key: GoogleAuth__ClientIds__0
+        sync: false
+      - key: KafkaSettings__BootstrapServers
+        sync: false
+      - key: KafkaSettings__SecurityProtocol
+        value: SASL_SSL
+      - key: KafkaSettings__SaslMechanism
+        value: SCRAM-SHA-256
+      - key: KafkaSettings__SaslUsername
+        sync: false
+      - key: KafkaSettings__SaslPassword
+        sync: false
 
   # 3. Group Matching Service
   - type: web
@@ -34,13 +51,28 @@ services:
     dockerContext: be
     plan: free
     region: singapore
+    healthCheckPath: /health
     envVars:
       - key: ConnectionStrings__DefaultConnection
-        fromDatabase:
-          name: exe-postgres-db
-          property: connectionString
+        sync: false
+      - key: JwtSettings__Secret
+        sync: false
+      - key: IdentitySemester__BaseUrl
+        sync: false
+      - key: MentorGrpc__Address
+        sync: false
+      - key: MentorGrpc__UseGrpcWeb
+        value: "true"
       - key: KafkaSettings__BootstrapServers
-        value: exe-kafka:9092
+        sync: false
+      - key: KafkaSettings__SecurityProtocol
+        value: SASL_SSL
+      - key: KafkaSettings__SaslMechanism
+        value: SCRAM-SHA-256
+      - key: KafkaSettings__SaslUsername
+        sync: false
+      - key: KafkaSettings__SaslPassword
+        sync: false
 
   # 4. Mentor Service
   - type: web
@@ -50,31 +82,56 @@ services:
     dockerContext: be
     plan: free
     region: singapore
+    healthCheckPath: /health
     envVars:
       - key: ConnectionStrings__DefaultConnection
-        fromDatabase:
-          name: exe-postgres-db
-          property: connectionString
+        sync: false
+      - key: JwtSettings__Secret
+        sync: false
+      - key: IdentitySemester__BaseUrl
+        sync: false
+      - key: GroupMatching__BaseUrl
+        sync: false
       - key: KafkaSettings__BootstrapServers
-        value: exe-kafka:9092
+        sync: false
+      - key: KafkaSettings__SecurityProtocol
+        value: SASL_SSL
+      - key: KafkaSettings__SaslMechanism
+        value: SCRAM-SHA-256
+      - key: KafkaSettings__SaslUsername
+        sync: false
+      - key: KafkaSettings__SaslPassword
+        sync: false
 
-  # 5. Notification Worker Service
-  - type: worker
+  # 5. Notification Worker Service (runs minimal web /health for Render Free)
+  - type: web
     name: exe-notification-worker
     env: docker
     dockerfilePath: be/src/Services/Notification/Notification.Worker/Dockerfile
     dockerContext: be
     plan: free
     region: singapore
+    healthCheckPath: /health
     envVars:
       - key: KafkaSettings__BootstrapServers
-        value: exe-kafka:9092
-
-
-# Managed PostgreSQL Database on Render
-databases:
-  - name: exe-postgres-db
-    databaseName: exe_matching_db
-    user: postgres
-    plan: free
-    region: singapore
+        sync: false
+      - key: KafkaSettings__SecurityProtocol
+        value: SASL_SSL
+      - key: KafkaSettings__SaslMechanism
+        value: SCRAM-SHA-256
+      - key: KafkaSettings__SaslUsername
+        sync: false
+      - key: KafkaSettings__SaslPassword
+        sync: false
+      - key: EmailSettings__SmtpServer
+        value: smtp.gmail.com
+      - key: EmailSettings__SmtpPort
+        value: "587"
+      - key: EmailSettings__SmtpUser
+        sync: false
+      - key: EmailSettings__SmtpPassword
+        sync: false
+      - key: EmailSettings__SenderEmail
+        sync: false
+      - key: EmailSettings__SenderName
+        value: EXE Team Matching
