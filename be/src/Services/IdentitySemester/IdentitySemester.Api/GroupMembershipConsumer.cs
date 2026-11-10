@@ -21,11 +21,11 @@ public sealed class GroupMembershipConsumer(IServiceScopeFactory scopes, IOption
         await Task.Yield();
         var config = new ConsumerConfig
         {
-            BootstrapServers = configuration["KafkaSettings:BootstrapServers"] ?? settings.Value.BootstrapServers,
             GroupId = "identity-semester-group-state-sync",
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false
         };
+        KafkaConfigHelper.ApplyTo(config, KafkaConfigHelper.Resolve(configuration, settings.Value));
         while (!stoppingToken.IsCancellationRequested)
         {
             try

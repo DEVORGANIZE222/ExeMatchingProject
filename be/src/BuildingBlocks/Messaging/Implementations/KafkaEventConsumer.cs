@@ -31,11 +31,11 @@ public class KafkaEventConsumer : IEventConsumer
         {
             var config = new ConsumerConfig
             {
-                BootstrapServers = _settings.BootstrapServers,
                 GroupId = _settings.GroupId,
                 AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnableAutoCommit = false
             };
+            KafkaConfigHelper.ApplyTo(config, _settings);
 
             while (!cancellationToken.IsCancellationRequested)
             {

@@ -23,11 +23,11 @@ public sealed class StudentStrengthRolesChangedConsumer(
         await Task.Yield();
         var config = new ConsumerConfig
         {
-            BootstrapServers = configuration["KafkaSettings:BootstrapServers"] ?? settings.Value.BootstrapServers,
             GroupId = "group-matching-student-roles-sync",
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false
         };
+        KafkaConfigHelper.ApplyTo(config, KafkaConfigHelper.Resolve(configuration, settings.Value));
         while (!stoppingToken.IsCancellationRequested)
         {
             try

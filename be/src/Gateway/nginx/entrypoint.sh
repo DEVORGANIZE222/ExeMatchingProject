@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Render injects $PORT dynamically; Docker Compose leaves it unset and defaults to 80
+export PORT=${PORT:-80}
+
 # Automatically detect system DNS resolver from /etc/resolv.conf
 SYSTEM_RESOLVER=$(grep -E '^nameserver' /etc/resolv.conf | awk '{print $2}' | tr '\n' ' ' | sed 's/ *$//')
 export DNS_RESOLVER=${DNS_RESOLVER:-${SYSTEM_RESOLVER:-127.0.0.11}}
@@ -21,7 +24,7 @@ export GROUP_MATCHING_HOST=$(echo "$GROUP_MATCHING_SERVICE_URL" | sed -E 's|^htt
 export MENTOR_HOST=$(echo "$MENTOR_SERVICE_URL" | sed -E 's|^https?://||; s|/.*$||')
 
 echo "=========================================================="
-echo " Starting EXE Nginx API Gateway"
+echo " Starting EXE Nginx API Gateway (Port: $PORT)"
 echo " - DNS Resolver:           $DNS_RESOLVER"
 echo " - Identity Service:       $IDENTITY_SERVICE_URL (Host: $IDENTITY_HOST)"
 echo " - Group Matching Service: $GROUP_MATCHING_SERVICE_URL (Host: $GROUP_MATCHING_HOST)"
@@ -29,6 +32,6 @@ echo " - Mentor Service:         $MENTOR_SERVICE_URL (Host: $MENTOR_HOST)"
 echo "=========================================================="
 
 # Replace only our variables, preserving Nginx internal variables ($host, $request_uri, etc.)
-envsubst '${DNS_RESOLVER} ${IDENTITY_SERVICE_URL} ${IDENTITY_HOST} ${GROUP_MATCHING_SERVICE_URL} ${GROUP_MATCHING_HOST} ${MENTOR_SERVICE_URL} ${MENTOR_HOST}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+envsubst '${PORT} ${DNS_RESOLVER} ${IDENTITY_SERVICE_URL} ${IDENTITY_HOST} ${GROUP_MATCHING_SERVICE_URL} ${GROUP_MATCHING_HOST} ${MENTOR_SERVICE_URL} ${MENTOR_HOST}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
 exec nginx -g 'daemon off;'

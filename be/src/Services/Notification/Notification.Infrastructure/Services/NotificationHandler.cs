@@ -338,6 +338,7 @@ public class NotificationHandler : INotificationService
     private async Task ProcessMentorDecisionAsync(MentorDecisionEvent @event, string? key, CancellationToken ct)
     {
         var decisionText = @event.IsAccepted ? "ĐÃ CHẤP NHẬN" : "TỪ CHỐI";
+        var decisionAction = @event.IsAccepted ? "chấp nhận" : "từ chối";
         var groupName = !string.IsNullOrWhiteSpace(@event.GroupName) ? @event.GroupName : $"Nhóm {@event.GroupId}";
         var mentorLabel = !string.IsNullOrWhiteSpace(@event.MentorName) ? @event.MentorName : "Giảng viên hướng dẫn";
         var reasonText = string.IsNullOrWhiteSpace(@event.DecisionReason)
@@ -350,7 +351,7 @@ public class NotificationHandler : INotificationService
         var badgeFg = @event.IsAccepted ? "#15803d" : "#b91c1c";
         var badgeLabel = @event.IsAccepted ? "Đã chấp thuận" : "Đã từ chối";
 
-        var subject = $"[ExeMatching] {mentorLabel} đã {decisionText.ToLower()} yêu cầu hướng dẫn của {groupName}";
+        var subject = $"[ExeMatching] {mentorLabel} đã {decisionAction} yêu cầu hướng dẫn của {groupName}";
         var body = BuildBrandedEmail(
             heading: $"Kết quả yêu cầu hướng dẫn: {decisionText}",
             badgeLabel: badgeLabel,

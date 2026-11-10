@@ -138,11 +138,14 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         // The department roster is the authority for this import. Preserve every
         // non-empty value under its Email/Gmail column; Google authentication still
         // accepts only the verified email claim from a valid Google ID token.
-        var existing = (await store.GoogleAllowedEmails(ct)).Select(x => x.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var email in emails.Where(email => !existing.Contains(email)))
-            store.AddGoogleAllowedEmail(new GoogleAllowedEmail { Email = email });
+        var existing = await store.ExistingAllowedGoogleEmails(emails, ct);
+        var toAdd = emails
+            .Where(email => !existing.Contains(email))
+            .Select(email => new GoogleAllowedEmail { Email = email })
+            .ToList();
+        store.AddGoogleAllowedEmailsRange(toAdd);
         await store.Save(ct);
-        return new GoogleEmailImportResult(emails.Count - emails.Count(existing.Contains), emails.Count(existing.Contains));
+        return new GoogleEmailImportResult(toAdd.Count, emails.Count - toAdd.Count);
     }
     public async Task RemoveGoogleAccess(Guid id, CancellationToken ct)
     {
@@ -204,18 +207,80 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         var semester = await FindSemester(request.SemesterCode, ct);
         var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var students = new List<Student>();
+        var validatedRows = new List<(string Code, string Email, string FullName, string Major)>(request.Students.Count);
         foreach (var row in request.Students)
         {
-            if (row is null || !codes.Add(Required(row.StudentCode)) || !emails.Add(Required(row.Email)))
+            if (row is null)
+                throw new IdentityException(400, "Duplicate student code or email in import.");
+            ValidateImportRow(row);
+            var code = Required(row.StudentCode).ToUpperInvariant();
+            var email = Required(row.Email).ToLowerInvariant();
+            if (!codes.Add(code) || !emails.Add(email))
                 throw new IdentityException(400, "Duplicate student code or email in import.");
             if (!string.IsNullOrWhiteSpace(row.SemesterCode) && !row.SemesterCode.Trim().Equals(semester.Code, StringComparison.OrdinalIgnoreCase))
                 throw new IdentityException(400, "Every Excel SemesterCode must match the selected semester.");
-            students.Add(await BuildStudent(row, semester, initialPassword, ct));
+            validatedRows.Add((code, email, Required(row.FullName), Required(row.Major)));
         }
+
+        // Batch-preload existing codes, users, enrollments, and Student role so large imports
+        // use O(1) SQL roundtrips instead of thousands of sequential queries.
+        var existingCodes = await store.StudentCodesInSemester(semester.Id, ct);
+        var existingUsers = await store.UsersByEmails(validatedRows.Select(x => x.Email), ct);
+        var enrollments = existingUsers.Count > 0
+            ? await store.UserEnrollmentsByUserIds(existingUsers.Values.Select(u => u.Id), ct)
+            : [];
+        var latestCodeByUserId = new Dictionary<Guid, string>();
+        var enrolledInSemester = new HashSet<Guid>();
+        foreach (var entry in enrollments)
+        {
+            latestCodeByUserId.TryAdd(entry.UserId, entry.StudentCode);
+            if (entry.SemesterId == semester.Id) enrolledInSemester.Add(entry.UserId);
+        }
+
+        Role? studentRole = null;
+        string? sharedInitialPasswordHash = null;
+        var students = new List<Student>(validatedRows.Count);
+        foreach (var item in validatedRows)
+        {
+            if (existingCodes.Contains(item.Code))
+                throw new IdentityException(409, "Student code already exists in this semester.");
+
+            User user;
+            if (existingUsers.TryGetValue(item.Email, out var existingUser))
+            {
+                if (existingUser.Role.Name is not ("Student" or "Admin")
+                    || (latestCodeByUserId.TryGetValue(existingUser.Id, out var prevCode)
+                        && !prevCode.Equals(item.Code, StringComparison.OrdinalIgnoreCase)))
+                    throw new IdentityException(409, "Email belongs to a different account or student code.");
+                if (enrolledInSemester.Contains(existingUser.Id))
+                    throw new IdentityException(409, "Account is already enrolled in this semester.");
+                user = existingUser;
+            }
+            else
+            {
+                studentRole ??= await store.RoleByName("Student", ct);
+                user = new User { Email = item.Email, Username = item.Code, RoleId = studentRole.Id, Role = studentRole };
+                // Hash the shared temporary initial password once per bulk import batch to avoid
+                // repeating 100k-iteration PBKDF2 work thousands of times on CPU-constrained hosts.
+                sharedInitialPasswordHash ??= passwords.Hash(user, initialPassword);
+                user.PasswordHash = sharedInitialPasswordHash;
+            }
+
+            students.Add(new Student
+            {
+                User = user,
+                UserId = user.Id,
+                StudentCode = item.Code,
+                FullName = item.FullName,
+                Major = item.Major,
+                SemesterId = semester.Id,
+                Semester = semester
+            });
+        }
+
         // Validate the entire file before tracking inserts. SaveChanges is atomic.
         // Do not emit per-student welcome emails on bulk roster imports to avoid mass SMTP throttling.
-        foreach (var student in students) store.AddStudent(student, emitImportEvent: false);
+        store.AddStudentsRange(students);
         // A roster entry is also the source of truth for Google access. Keep this
         // in the same unit of work so a partially imported roster never grants access.
         await AddRosterEmailsToGoogleAccess(students.Select(x => x.User.Email), ct);
@@ -321,11 +386,15 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         if (!semester.IsActive) throw new IdentityException(409, "Semester is inactive.");
         return semester;
     }
-    private async Task<Student> BuildStudent(StudentImportDto row, Semester semester, string password, CancellationToken ct)
+    private static void ValidateImportRow(StudentImportDto row)
     {
         var results = new List<ValidationResult>();
         if (!Validator.TryValidateObject(row, new ValidationContext(row), results, true))
             throw new IdentityException(400, string.Join(" ", results.Select(x => x.ErrorMessage)));
+    }
+    private async Task<Student> BuildStudent(StudentImportDto row, Semester semester, string password, CancellationToken ct)
+    {
+        ValidateImportRow(row);
         var code = Required(row.StudentCode).ToUpperInvariant();
         var email = Required(row.Email).ToLowerInvariant();
         if (await store.StudentExists(code, semester.Id, ct)) throw new IdentityException(409, "Student code already exists in this semester.");
@@ -351,14 +420,19 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     }
     private async Task AddRosterEmailsToGoogleAccess(IEnumerable<string> rosterEmails, CancellationToken ct)
     {
-        var existing = (await store.GoogleAllowedEmails(ct))
-            .Select(x => x.Email)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var email in rosterEmails.Select(x => x.Trim().ToLowerInvariant()).Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            if (!existing.Add(email)) continue;
-            store.AddGoogleAllowedEmail(new GoogleAllowedEmail { Email = email });
-        }
+        var uniqueEmails = rosterEmails
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (uniqueEmails.Count == 0) return;
+
+        var existing = await store.ExistingAllowedGoogleEmails(uniqueEmails, ct);
+        var toAdd = uniqueEmails
+            .Where(email => !existing.Contains(email))
+            .Select(email => new GoogleAllowedEmail { Email = email })
+            .ToList();
+        store.AddGoogleAllowedEmailsRange(toAdd);
     }
     private async Task<LoginResponse> IssueLoginAsync(User user, CancellationToken ct)
     {

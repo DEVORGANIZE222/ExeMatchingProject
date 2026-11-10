@@ -213,6 +213,8 @@ public class NotificationServiceTests
 
         Assert.Equal(2, emailService.SentEmails.Count);
         Assert.Equal(studentEmail, emailService.SentEmails[1].To);
+        Assert.Contains("đã chấp nhận", emailService.SentEmails[1].Subject);
+        Assert.DoesNotContain("đã đã", emailService.SentEmails[1].Subject);
         Assert.Contains("ĐÃ CHẤP NHẬN", emailService.SentEmails[1].Body);
         Assert.Contains($"cid:{EmailService.BrandLogoContentId}", emailService.SentEmails[1].Body);
     }

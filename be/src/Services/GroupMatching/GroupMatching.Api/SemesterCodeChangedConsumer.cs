@@ -20,11 +20,11 @@ public sealed class SemesterCodeChangedConsumer(IServiceScopeFactory scopes, IOp
         await Task.Yield();
         var config = new ConsumerConfig
         {
-            BootstrapServers = configuration["KafkaSettings:BootstrapServers"] ?? settings.Value.BootstrapServers,
             GroupId = "group-matching-semester-code-sync",
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false
         };
+        KafkaConfigHelper.ApplyTo(config, KafkaConfigHelper.Resolve(configuration, settings.Value));
         while (!stoppingToken.IsCancellationRequested)
         {
             try

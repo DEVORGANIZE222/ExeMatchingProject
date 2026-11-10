@@ -7,16 +7,23 @@ using EXETeamMatching.GroupMatching.Application.Services;
 using EXETeamMatching.Messaging.Abstractions;
 using EXETeamMatching.Messaging.Implementations;
 using EXETeamMatching.Messaging.Settings;
+using EXETeamMatching.SharedKernel.Configuration;
 using EXETeamMatching.SharedKernel.Middleware;
+using Grpc.Net.Client.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using System.Net;
 using System.Text;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Configuration.GetRenderPort() is { } renderPort)
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{renderPort}");
+}
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -39,11 +46,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection("KafkaSettings"));
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-                       ?? builder.Configuration["DATABASE_CONNECTION_STRING"];
-
-builder.Services.AddDbContext<GroupMatchingDbContext>(options =>
-    options.UseNpgsql(connectionString));
+builder.Services.AddDbContext<GroupMatchingDbContext>((sp, options) =>
+    options.UseNpgsql(sp.GetRequiredService<IConfiguration>().ResolvePostgresConnectionString()));
 builder.Services.AddScoped<GroupDatabaseInitializer>();
 
 builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
@@ -55,8 +59,28 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IRequestAccessToken, RequestAccessToken>();
 builder.Services.AddHttpClient<IIdentitySemesterClient, IdentitySemesterClient>(client =>
     client.BaseAddress = new Uri(builder.Configuration["IdentitySemester:BaseUrl"] ?? "http://identity-semester:8080/"));
-builder.Services.AddGrpcClient<EXETeamMatching.Mentor.Grpc.MentorGrpcService.MentorGrpcServiceClient>(client =>
-    client.Address = new Uri(builder.Configuration["MentorGrpc:Address"] ?? "http://mentor:50051"));
+
+var mentorGrpcAddress = builder.Configuration["MentorGrpc:Address"] ?? "http://mentor:50051";
+var useGrpcWeb = builder.Configuration.GetValue<bool?>("MentorGrpc:UseGrpcWeb")
+                 ?? mentorGrpcAddress.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+var grpcClientBuilder = builder.Services.AddGrpcClient<EXETeamMatching.Mentor.Grpc.MentorGrpcService.MentorGrpcServiceClient>(options =>
+{
+    options.Address = new Uri(mentorGrpcAddress);
+});
+if (useGrpcWeb)
+{
+    grpcClientBuilder
+        .ConfigureHttpClient(client =>
+        {
+            client.DefaultRequestVersion = HttpVersion.Version11;
+            client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+        })
+        .ConfigurePrimaryHttpMessageHandler(() =>
+            new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler())
+            {
+                HttpVersion = HttpVersion.Version11
+            });
+}
 builder.Services.AddScoped<IMentorRecommendationClient, MentorGrpcRecommendationClient>();
 var jwt = builder.Configuration.GetSection("JwtSettings");
 var secret = jwt["Secret"] ?? string.Empty;
