@@ -11,4 +11,6 @@ public class EmailSettings
     public bool EnableSsl { get; set; } = true;
     public bool SimulateOnly { get; set; } = false;
     public string? DefaultRecipientEmail { get; set; } = null;
+    public string? WebhookUrl { get; set; } = null;
+    public string? WebhookSecret { get; set; } = null;
 }
