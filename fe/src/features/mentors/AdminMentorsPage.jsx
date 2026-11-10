@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react'
 import {
   GraduationCap, Users, Plus, Search,
-  Sliders, CheckCircle2, Sparkles, X, Mail
+  Sliders, CheckCircle2, Sparkles, X, Mail, Pencil, Trash2, Phone
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../hooks/useAuth'
+import ConfirmModal from '../../components/ConfirmModal'
 import './MentorPages.css'
+
+const DEPARTMENT_OPTIONS = [
+  'Khoa Công nghệ thông tin',
+  'Viện Quản trị Kinh doanh',
+  'Khoa Hệ thống thông tin',
+  'Khoa Digital Marketing & Truyền thông',
+  'Khoa Thiết kế mỹ thuật số',
+  'Khoa An toàn thông tin',
+  'Software Engineering'
+]
 
 export default function AdminMentorsPage() {
   const { request } = useAuth()
@@ -18,6 +29,19 @@ export default function AdminMentorsPage() {
   // Modal States
   const [selectedMentorForQuota, setSelectedMentorForQuota] = useState(null)
   const [newQuotaValue, setNewQuotaValue] = useState(4)
+
+  const [editingMentor, setEditingMentor] = useState(null)
+  const [editMentorForm, setEditMentorForm] = useState({
+    fullName: '',
+    department: 'Khoa Công nghệ thông tin',
+    expertise: '',
+    phone: '',
+    maxQuota: 4
+  })
+  const [savingMentor, setSavingMentor] = useState(false)
+
+  const [mentorToDelete, setMentorToDelete] = useState(null)
+  const [deletingMentor, setDeletingMentor] = useState(false)
 
   const [showAddMentorModal, setShowAddMentorModal] = useState(false)
   const [newMentorForm, setNewMentorForm] = useState({
@@ -70,6 +94,77 @@ export default function AdminMentorsPage() {
   const handleOpenEditQuota = (mentor) => {
     setSelectedMentorForQuota(mentor)
     setNewQuotaValue(mentor.maxQuota)
+  }
+
+  const handleOpenEditMentor = (mentor) => {
+    setEditingMentor(mentor)
+    setEditMentorForm({
+      fullName: mentor.fullName || '',
+      department: mentor.department || 'Khoa Công nghệ thông tin',
+      expertise: mentor.expertise || '',
+      phone: mentor.phone || '',
+      maxQuota: mentor.maxQuota || 4
+    })
+  }
+
+  const handleSaveMentorInfo = async (e) => {
+    e.preventDefault()
+    if (!editingMentor) return
+    if (!editMentorForm.fullName.trim()) {
+      toast.error('Vui lòng nhập họ tên giảng viên.')
+      return
+    }
+
+    setSavingMentor(true)
+    try {
+      const updatedMentor = await request(`/api/mentors/${editingMentor.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: editMentorForm.fullName.trim(),
+          department: editMentorForm.department.trim(),
+          expertise: editMentorForm.expertise.trim(),
+          phone: editMentorForm.phone.trim(),
+          maxQuota: Number(editMentorForm.maxQuota)
+        })
+      })
+      setMentorsList((current) =>
+        current.map((mentor) =>
+          mentor.id === updatedMentor.id
+            ? { ...updatedMentor, avatar: updatedMentor.fullName.charAt(0).toUpperCase() }
+            : mentor
+        )
+      )
+      toast.success(`Đã cập nhật thông tin giảng viên ${updatedMentor.fullName}.`)
+      setEditingMentor(null)
+    } catch (err) {
+      toast.error(err.message || 'Không thể cập nhật thông tin giảng viên.')
+    } finally {
+      setSavingMentor(false)
+    }
+  }
+
+  const handleRequestDeleteMentor = (mentor) => {
+    if (mentor.currentAssigned > 0) {
+      toast.error(`${mentor.fullName} đang hướng dẫn ${mentor.currentAssigned} nhóm nên chưa thể xóa.`)
+      return
+    }
+    setMentorToDelete(mentor)
+  }
+
+  const handleConfirmDeleteMentor = async () => {
+    if (!mentorToDelete) return
+    setDeletingMentor(true)
+    try {
+      await request(`/api/mentors/${mentorToDelete.id}`, { method: 'DELETE' })
+      setMentorsList((current) => current.filter((mentor) => mentor.id !== mentorToDelete.id))
+      toast.success(`Đã xóa giảng viên ${mentorToDelete.fullName}.`)
+      setMentorToDelete(null)
+    } catch (err) {
+      toast.error(err.message || 'Không thể xóa giảng viên.')
+    } finally {
+      setDeletingMentor(false)
+    }
   }
 
   const handleSaveQuota = async (e) => {
@@ -275,6 +370,12 @@ export default function AdminMentorsPage() {
                         <Mail size={12} />
                         <span>{mentor.email}</span>
                       </div>
+                      {mentor.phone && (
+                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          <Phone size={12} />
+                          <span>{mentor.phone}</span>
+                        </div>
+                      )}
                     </div>
                     <span className={`badge ${isFull ? 'badge-neutral' : 'badge-green'}`} style={{ fontSize: 11 }}>
                       {isFull ? 'Đã đủ' : `Còn ${openSlots} suất`}
@@ -317,14 +418,36 @@ export default function AdminMentorsPage() {
                 </div>
 
                 {/* Footer Action */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleOpenEditMentor(mentor)}
+                  >
+                    <Pencil size={13} />
+                    <span>Cập nhật</span>
+                  </button>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => handleOpenEditQuota(mentor)}
                   >
                     <Sliders size={13} />
-                    <span>Điều chỉnh Quota</span>
+                    <span>Quota</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => handleRequestDeleteMentor(mentor)}
+                    title={mentor.currentAssigned > 0 ? 'Không thể xóa mentor đang hướng dẫn nhóm' : 'Xóa giảng viên'}
+                    style={{
+                      backgroundColor: '#fff1f2',
+                      color: '#be123c',
+                      border: '1px solid #fecdd3'
+                    }}
+                  >
+                    <Trash2 size={13} />
+                    <span>Xóa</span>
                   </button>
                 </div>
               </div>
@@ -371,10 +494,10 @@ export default function AdminMentorsPage() {
                 <input
                   type="number"
                   min={selectedMentorForQuota.currentAssigned || 1}
-                  max={10}
+                  max={50}
                   className="input"
                   value={newQuotaValue}
-                  onChange={(e) => setNewQuotaValue(parseInt(e.target.value, 10))}
+                  onChange={(e) => setNewQuotaValue(parseInt(e.target.value, 10) || 1)}
                   required
                 />
                 <span style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
@@ -389,6 +512,121 @@ export default function AdminMentorsPage() {
                 <button type="submit" className="btn btn-primary">
                   <CheckCircle2 size={16} />
                   <span>Lưu hạn ngạch</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Edit Mentor Info ── */}
+      {editingMentor && (
+        <div className="modal-backdrop" onClick={() => !savingMentor && setEditingMentor(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>
+                Cập nhật thông tin Giảng viên
+              </h2>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setEditingMentor(null)}
+                disabled={savingMentor}
+                style={{ padding: 4 }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMentorInfo}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label className="input-label">Họ tên & Học hàm/Học vị *</label>
+                  <input
+                    required
+                    className="input"
+                    value={editMentorForm.fullName}
+                    onChange={(e) => setEditMentorForm({ ...editMentorForm, fullName: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label className="input-label">Email đăng nhập</label>
+                    <input
+                      disabled
+                      className="input"
+                      value={editingMentor.email}
+                      style={{ backgroundColor: 'var(--bg-subtle)', color: 'var(--text-muted)' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="input-label">Số điện thoại liên hệ</label>
+                    <input
+                      className="input"
+                      placeholder="0912 xxx xxx"
+                      value={editMentorForm.phone}
+                      onChange={(e) => setEditMentorForm({ ...editMentorForm, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 10 }}>
+                  <div>
+                    <label className="input-label">Khoa / Bộ môn *</label>
+                    <select
+                      className="select"
+                      value={editMentorForm.department}
+                      onChange={(e) => setEditMentorForm({ ...editMentorForm, department: e.target.value })}
+                    >
+                      {editMentorForm.department && !DEPARTMENT_OPTIONS.includes(editMentorForm.department) && (
+                        <option value={editMentorForm.department}>{editMentorForm.department}</option>
+                      )}
+                      {DEPARTMENT_OPTIONS.map((dept) => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="input-label">Hạn ngạch Quota tối đa</label>
+                    <input
+                      type="number"
+                      min={editingMentor.currentAssigned || 1}
+                      max={50}
+                      className="input"
+                      value={editMentorForm.maxQuota}
+                      onChange={(e) => setEditMentorForm({ ...editMentorForm, maxQuota: parseInt(e.target.value, 10) || 1 })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="input-label">Chuyên môn & Lĩnh vực hướng dẫn *</label>
+                  <textarea
+                    required
+                    className="textarea"
+                    rows={2}
+                    value={editMentorForm.expertise}
+                    onChange={(e) => setEditMentorForm({ ...editMentorForm, expertise: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingMentor(null)}
+                  disabled={savingMentor}
+                >
+                  Hủy bỏ
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={savingMentor}>
+                  <CheckCircle2 size={16} />
+                  <span>{savingMentor ? 'Đang lưu...' : 'Lưu thông tin'}</span>
                 </button>
               </div>
             </form>
@@ -457,12 +695,9 @@ export default function AdminMentorsPage() {
                       value={newMentorForm.department}
                       onChange={(e) => setNewMentorForm({ ...newMentorForm, department: e.target.value })}
                     >
-                      <option value="Khoa Công nghệ thông tin">Khoa Công nghệ thông tin</option>
-                      <option value="Viện Quản trị Kinh doanh">Viện Quản trị Kinh doanh</option>
-                      <option value="Khoa Hệ thống thông tin">Khoa Hệ thống thông tin</option>
-                      <option value="Khoa Digital Marketing & Truyền thông">Khoa Digital Marketing & Truyền thông</option>
-                      <option value="Khoa Thiết kế mỹ thuật số">Khoa Thiết kế mỹ thuật số</option>
-                      <option value="Khoa An toàn thông tin">Khoa An toàn thông tin</option>
+                      {DEPARTMENT_OPTIONS.map((dept) => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -471,7 +706,7 @@ export default function AdminMentorsPage() {
                     <input
                       type="number"
                       min={1}
-                      max={10}
+                      max={50}
                       className="input"
                       value={newMentorForm.maxQuota}
                       onChange={(e) => setNewMentorForm({ ...newMentorForm, maxQuota: parseInt(e.target.value, 10) || 4 })}
@@ -505,6 +740,23 @@ export default function AdminMentorsPage() {
           </div>
         </div>
       )}
+
+      {/* ── Confirm Delete Mentor ── */}
+      <ConfirmModal
+        open={Boolean(mentorToDelete)}
+        title="Xác nhận xóa giảng viên"
+        message={
+          mentorToDelete
+            ? `Bạn có chắc chắn muốn xóa hồ sơ mentor "${mentorToDelete.fullName}" (${mentorToDelete.email})? Thao tác này sẽ xóa hồ sơ mentor, hạn ngạch và dữ liệu liên quan trong không gian mentor.`
+            : ''
+        }
+        confirmLabel="Xóa giảng viên"
+        cancelLabel="Hủy bỏ"
+        tone="danger"
+        busy={deletingMentor}
+        onConfirm={handleConfirmDeleteMentor}
+        onCancel={() => setMentorToDelete(null)}
+      />
     </div>
   )
 }

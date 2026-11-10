@@ -98,15 +98,24 @@ public class MentorService(
         return Map(mentor);
     }
 
+    public async Task<MentorResponse> UpdateMentorAsync(Guid id, AdminUpdateMentorRequest request, CancellationToken cancellationToken = default)
+    {
+        var mentor = await repository.GetByIdForUpdateAsync(id, cancellationToken)
+            ?? throw new KeyNotFoundException("Mentor not found.");
+
+        if (request.MaxQuota.HasValue)
+            ApplyQuotaUpdate(mentor, request.MaxQuota.Value);
+
+        ApplyProfileFields(mentor, request.FullName, request.Department, request.Expertise, request.Phone);
+        await repository.SaveChangesAsync(cancellationToken);
+        return Map(mentor);
+    }
+
     public async Task<MentorResponse> UpdateQuotaAsync(Guid id, int maxQuota, CancellationToken cancellationToken = default)
     {
         var mentor = await repository.GetByIdForUpdateAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException("Mentor not found.");
-        var quota = mentor.Quota ??= new MentorQuota { MentorId = mentor.Id };
-        if (maxQuota < quota.CurrentAssigned)
-            throw new ArgumentException("Quota cannot be lower than the number of assigned groups.");
-        quota.MaxQuota = maxQuota;
-        quota.UpdatedAt = DateTime.UtcNow;
+        ApplyQuotaUpdate(mentor, maxQuota);
         await repository.SaveChangesAsync(cancellationToken);
         return Map(mentor);
     }
@@ -126,17 +135,13 @@ public class MentorService(
         await transaction.CommitAsync(cancellationToken);
     }
 
-    public async Task<MentorResponse> GetMyProfileAsync(Guid actorUserId, CancellationToken cancellationToken = default)
-        => Map(await FindMineAsync(actorUserId, cancellationToken));
+    public async Task<MentorResponse> GetMyProfileAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null)
+        => Map(await FindMineAsync(actorUserId, cancellationToken, actorEmail));
 
-    public async Task<MentorResponse> UpdateMyProfileAsync(Guid actorUserId, UpdateMentorProfileRequest request, CancellationToken cancellationToken = default)
+    public async Task<MentorResponse> UpdateMyProfileAsync(Guid actorUserId, UpdateMentorProfileRequest request, CancellationToken cancellationToken = default, string? actorEmail = null)
     {
-        var mentor = await FindMineAsync(actorUserId, cancellationToken);
-        mentor.FullName = request.FullName.Trim();
-        mentor.Department = request.Department.Trim();
-        mentor.Expertise = request.Expertise.Trim();
-        mentor.Phone = request.Phone.Trim();
-        mentor.UpdatedAt = DateTime.UtcNow;
+        var mentor = await FindMineAsync(actorUserId, cancellationToken, actorEmail);
+        ApplyProfileFields(mentor, request.FullName, request.Department, request.Expertise, request.Phone);
         await repository.SaveChangesAsync(cancellationToken);
         return Map(mentor);
     }
@@ -222,11 +227,10 @@ public class MentorService(
             ?? new GroupMentorStatusResponse(false, null, null, null, null);
     }
 
-    public async Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null, string? tokenVersion = null)
+    public async Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null, string? tokenVersion = null, string? actorEmail = null)
     {
         await using var transaction = await repository.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var mentor = await repository.GetByUserIdForUpdateAsync(actorUserId, cancellationToken)
-            ?? throw new KeyNotFoundException("Mentor profile not found.");
+        var mentor = await FindMineAsync(actorUserId, cancellationToken, actorEmail);
         var request = await repository.GetRequestForUpdateAsync(decision.RequestId, mentor.Id, cancellationToken)
             ?? throw new KeyNotFoundException("Mentor request not found.");
         if (request.Status != RequestStatus.Pending)
@@ -310,23 +314,19 @@ public class MentorService(
         }
     }
 
-    public async Task<List<MentorRequestDto>> GetMyRequestsAsync(Guid actorUserId, CancellationToken cancellationToken = default)
-    {
-        var mentorId = await repository.GetIdByUserIdAsync(actorUserId, cancellationToken)
-            ?? throw new KeyNotFoundException("Mentor profile not found.");
-        return await repository.GetRequestsForMentorAsync(mentorId, cancellationToken);
-    }
+    public async Task<List<MentorRequestDto>> GetMyRequestsAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null)
+        => await repository.GetRequestsForMentorAsync(await MentorIdAsync(actorUserId, cancellationToken, actorEmail), cancellationToken);
 
     // ------------------------------------------------------------------
     // Mentor workspace
     // ------------------------------------------------------------------
 
-    public async Task<List<MentorProgressResponse>> GetMyGroupsAsync(Guid actorUserId, CancellationToken cancellationToken = default)
-        => await repository.GetGroupProgressListAsync(await MentorIdAsync(actorUserId, cancellationToken), cancellationToken);
+    public async Task<List<MentorProgressResponse>> GetMyGroupsAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null)
+        => await repository.GetGroupProgressListAsync(await MentorIdAsync(actorUserId, cancellationToken, actorEmail), cancellationToken);
 
     public async Task<MentorTeamDetailsResponse> GetMyGroupDetailsAsync(RequestActor actor, Guid groupId, CancellationToken cancellationToken = default)
     {
-        var mentorId = await MentorIdAsync(actor.UserId, cancellationToken);
+        var mentorId = await MentorIdAsync(actor.UserId, cancellationToken, actor.Email);
         if (!await repository.IsGroupAssignedAsync(mentorId, groupId, cancellationToken))
             throw new KeyNotFoundException("Assigned group not found.");
 
@@ -365,9 +365,9 @@ public class MentorService(
                 contacts.GetValueOrDefault(member.StudentId, string.Empty))).ToList());
     }
 
-    public async Task<MentorProgressResponse> UpdateGroupProgressAsync(Guid actorUserId, Guid groupId, MentorProgressRequest request, CancellationToken cancellationToken = default)
+    public async Task<MentorProgressResponse> UpdateGroupProgressAsync(Guid actorUserId, Guid groupId, MentorProgressRequest request, CancellationToken cancellationToken = default, string? actorEmail = null)
     {
-        var mentor = await FindMineAsync(actorUserId, cancellationToken);
+        var mentor = await FindMineAsync(actorUserId, cancellationToken, actorEmail);
         var group = await repository.GetGroupProgressForUpdateAsync(mentor.Id, groupId, cancellationToken)
             ?? throw new KeyNotFoundException("Assigned group not found.");
         group.Milestone = request.Milestone.Trim();
@@ -389,12 +389,12 @@ public class MentorService(
         return ToResponse(group);
     }
 
-    public async Task<List<MentorAppointmentResponse>> GetMyAppointmentsAsync(Guid actorUserId, CancellationToken cancellationToken = default)
-        => await repository.GetAppointmentsAsync(await MentorIdAsync(actorUserId, cancellationToken), cancellationToken);
+    public async Task<List<MentorAppointmentResponse>> GetMyAppointmentsAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null)
+        => await repository.GetAppointmentsAsync(await MentorIdAsync(actorUserId, cancellationToken, actorEmail), cancellationToken);
 
-    public async Task<MentorAppointmentResponse> CreateAppointmentAsync(Guid actorUserId, MentorAppointmentRequest request, CancellationToken cancellationToken = default)
+    public async Task<MentorAppointmentResponse> CreateAppointmentAsync(Guid actorUserId, MentorAppointmentRequest request, CancellationToken cancellationToken = default, string? actorEmail = null)
     {
-        var mentorId = await MentorIdAsync(actorUserId, cancellationToken);
+        var mentorId = await MentorIdAsync(actorUserId, cancellationToken, actorEmail);
         ValidateAppointment(request);
         await ValidateGroupAsync(mentorId, request.GroupId, cancellationToken);
         var appointment = new MentorAppointment
@@ -410,9 +410,9 @@ public class MentorService(
         return ToResponse(appointment);
     }
 
-    public async Task<MentorAppointmentResponse> UpdateAppointmentAsync(Guid actorUserId, Guid id, MentorAppointmentRequest request, CancellationToken cancellationToken = default)
+    public async Task<MentorAppointmentResponse> UpdateAppointmentAsync(Guid actorUserId, Guid id, MentorAppointmentRequest request, CancellationToken cancellationToken = default, string? actorEmail = null)
     {
-        var mentorId = await MentorIdAsync(actorUserId, cancellationToken);
+        var mentorId = await MentorIdAsync(actorUserId, cancellationToken, actorEmail);
         ValidateAppointment(request);
         await ValidateGroupAsync(mentorId, request.GroupId, cancellationToken);
         var appointment = await repository.GetAppointmentForUpdateAsync(id, mentorId, cancellationToken)
@@ -426,21 +426,21 @@ public class MentorService(
         return ToResponse(appointment);
     }
 
-    public async Task DeleteAppointmentAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAppointmentAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default, string? actorEmail = null)
     {
-        var mentorId = await MentorIdAsync(actorUserId, cancellationToken);
+        var mentorId = await MentorIdAsync(actorUserId, cancellationToken, actorEmail);
         var appointment = await repository.GetAppointmentForUpdateAsync(id, mentorId, cancellationToken)
             ?? throw new KeyNotFoundException("Appointment not found.");
         repository.RemoveAppointment(appointment);
         await repository.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<List<MentorNotificationResponse>> GetMyNotificationsAsync(Guid actorUserId, CancellationToken cancellationToken = default)
-        => await repository.GetNotificationsAsync(await MentorIdAsync(actorUserId, cancellationToken), NotificationPageSize, cancellationToken);
+    public async Task<List<MentorNotificationResponse>> GetMyNotificationsAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null)
+        => await repository.GetNotificationsAsync(await MentorIdAsync(actorUserId, cancellationToken, actorEmail), NotificationPageSize, cancellationToken);
 
-    public async Task MarkNotificationReadAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default)
+    public async Task MarkNotificationReadAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default, string? actorEmail = null)
     {
-        var mentorId = await MentorIdAsync(actorUserId, cancellationToken);
+        var mentorId = await MentorIdAsync(actorUserId, cancellationToken, actorEmail);
         var notification = await repository.GetNotificationForUpdateAsync(id, mentorId, cancellationToken)
             ?? throw new KeyNotFoundException("Notification not found.");
         notification.IsRead = true;
@@ -448,8 +448,8 @@ public class MentorService(
         await repository.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task MarkAllNotificationsReadAsync(Guid actorUserId, CancellationToken cancellationToken = default)
-        => await repository.MarkAllNotificationsReadAsync(await MentorIdAsync(actorUserId, cancellationToken), cancellationToken);
+    public async Task MarkAllNotificationsReadAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null)
+        => await repository.MarkAllNotificationsReadAsync(await MentorIdAsync(actorUserId, cancellationToken, actorEmail), cancellationToken);
 
     // ------------------------------------------------------------------
     // Student notifications (responses from mentors)
@@ -488,13 +488,62 @@ public class MentorService(
     // Helpers
     // ------------------------------------------------------------------
 
-    private async Task<MentorUser> FindMineAsync(Guid actorUserId, CancellationToken cancellationToken)
+    private async Task<MentorUser> FindMineAsync(Guid actorUserId, CancellationToken cancellationToken, string? actorEmail = null)
         => await repository.GetByUserIdForUpdateAsync(actorUserId, cancellationToken)
+            ?? await TryRebindByEmailAsync(actorUserId, actorEmail, cancellationToken)
             ?? throw new KeyNotFoundException(MentorProfileMissingMessage);
 
-    private async Task<Guid> MentorIdAsync(Guid actorUserId, CancellationToken cancellationToken)
-        => await repository.GetIdByUserIdAsync(actorUserId, cancellationToken)
-            ?? throw new KeyNotFoundException(MentorProfileMissingMessage);
+    private async Task<Guid> MentorIdAsync(Guid actorUserId, CancellationToken cancellationToken, string? actorEmail = null)
+    {
+        var existingId = await repository.GetIdByUserIdAsync(actorUserId, cancellationToken);
+        if (existingId.HasValue)
+            return existingId.Value;
+
+        var rebound = await TryRebindByEmailAsync(actorUserId, actorEmail, cancellationToken);
+        return rebound?.Id ?? throw new KeyNotFoundException(MentorProfileMissingMessage);
+    }
+
+    private async Task<MentorUser?> TryRebindByEmailAsync(Guid actorUserId, string? actorEmail, CancellationToken cancellationToken)
+    {
+        var normalizedEmail = actorEmail?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedEmail))
+            return null;
+
+        var mentor = await repository.GetByEmailForUpdateAsync(normalizedEmail, cancellationToken);
+        if (mentor is null)
+            return null;
+
+        // Heal UserId drift when an account row in Identity changes or differs from seeded MentorUser.UserId.
+        if (mentor.UserId != actorUserId)
+        {
+            logger.LogInformation(
+                "Rebinding mentor profile {MentorId} ({Email}) from UserId {OldUserId} to {NewUserId}.",
+                mentor.Id, mentor.Email, mentor.UserId, actorUserId);
+            mentor.UserId = actorUserId;
+            mentor.UpdatedAt = DateTime.UtcNow;
+            await repository.SaveChangesAsync(cancellationToken);
+        }
+
+        return mentor;
+    }
+
+    private static void ApplyProfileFields(MentorUser mentor, string fullName, string department, string expertise, string phone)
+    {
+        mentor.FullName = fullName.Trim();
+        mentor.Department = department.Trim();
+        mentor.Expertise = expertise?.Trim() ?? string.Empty;
+        mentor.Phone = phone?.Trim() ?? string.Empty;
+        mentor.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static void ApplyQuotaUpdate(MentorUser mentor, int maxQuota)
+    {
+        var quota = mentor.Quota ??= new MentorQuota { MentorId = mentor.Id };
+        if (maxQuota < quota.CurrentAssigned)
+            throw new ArgumentException("Quota cannot be lower than the number of assigned groups.");
+        quota.MaxQuota = maxQuota;
+        quota.UpdatedAt = DateTime.UtcNow;
+    }
 
     private async Task ValidateGroupAsync(Guid mentorId, Guid? groupId, CancellationToken cancellationToken)
     {

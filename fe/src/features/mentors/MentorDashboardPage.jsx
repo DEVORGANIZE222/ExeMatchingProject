@@ -24,8 +24,10 @@ export default function MentorDashboardPage() {
   const [editingProfile, setEditingProfile] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   const loadWorkspace = useCallback(async () => {
+    setLoadError('')
     const [mentor, assignedGroups, mentorRequests] = await Promise.all([
       request('/api/mentors/me'),
       request('/api/mentors/me/groups'),
@@ -47,7 +49,11 @@ export default function MentorDashboardPage() {
     let active = true
     const timer = setTimeout(() => {
       loadWorkspace()
-        .catch((error) => toast.error(error.message || 'Không thể tải không gian mentor.'))
+        .catch((error) => {
+          const message = error.message || 'Không thể tải không gian mentor.'
+          if (active) setLoadError(message)
+          toast.error(message)
+        })
         .finally(() => { if (active) setLoading(false) })
     }, 0)
     return () => {
@@ -55,6 +61,17 @@ export default function MentorDashboardPage() {
       clearTimeout(timer)
     }
   }, [loadWorkspace])
+
+  const retryWorkspaceLoad = () => {
+    setLoading(true)
+    loadWorkspace()
+      .catch((error) => {
+        const message = error.message || 'Không thể tải không gian mentor.'
+        setLoadError(message)
+        toast.error(message)
+      })
+      .finally(() => setLoading(false))
+  }
 
   const pendingCount = requests.filter((item) => item.status === 0).length
   const feedbackNeededCount = groups.filter((group) => !group.feedback?.trim() || group.progress < 100).length
@@ -158,8 +175,15 @@ export default function MentorDashboardPage() {
   if (!profile) {
     return (
       <div className="card">
-        <h1 className="page-title">Chưa có hồ sơ mentor</h1>
-        <p className="page-subtitle">Vui lòng đăng nhập bằng tài khoản mentor đã được Admin kích hoạt.</p>
+        <h1 className="page-title">{loadError ? 'Không thể tải không gian mentor' : 'Chưa có hồ sơ mentor'}</h1>
+        <p className="page-subtitle" style={{ marginBottom: loadError ? 16 : 0 }}>
+          {loadError || 'Vui lòng đăng nhập bằng tài khoản mentor đã được Admin kích hoạt.'}
+        </p>
+        {loadError && (
+          <button type="button" className="btn btn-primary btn-sm" onClick={retryWorkspaceLoad}>
+            Thử lại
+          </button>
+        )}
       </div>
     )
   }
@@ -181,21 +205,7 @@ export default function MentorDashboardPage() {
           <Inbox size={16} />
           <span>{pendingCount > 0 ? `${pendingCount} yêu cầu chờ duyệt` : 'Xem yêu cầu (0 chờ)'}</span>
           {pendingCount > 0 && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: 20,
-                height: 20,
-                padding: '0 6px',
-                borderRadius: 9999,
-                backgroundColor: '#EA580C',
-                color: '#FFFFFF',
-                fontSize: 11,
-                fontWeight: 700
-              }}
-            >
+            <span className="notification-count-badge">
               {pendingCount}
             </span>
           )}

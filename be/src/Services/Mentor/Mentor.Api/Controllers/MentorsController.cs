@@ -55,6 +55,11 @@ public class MentorsController(IMentorService mentorService) : ControllerBase
         return CreatedAtAction(nameof(GetMentorById), new { id = mentor.Id }, ApiResponse<MentorResponse>.Ok(mentor));
     }
 
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<ApiResponse<MentorResponse>>> UpdateMentor(Guid id, AdminUpdateMentorRequest request, CancellationToken ct)
+        => Ok(ApiResponse<MentorResponse>.Ok(await mentorService.UpdateMentorAsync(id, request, ct)));
+
     [HttpPut("{id:guid}/quota")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<MentorResponse>>> UpdateQuota(Guid id, UpdateMentorQuotaRequest request, CancellationToken ct)
@@ -75,10 +80,10 @@ public class MentorsController(IMentorService mentorService) : ControllerBase
     [HttpGet("me")]
     [Authorize(Roles = "Mentor")]
     public async Task<ActionResult<ApiResponse<MentorResponse>>> GetMine(CancellationToken ct)
-        => Ok(ApiResponse<MentorResponse>.Ok(await mentorService.GetMyProfileAsync(this.ActorId(), ct)));
+        => Ok(ApiResponse<MentorResponse>.Ok(await mentorService.GetMyProfileAsync(this.ActorId(), ct, this.ActorEmail())));
 
     [HttpPut("me")]
     [Authorize(Roles = "Mentor")]
     public async Task<ActionResult<ApiResponse<MentorResponse>>> UpdateMine(UpdateMentorProfileRequest request, CancellationToken ct)
-        => Ok(ApiResponse<MentorResponse>.Ok(await mentorService.UpdateMyProfileAsync(this.ActorId(), request, ct)));
+        => Ok(ApiResponse<MentorResponse>.Ok(await mentorService.UpdateMyProfileAsync(this.ActorId(), request, ct, this.ActorEmail())));
 }

@@ -181,6 +181,23 @@
   border: 1px solid var(--border-default);
 }
 
+.notification-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background-color: #F59E0B;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 /* ── Section Header ──────────────────────────────────────── */
 .page-header {
   display: flex;

@@ -12,13 +12,17 @@ internal static class ControllerExtensions
     public static Guid ActorId(this ControllerBase controller)
         => Guid.Parse(controller.User.FindFirstValue("sub")!);
 
+    /// <summary>The authenticated user's normalized email claim from the JWT, if present.</summary>
+    public static string? ActorEmail(this ControllerBase controller)
+        => controller.User.FindFirstValue(ClaimTypes.Email) ?? controller.User.FindFirstValue("email");
+
     /// <summary>Raw inbound Authorization header, forwarded to downstream services.</summary>
     public static string? AuthorizationHeader(this ControllerBase controller)
         => controller.Request.Headers.Authorization.Count > 0 ? controller.Request.Headers.Authorization.ToString() : null;
 
     public static RequestActor Actor(this ControllerBase controller) => new(
         controller.ActorId(),
-        controller.User.FindFirstValue(ClaimTypes.Email) ?? controller.User.FindFirstValue("email"),
+        controller.ActorEmail(),
         controller.User.FindFirstValue("ver"),
         controller.AuthorizationHeader());
 
