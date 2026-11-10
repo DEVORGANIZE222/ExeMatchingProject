@@ -222,7 +222,7 @@ public class MentorService(
             ?? new GroupMentorStatusResponse(false, null, null, null, null);
     }
 
-    public async Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null)
+    public async Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null, string? tokenVersion = null)
     {
         await using var transaction = await repository.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var mentor = await repository.GetByUserIdForUpdateAsync(actorUserId, cancellationToken)
@@ -277,9 +277,14 @@ public class MentorService(
         await repository.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        var resolvedRequesterEmail = !string.IsNullOrWhiteSpace(request.RequesterEmail)
-            ? request.RequesterEmail.Trim()
-            : await TryResolveGroupLeaderEmailAsync(request.GroupId, authorizationHeader, cancellationToken);
+        var recipientEmails = await ResolveGroupRecipientEmailsAsync(
+            actorUserId,
+            tokenVersion,
+            request.GroupId,
+            authorizationHeader,
+            request.RequesterEmail,
+            cancellationToken);
+        var primaryRequesterEmail = recipientEmails.FirstOrDefault();
 
         try
         {
@@ -290,10 +295,11 @@ public class MentorService(
                 IsAccepted: decision.IsAccepted,
                 DecisionReason: request.DecisionReason,
                 DecidedAt: request.DecidedAt.Value,
-                RequesterEmail: string.IsNullOrWhiteSpace(resolvedRequesterEmail) ? null : resolvedRequesterEmail,
+                RequesterEmail: primaryRequesterEmail,
                 MentorEmail: mentor.Email,
                 GroupName: request.GroupName,
-                MentorName: mentor.FullName
+                MentorName: mentor.FullName,
+                RecipientEmails: recipientEmails.Count > 0 ? recipientEmails : null
             );
             await publisher.PublishAsync("mentor-decision", request.Id.ToString(), decisionEvent, cancellationToken);
             logger.LogInformation("Published mentor-decision event for RequestId {RequestId} to Kafka", request.Id);
@@ -556,38 +562,74 @@ public class MentorService(
         return groupResult?.Data?.Id;
     }
 
-    private async Task<string?> TryResolveGroupLeaderEmailAsync(
-        Guid groupId, string? authorizationHeader, CancellationToken cancellationToken)
+    private async Task<List<string>> ResolveGroupRecipientEmailsAsync(
+        Guid actorUserId,
+        string? tokenVersion,
+        Guid groupId,
+        string? authorizationHeader,
+        string? savedRequesterEmail,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(authorizationHeader))
-            return null;
-
-        try
+        var emails = new List<string>();
+        void AddIfValid(string? email)
         {
-            var client = clients.CreateClient(GroupsClientName);
-            using var groupRequest = new HttpRequestMessage(HttpMethod.Get, $"api/groups/{groupId}");
-            ApplyAuthorization(groupRequest, authorizationHeader);
-
-            using var response = await client.SendAsync(groupRequest, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-                return null;
-
-            var payload = await response.Content.ReadFromJsonAsync<ApiResponse<GroupDetailsPayload>>(cancellationToken: cancellationToken);
-            var group = payload?.Data;
-            if (group is null || group.Members is null)
-                return null;
-
-            var leader = group.Members.FirstOrDefault(m => m.StudentId == group.LeaderStudentId)
-                ?? group.Members.FirstOrDefault(m => !m.IsDemo && !string.IsNullOrWhiteSpace(m.Email));
-            return !string.IsNullOrWhiteSpace(leader?.Email) && leader.Email.Contains('@')
-                ? leader.Email.Trim()
-                : null;
+            if (string.IsNullOrWhiteSpace(email))
+                return;
+            var trimmed = email.Trim();
+            if (trimmed.Contains('@') && !trimmed.EndsWith(".internal", StringComparison.OrdinalIgnoreCase))
+                emails.Add(trimmed);
         }
-        catch (Exception ex)
+
+        if (!string.IsNullOrWhiteSpace(authorizationHeader))
         {
-            logger.LogDebug(ex, "Could not fallback-resolve leader email for group {GroupId}", groupId);
-            return null;
+            try
+            {
+                var client = clients.CreateClient(GroupsClientName);
+                using var groupRequest = new HttpRequestMessage(HttpMethod.Get, $"api/groups/{groupId}");
+                ApplyAuthorization(groupRequest, authorizationHeader);
+
+                using var response = await client.SendAsync(groupRequest, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    var payload = await response.Content.ReadFromJsonAsync<ApiResponse<GroupDetailsPayload>>(cancellationToken: cancellationToken);
+                    var realMembers = payload?.Data?.Members?.Where(m => !m.IsDemo).ToList() ?? [];
+                    var missingEmailStudentIds = new List<Guid>();
+
+                    foreach (var member in realMembers)
+                    {
+                        if (!string.IsNullOrWhiteSpace(member.Email) && member.Email.Contains('@'))
+                            AddIfValid(member.Email);
+                        else
+                            missingEmailStudentIds.Add(member.StudentId);
+                    }
+
+                    if (missingEmailStudentIds.Count > 0 && !string.IsNullOrWhiteSpace(tokenVersion))
+                    {
+                        try
+                        {
+                            var contacts = await LoadTeamContactsAsync(
+                                new RequestActor(actorUserId, null, tokenVersion, authorizationHeader),
+                                groupId,
+                                missingEmailStudentIds,
+                                cancellationToken);
+                            foreach (var contactEmail in contacts.Values)
+                                AddIfValid(contactEmail);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogDebug(ex, "Could not load fallback contacts for group {GroupId}", groupId);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Could not resolve group member emails for group {GroupId}", groupId);
+            }
         }
+
+        AddIfValid(savedRequesterEmail);
+        return emails.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>
