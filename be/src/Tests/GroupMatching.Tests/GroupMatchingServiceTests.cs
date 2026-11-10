@@ -150,6 +150,62 @@ public class GroupMatchingServiceTests
             vote => Assert.Equal(students[0].StudentId, vote.NominatedStudentId));
     }
 
+    [Fact]
+    public async Task Random_matching_skips_locked_group_members_and_sets_needs_on_partial_groups()
+    {
+        var store = new MemoryStore();
+        var sLocked = Enumerable.Range(1, 4)
+            .Select(i => new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), $"L{i}", $"Locked {i}", "FA26", false, $"l{i}@fpt.edu.vn", "SE", ["Backend"]))
+            .ToArray();
+        var lockedGroup = new Group
+        {
+            GroupCode = "GRP-FA26-LOCKED",
+            GroupName = "Locked Alpha",
+            ProjectDescription = "Locked before random matching",
+            SemesterCode = "FA26",
+            Status = GroupStatus.Locked,
+            LeaderStudentId = sLocked[0].StudentId
+        };
+        foreach (var student in sLocked)
+            lockedGroup.Members.Add(new GroupMember
+            {
+                GroupId = lockedGroup.Id,
+                StudentId = student.StudentId,
+                StudentCode = student.StudentCode,
+                FullName = student.FullName,
+                Email = student.Email,
+                Major = student.Major,
+                Role = student.StudentId == sLocked[0].StudentId ? MemberRole.Leader : MemberRole.Member
+            });
+        store.Add(lockedGroup);
+
+        var unmatched = Enumerable.Range(1, 4)
+            .Select(i => new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), $"U{i}", $"Unmatched {i}", "FA26", false, $"u{i}@fpt.edu.vn", "SE", ["Frontend"]))
+            .ToList();
+        var identity = new FakeIdentity
+        {
+            MatchingWindow = true,
+            Current = sLocked[0],
+            // Simulate IdentitySemester lagging behind on HasGroup for a student already in a Locked group.
+            Unmatched = [sLocked[0], .. unmatched]
+        };
+
+        var result = await new MatchingService(store, identity).RandomMatchingAsync("FA26");
+
+        Assert.Equal(4, result.MatchedStudents);
+        Assert.Equal(1, result.CreatedGroups);
+        Assert.Equal(2, store.Groups.Count);
+        var created = store.Groups.Single(g => g.Id != lockedGroup.Id);
+        Assert.Equal(4, created.Members.Count);
+        Assert.DoesNotContain(created.Members, m => m.StudentId == sLocked[0].StudentId);
+        Assert.Single(created.RecruitmentNeeds);
+        Assert.DoesNotContain(created.RecruitmentNeeds, n => n.RoleCode == "Frontend");
+
+        var myGroup = await new GroupService(store, identity).GetMyGroupAsync("FA26", sLocked[0].UserId);
+        Assert.NotNull(myGroup);
+        Assert.Equal(lockedGroup.Id, myGroup!.Id);
+    }
+
     private sealed class FakeIdentity : IIdentitySemesterClient
     {
         public EnrollmentContext Current { get; set; } = null!;
@@ -184,6 +240,8 @@ public class GroupMatchingServiceTests
         public Task<Group?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult(_groups.SingleOrDefault(x => x.Id == id));
         public Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, CancellationToken ct = default) => Task.FromResult(new PageResult<GroupDto>([], 0, query.Page, query.PageSize));
         public Task<Group?> GetStudentGroupAsync(Guid studentId, string semesterCode, CancellationToken ct = default) => Task.FromResult(_groups.SingleOrDefault(x => x.SemesterCode == semesterCode && x.Members.Any(m => m.StudentId == studentId)));
+        public Task<HashSet<Guid>> GetSemesterMemberIdsAsync(string semesterCode, CancellationToken ct = default)
+            => Task.FromResult(_groups.Where(x => x.SemesterCode == semesterCode).SelectMany(x => x.Members).Select(m => m.StudentId).ToHashSet());
         public Task<List<Group>> OpenGroupsAsync(string semesterCode, CancellationToken ct = default) => Task.FromResult(_groups.Where(x => x.SemesterCode == semesterCode && x.Status == GroupStatus.Open).ToList());
         public void Add(Group group) => _groups.Add(group);
         public void AddMember(GroupMember member) { }

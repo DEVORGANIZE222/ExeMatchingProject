@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth'
 import SemesterTimelineProgress from '../../components/SemesterTimelineProgress'
 import StudentCoreModal from '../../components/StudentCoreModal'
 import { getTeamRoleLabel } from '../../config/teamRoles'
+import { fetchAllGroupsBySemester } from '../../utils/groupsApi'
 import './DashboardPage.css'
 
 function getMilestoneCountdown(dateStr) {
@@ -145,9 +146,8 @@ export default function DashboardPage() {
       let fullGroups = 0
       let topicCount = 0
       try {
-        const groupsRes = await request(`/api/groups?semesterCode=${encodeURIComponent(targetCode)}&page=1&pageSize=100`)
-        const items = groupsRes?.items || []
-        totalGroups = groupsRes?.totalCount || items.length
+        const { items, totalCount } = await fetchAllGroupsBySemester(request, targetCode)
+        totalGroups = totalCount
         fullGroups = items.filter((g) => g.status === 2 || g.status === 'Locked' || (g.members?.length >= 5)).length
         topicCount = items.filter((g) => Boolean(g.topicTitle)).length
       } catch {

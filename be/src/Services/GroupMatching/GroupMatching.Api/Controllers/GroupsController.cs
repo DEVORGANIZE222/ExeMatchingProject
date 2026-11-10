@@ -23,6 +23,11 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
     [HttpGet] public async Task<ActionResult<ApiResponse<PageResult<GroupDto>>>> GetGroups([FromQuery] GroupListQuery query, CancellationToken ct)
         => Ok(ApiResponse<PageResult<GroupDto>>.Ok(await service.ListAsync(query, Actor, IsAdmin, ct)));
 
+    [HttpGet("my")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Student")]
+    public async Task<ActionResult<ApiResponse<GroupDto?>>> GetMyGroup([FromQuery] string semesterCode, CancellationToken ct)
+        => Ok(ApiResponse<GroupDto?>.Ok(await service.GetMyGroupAsync(semesterCode, Actor, ct)));
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> GetGroupById(Guid id, CancellationToken ct)
         => Ok(ApiResponse<GroupDto>.Ok(await service.GetAsync(id, Actor, IsAdmin, ct)));

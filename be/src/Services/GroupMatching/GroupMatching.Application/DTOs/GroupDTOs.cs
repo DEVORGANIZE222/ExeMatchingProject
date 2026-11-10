@@ -66,7 +66,7 @@ public class GroupListQuery
     public GroupStatus? Status { get; set; }
     [StringLength(200)] public string? Search { get; set; }
     [Range(1, int.MaxValue)] public int Page { get; set; } = 1;
-    [Range(1, 100)] public int PageSize { get; set; } = 20;
+    [Range(1, 2000)] public int PageSize { get; set; } = 20;
 }
 
 public record GroupMemberDto(Guid StudentId, string StudentCode, string FullName, MemberRole Role, DateTime JoinedAt, bool IsDemo = false, string Email = "", string Major = "");

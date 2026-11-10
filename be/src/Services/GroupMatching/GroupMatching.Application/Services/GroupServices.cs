@@ -16,6 +16,14 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         return await repository.ListAsync(query, ct);
     }
 
+    public async Task<GroupDto?> GetMyGroupAsync(string semesterCode, Guid actorUserId, CancellationToken ct = default)
+    {
+        var semester = Code(semesterCode);
+        var actor = await Enrollment(actorUserId, semester, ct);
+        var group = await repository.GetStudentGroupAsync(actor.StudentId, semester, ct);
+        return group is null ? null : Map(group);
+    }
+
     public async Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
     {
         var group = await Group(id, ct);
@@ -383,11 +391,12 @@ public sealed class MatchingService(IGroupRepository repository, IIdentitySemest
         var candidates = (await identity.UnmatchedEnrollmentsAsync(code, ct)).OrderBy(x => x.StudentCode).ToList();
         await using var tx = await repository.BeginSerializableTransactionAsync(ct);
         var groups = await repository.OpenGroupsAsync(code, ct);
-        var existingIds = groups.SelectMany(x => x.Members).Select(x => x.StudentId).ToHashSet();
+        var existingIds = await repository.GetSemesterMemberIdsAsync(code, ct);
         candidates = candidates.Where(x => !existingIds.Contains(x.StudentId)).ToList();
         if (candidates.Count == 0)
             return new RandomMatchingResult(0, 0, 0);
 
+        var studentRoles = candidates.ToDictionary(x => x.StudentId, x => x.StrengthRoles ?? []);
         var index = 0; var added = 0;
         foreach (var group in groups.OrderBy(x => x.CreatedAt))
             while (index < candidates.Count && group.Members.Count < 4)
@@ -419,6 +428,9 @@ public sealed class MatchingService(IGroupRepository repository, IIdentitySemest
                 fill--; added++;
             }
 
+        foreach (var group in groups)
+            ReconcileRecruitmentNeeds(group, studentRoles);
+
         remaining = candidates.Count - index;
         var created = 0;
         foreach (var size in PartitionAny(remaining))
@@ -426,11 +438,57 @@ public sealed class MatchingService(IGroupRepository repository, IIdentitySemest
             var rawCode = $"GRP-{code}-{Guid.NewGuid():N}";
             var group = new Group { GroupCode = rawCode[..Math.Min(64, rawCode.Length)], GroupName = $"Nhóm ghép ngẫu nhiên {created + 1}", ProjectDescription = "Nhóm được tạo từ thuật toán ghép ngẫu nhiên.", SemesterCode = code };
             for (var i = 0; i < size; i++) group.Members.Add(GroupService.Member(candidates[index++]));
+            AssignMissingRecruitmentNeeds(group, studentRoles);
             repository.Add(group); created++;
         }
         foreach (var student in candidates) repository.AddOutbox(new GroupEventOutbox { Topic = "student-group-membership-changed", Payload = JsonSerializer.Serialize(new StudentGroupMembershipChangedEvent(student.StudentId, true, DateTime.UtcNow)) });
         await repository.SaveAsync(ct); await tx.CommitAsync(ct);
         return new RandomMatchingResult(added, created, candidates.Count);
+    }
+
+    private static void ReconcileRecruitmentNeeds(Group group, IReadOnlyDictionary<Guid, IReadOnlyList<string>> studentRoles)
+    {
+        var maxSlots = 5 - group.Members.Count;
+        if (maxSlots <= 0)
+        {
+            group.RecruitmentNeeds.Clear();
+            return;
+        }
+        if (group.RecruitmentNeeds.Count == 0)
+        {
+            AssignMissingRecruitmentNeeds(group, studentRoles);
+            return;
+        }
+        var remainingCapacity = maxSlots;
+        foreach (var need in group.RecruitmentNeeds.ToList())
+        {
+            if (remainingCapacity <= 0)
+            {
+                group.RecruitmentNeeds.Remove(need);
+                continue;
+            }
+            if (need.Slots > remainingCapacity)
+                need.Slots = remainingCapacity;
+            remainingCapacity -= need.Slots;
+        }
+    }
+
+    private static void AssignMissingRecruitmentNeeds(Group group, IReadOnlyDictionary<Guid, IReadOnlyList<string>> studentRoles)
+    {
+        var missingSlots = 5 - group.Members.Count;
+        if (missingSlots <= 0 || group.RecruitmentNeeds.Count > 0) return;
+
+        var coveredRoles = group.Members
+            .SelectMany(m => studentRoles.TryGetValue(m.StudentId, out var roles) ? roles : [])
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var targetRoles = TeamRoleCatalog.All
+            .Where(role => !coveredRoles.Contains(role))
+            .Concat(TeamRoleCatalog.All.Where(role => coveredRoles.Contains(role)))
+            .Take(Math.Min(4, missingSlots));
+
+        foreach (var role in targetRoles)
+            group.RecruitmentNeeds.Add(new GroupRecruitmentNeed { RoleCode = role, Slots = 1 });
     }
     private static bool IsPartitionable(int n) => n == 0 || Enumerable.Range(0, n / 5 + 1).Any(fives => (n - 5 * fives) >= 0 && (n - 5 * fives) % 4 == 0);
     private static IEnumerable<int> Partition(int n)

@@ -8,8 +8,11 @@ import {
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 import { useAuth } from '../../hooks/useAuth'
-import { TEAM_ROLES, getTeamRoleLabel } from '../../config/teamRoles'
+import { TEAM_ROLE_OPTIONS, getTeamRoleLabel } from '../../config/teamRoles'
 import StudentCoreModal from '../../components/StudentCoreModal'
+import { fetchAllGroupsBySemester } from '../../utils/groupsApi'
+
+const GROUPS_PER_PAGE = 24
 
 const normalizeSearchText = (value) => value
   .normalize('NFD')
@@ -20,10 +23,12 @@ const normalizeSearchText = (value) => value
 export default function GroupsPage() {
   const { account, request, isAdmin, isMentor, isStudent } = useAuth()
   const [groups, setGroups] = useState([])
+  const [myGroup, setMyGroup] = useState(null)
   const [semesters, setSemesters] = useState([])
   const [semesterCode, setSemesterCode] = useState('')
   const [filter, setFilter] = useState('all') // 'all' | 'recruiting' | 'full'
   const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
   const [busy, setBusy] = useState(false)
   const [enrollmentError, setEnrollmentError] = useState(null)
   const [demoSeedEnabled, setDemoSeedEnabled] = useState(false)
@@ -57,6 +62,8 @@ export default function GroupsPage() {
   const [editGroupName, setEditGroupName] = useState('')
   const [editGroupTopic, setEditGroupTopic] = useState('')
   const [editGroupDescription, setEditGroupDescription] = useState('')
+  const [editRecruitmentNeeds, setEditRecruitmentNeeds] = useState([])
+  const [editNeedsDirty, setEditNeedsDirty] = useState(false)
 
   // Student's fixed semester from Admin roster
   const studentSemesterCode = account?.student?.semesterCode
@@ -123,36 +130,58 @@ export default function GroupsPage() {
     fetchSemesters()
   }, [account, isAdmin, isMentor, request, semesterCode, studentSemesterCode])
 
-  // 2. Load Groups by Semester
+  // 2. Load Groups by Semester (fetch all pages so >100 groups are never truncated)
   const loadGroups = useCallback(async () => {
     const targetCode = isStudent ? studentSemesterCode : semesterCode
     if (!targetCode) {
       setGroups([])
+      setMyGroup(null)
       return
     }
 
     setBusy(true)
     setEnrollmentError(null)
     try {
-      const result = await request(`/api/groups?semesterCode=${encodeURIComponent(targetCode)}&page=1&pageSize=100`)
-      const mapped = (result.items || []).map(mapGroup)
+      const [{ items: rawItems }, myRaw] = await Promise.all([
+        fetchAllGroupsBySemester(request, targetCode),
+        isStudent
+          ? request(`/api/groups/my?semesterCode=${encodeURIComponent(targetCode)}`).catch(() => null)
+          : Promise.resolve(null)
+      ])
+
+      const mappedMy = myRaw ? mapGroup(myRaw) : null
+      setMyGroup(mappedMy)
+
+      let mapped = rawItems.map(mapGroup)
+      if (mappedMy && !mapped.some((g) => g.id === mappedMy.id)) {
+        mapped = [mappedMy, ...mapped]
+      }
+      const studentId = account?.student?.id
+      mapped.sort((a, b) => {
+        const aIsMine = Boolean(mappedMy?.id === a.id || (studentId && a.members.some((m) => m.studentId === studentId)))
+        const bIsMine = Boolean(mappedMy?.id === b.id || (studentId && b.members.some((m) => m.studentId === studentId)))
+        if (aIsMine !== bIsMine) return aIsMine ? -1 : 1
+        return 0
+      })
+
       setGroups(mapped)
 
       // Refresh currently selected group modal if open
       setSelectedGroup((current) => current
-        ? mapped.find((group) => group.id === current.id) || current
+        ? mapped.find((group) => group.id === current.id) || (mappedMy?.id === current.id ? mappedMy : current)
         : null)
     } catch (error) {
       if (error.message?.includes('No enrollment') || error.status === 409 || error.status === 404) {
         setEnrollmentError('Tài khoản của bạn chưa có danh sách đăng ký học phần (Enrollment) trong học kỳ này.')
         setGroups([])
+        setMyGroup(null)
       } else {
         toast.error(error.message || 'Không thể tải danh sách nhóm.')
       }
     } finally {
       setBusy(false)
     }
-  }, [isStudent, mapGroup, request, semesterCode, studentSemesterCode])
+  }, [account, isStudent, mapGroup, request, semesterCode, studentSemesterCode])
 
   useEffect(() => {
     if (!isAdmin && !isStudent) return
@@ -384,7 +413,7 @@ export default function GroupsPage() {
     }
   }
 
-  // 6. Update group name, topic, and project description.
+  // 6. Update group name, topic, project description, and open recruitment needs.
   const handleSaveEdit = async (e) => {
     e.preventDefault()
     if (!selectedGroup) return
@@ -393,6 +422,11 @@ export default function GroupsPage() {
       toast.error('Tên đề tài phải có ít nhất 3 ký tự.')
       return
     }
+    const remainingSlots = Math.max(0, 5 - (selectedGroup.members?.length || 0))
+    const maxNeeds = Math.min(4, remainingSlots)
+    const recruitmentNeeds = !selectedGroup.isLocked && editNeedsDirty
+      ? editRecruitmentNeeds.slice(0, maxNeeds).map((roleCode) => ({ roleCode, slots: 1 }))
+      : null
     try {
       setBusy(true)
       const updated = await request(`/api/groups/${selectedGroup.id}`, {
@@ -402,11 +436,11 @@ export default function GroupsPage() {
           groupName: editGroupName.trim(),
           projectDescription: editGroupDescription.trim(),
           topicTitle: cleanTopic,
-          recruitmentNeeds: null
+          recruitmentNeeds
         })
       })
       setSelectedGroup(mapGroup(updated))
-      toast.success('Đã cập nhật tên nhóm và đề tài.')
+      toast.success('Đã cập nhật thông tin nhóm thành công.')
       setEditGroupModal(false)
       await loadGroups()
     } catch (error) {
@@ -502,6 +536,7 @@ export default function GroupsPage() {
 
   const currentStudentId = account?.student?.id
   const activeSemester = semesters.find((s) => s.code === (isAdmin ? semesterCode : studentSemesterCode))
+  const currentStudentGroup = myGroup || groups.find((g) => g.members.some((m) => m.studentId === currentStudentId)) || null
 
   const filteredGroups = groups.filter((g) => {
     const matchesFilter =
@@ -509,14 +544,20 @@ export default function GroupsPage() {
       (filter === 'recruiting' && g.statusType === 'recruiting') ||
       (filter === 'full' && g.statusType === 'full')
 
-    const q = search.toLowerCase()
+    const q = normalizeSearchText(search.trim())
     const matchesSearch =
-      g.name.toLowerCase().includes(q) ||
-      g.topic.toLowerCase().includes(q) ||
-      g.leader.toLowerCase().includes(q)
+      !q ||
+      normalizeSearchText(g.name || '').includes(q) ||
+      normalizeSearchText(g.topic || '').includes(q) ||
+      normalizeSearchText(g.leader || '').includes(q) ||
+      g.members.some((m) => normalizeSearchText(`${m.name || ''} ${m.studentCode || ''}`).includes(q))
 
     return matchesFilter && matchesSearch
   })
+
+  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / GROUPS_PER_PAGE))
+  const safePage = Math.min(currentPage, totalPages)
+  const pagedGroups = filteredGroups.slice((safePage - 1) * GROUPS_PER_PAGE, safePage * GROUPS_PER_PAGE)
 
   return (
     <div>
@@ -586,7 +627,10 @@ export default function GroupsPage() {
             <select
               className="select input-sm"
               value={semesterCode}
-              onChange={(e) => setSemesterCode(e.target.value)}
+              onChange={(e) => {
+                setSemesterCode(e.target.value)
+                setCurrentPage(1)
+              }}
               style={{ fontWeight: 600, minWidth: 160 }}
             >
               {semesters.map((s) => (
@@ -625,19 +669,28 @@ export default function GroupsPage() {
           <div className="filter-tab-bar" style={{ margin: 0 }}>
             <button
               className={`tab-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
+              onClick={() => {
+                setFilter('all')
+                setCurrentPage(1)
+              }}
             >
               Tất cả ({groups.length})
             </button>
             <button
               className={`tab-btn ${filter === 'recruiting' ? 'active' : ''}`}
-              onClick={() => setFilter('recruiting')}
+              onClick={() => {
+                setFilter('recruiting')
+                setCurrentPage(1)
+              }}
             >
               Đang tuyển ({groups.filter((g) => g.statusType === 'recruiting').length})
             </button>
             <button
               className={`tab-btn ${filter === 'full' ? 'active' : ''}`}
-              onClick={() => setFilter('full')}
+              onClick={() => {
+                setFilter('full')
+                setCurrentPage(1)
+              }}
             >
               Đã chốt / Đủ người ({groups.filter((g) => g.statusType === 'full').length})
             </button>
@@ -650,17 +703,53 @@ export default function GroupsPage() {
           <input
             type="text"
             className="input input-sm"
-            placeholder="Tìm theo tên nhóm, đề tài, leader..."
+            placeholder="Tìm nhóm, đề tài, MSSV, thành viên..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setCurrentPage(1)
+            }}
             style={{ paddingLeft: 34 }}
           />
         </div>
       </div>
 
+      {/* Pinned My Group Strip for Student */}
+      {isStudent && currentStudentGroup && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 'var(--space-5)',
+            backgroundColor: '#F0FDF4',
+            borderColor: '#BBF7D0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            padding: '12px 16px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span className="badge badge-green">Nhóm của bạn</span>
+            <strong style={{ fontSize: 14.5, color: 'var(--text-main)' }}>{currentStudentGroup.name}</strong>
+            <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+              {currentStudentGroup.members.length}/5 thành viên · {currentStudentGroup.statusText}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => openGroupDetails(currentStudentGroup)}
+          >
+            Xem & Quản lý nhóm
+          </button>
+        </div>
+      )}
+
       {/* ── Group Cards Grid ── */}
       <div className="groups-grid">
-        {filteredGroups.map((group) => {
+        {pagedGroups.map((group) => {
           const isFull = group.statusType === 'full'
           const isInGroup = group.members.some((m) => m.studentId === currentStudentId)
 
@@ -693,11 +782,26 @@ export default function GroupsPage() {
               </div>
               <p className="group-topic">{group.topic}</p>
               <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>{group.projectDescription}</p>
-              {!!group.recruitmentNeeds.length && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>{group.recruitmentNeeds.map((need) => <span className="badge badge-warning" key={need.roleCode}>{need.roleCode} · {need.slots}</span>)}</div>}
+              {!isFull && !group.isLocked && (
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontWeight: 600 }}>Cần tuyển:</span>
+                  {group.recruitmentNeeds.length > 0 ? (
+                    group.recruitmentNeeds.map((need) => (
+                      <span className="badge badge-warning" key={need.roleCode}>
+                        {getTeamRoleLabel(need.roleCode)} · {need.slots}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="badge badge-neutral" style={{ fontSize: 11 }}>
+                      Tất cả role · {5 - group.members.length} chỗ
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Members List */}
               <div className="group-members-list">
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginRight: 2 }}>Đội ngũ:</span>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginRight: 2, flexShrink: 0 }}>Đội ngũ:</span>
                 {group.members.map((m, idx) => (
                   <span key={idx} className="member-avatar-pill" title={`${m.name} (${m.role})`}>
                     <span className="avatar avatar-sm avatar-primary" style={{ width: 20, height: 20, fontSize: 10 }}>
@@ -724,7 +828,7 @@ export default function GroupsPage() {
                   Chi tiết & Quản lý
                 </button>
 
-                {!isInGroup && !isFull && !group.isLocked && (
+                {isStudent && !currentStudentGroup && !isInGroup && !isFull && !group.isLocked && (
                   <button
                     className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
@@ -765,6 +869,46 @@ export default function GroupsPage() {
         )}
       </div>
 
+      {filteredGroups.length > GROUPS_PER_PAGE && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginTop: 'var(--space-6)',
+            paddingTop: 'var(--space-4)',
+            borderTop: '1px solid var(--border-default)'
+          }}
+        >
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            Hiển thị {(safePage - 1) * GROUPS_PER_PAGE + 1}–{Math.min(safePage * GROUPS_PER_PAGE, filteredGroups.length)} / {filteredGroups.length} nhóm
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Trang trước
+            </button>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', padding: '0 6px' }}>
+              Trang {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Trang sau
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Detail & Management Modal ── */}
       {selectedGroup && (
         <div className="modal-backdrop" onClick={() => setSelectedGroup(null)}>
@@ -798,9 +942,12 @@ export default function GroupsPage() {
                     className="btn btn-ghost btn-sm"
                     style={{ fontSize: 11.5, padding: '3px 8px' }}
                     onClick={() => {
+                      const maxNeeds = Math.min(4, Math.max(0, 5 - (selectedGroup.members?.length || 0)))
                       setEditGroupName(selectedGroup.name)
                       setEditGroupTopic(selectedGroup.topicTitle || '')
                       setEditGroupDescription(selectedGroup.projectDescription || '')
+                      setEditRecruitmentNeeds((selectedGroup.recruitmentNeeds || []).map((n) => n.roleCode).slice(0, maxNeeds))
+                      setEditNeedsDirty(false)
                       setEditGroupModal(true)
                     }}
                   >
@@ -816,14 +963,20 @@ export default function GroupsPage() {
                   {selectedGroup.projectDescription}
                 </p>
               )}
-              {selectedGroup.recruitmentNeeds && selectedGroup.recruitmentNeeds.length > 0 && (
+              {!selectedGroup.isLocked && selectedGroup.members.length < 5 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', alignSelf: 'center' }}>Vị trí cần tuyển:</span>
-                  {selectedGroup.recruitmentNeeds.map((need) => (
-                    <span className="badge badge-warning" key={need.roleCode} style={{ fontSize: 11 }}>
-                      {need.roleCode} ({need.slots} chỗ)
+                  {selectedGroup.recruitmentNeeds && selectedGroup.recruitmentNeeds.length > 0 ? (
+                    selectedGroup.recruitmentNeeds.map((need) => (
+                      <span className="badge badge-warning" key={need.roleCode} style={{ fontSize: 11 }}>
+                        {getTeamRoleLabel(need.roleCode)} ({need.slots} chỗ)
+                      </span>
+                    ))
+                  ) : (
+                    <span className="badge badge-neutral" style={{ fontSize: 11 }}>
+                      Tất cả role (còn {5 - selectedGroup.members.length} chỗ)
                     </span>
-                  ))}
+                  )}
                 </div>
               )}
               {account?.role === 'Student' && selectedGroup.members.some((member) => member.studentId === currentStudentId) && (
@@ -1094,8 +1247,8 @@ export default function GroupsPage() {
                   </button>
                 )}
 
-                {/* Join Group Button if User is NOT inside and group is Open */}
-                {!selectedGroup.members.some((m) => m.studentId === currentStudentId) &&
+                {/* Join Group Button if Student has no group yet and group is Open */}
+                {isStudent && !currentStudentGroup && !selectedGroup.members.some((m) => m.studentId === currentStudentId) &&
                   !selectedGroup.isLocked &&
                   selectedGroup.members.length < 5 && (
                     <button
@@ -1162,6 +1315,45 @@ export default function GroupsPage() {
                   onChange={(e) => setEditGroupDescription(e.target.value)}
                 />
               </div>
+
+              {!selectedGroup?.isLocked && 5 - (selectedGroup?.members?.length || 0) > 0 && (
+                <div style={{ marginBottom: 18 }}>
+                  <label className="input-label">
+                    Đang cần tuyển role nào?{' '}
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
+                      (tối đa {Math.min(4, 5 - (selectedGroup?.members?.length || 0))} vị trí)
+                    </span>
+                  </label>
+                  <div role="group" aria-label="Cập nhật role nhóm đang cần tuyển" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                    {TEAM_ROLE_OPTIONS.map((role) => {
+                      const selected = editRecruitmentNeeds.includes(role.code)
+                      const maxNeeds = Math.min(4, 5 - (selectedGroup?.members?.length || 0))
+                      return (
+                        <button
+                          key={role.code}
+                          type="button"
+                          aria-pressed={selected}
+                          className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`}
+                          onClick={() => {
+                            setEditNeedsDirty(true)
+                            setEditRecruitmentNeeds((prev) => {
+                              if (selected) return prev.filter((item) => item !== role.code)
+                              const clamped = prev.slice(0, maxNeeds)
+                              if (clamped.length >= maxNeeds) {
+                                toast.error(`Nhóm chỉ còn tối đa ${maxNeeds} chỗ trống.`)
+                                return clamped
+                              }
+                              return [...clamped, role.code]
+                            })
+                          }}
+                        >
+                          {role.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button
@@ -1231,9 +1423,9 @@ export default function GroupsPage() {
               <div style={{ marginBottom: 18 }}>
                 <label className="input-label">Đang cần tuyển role nào? <span style={{ color: 'var(--text-muted)' }}>(tối đa 4)</span></label>
                 <div role="group" aria-label="Role nhóm đang cần tuyển" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                  {TEAM_ROLES.map((role) => {
-                    const selected = newRecruitmentNeeds.includes(role)
-                    return <button key={role} type="button" aria-pressed={selected} className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`} onClick={() => setNewRecruitmentNeeds((roles) => selected ? roles.filter((item) => item !== role) : roles.length < 4 ? [...roles, role] : roles)}>{role}</button>
+                  {TEAM_ROLE_OPTIONS.map((role) => {
+                    const selected = newRecruitmentNeeds.includes(role.code)
+                    return <button key={role.code} type="button" aria-pressed={selected} className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`} onClick={() => setNewRecruitmentNeeds((roles) => selected ? roles.filter((item) => item !== role.code) : roles.length < 4 ? [...roles, role.code] : roles)}>{role.label}</button>
                   })}
                 </div>
               </div>

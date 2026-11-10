@@ -25,13 +25,23 @@ public sealed class GroupRepository(GroupMatchingDbContext db) : IGroupRepositor
                 (x.TopicTitle != null && x.TopicTitle.ToLower().Contains(term)) || x.GroupCode.ToLower().Contains(term));
         }
         var total = await groups.CountAsync(ct);
-        var entities = await groups.OrderBy(x => x.GroupCode).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
+        var entities = await groups.OrderBy(x => x.CreatedAt).ThenBy(x => x.GroupName).ThenBy(x => x.GroupCode).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
         return new PageResult<GroupDto>(entities.Select(Map).ToList(), total, query.Page, query.PageSize);
     }
 
     public Task<Group?> GetStudentGroupAsync(Guid studentId, string semesterCode, CancellationToken ct = default) => db.Groups
         .Include(x => x.Members).Include(x => x.Votes).Include(x => x.RecruitmentNeeds)
         .SingleOrDefaultAsync(x => x.SemesterCode == semesterCode && x.Members.Any(m => m.StudentId == studentId), ct);
+
+    public async Task<HashSet<Guid>> GetSemesterMemberIdsAsync(string semesterCode, CancellationToken ct = default)
+    {
+        var code = semesterCode.Trim().ToUpperInvariant();
+        var ids = await db.Groups
+            .Where(g => g.SemesterCode == code)
+            .SelectMany(g => g.Members.Select(m => m.StudentId))
+            .ToListAsync(ct);
+        return ids.ToHashSet();
+    }
 
     public Task<List<Group>> OpenGroupsAsync(string semesterCode, CancellationToken ct = default) => db.Groups
         .Include(x => x.Members).Include(x => x.Votes).Include(x => x.RecruitmentNeeds)

@@ -8,6 +8,7 @@ public interface IGroupRepository
     Task<Group?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, CancellationToken ct = default);
     Task<Group?> GetStudentGroupAsync(Guid studentId, string semesterCode, CancellationToken ct = default);
+    Task<HashSet<Guid>> GetSemesterMemberIdsAsync(string semesterCode, CancellationToken ct = default);
     Task<List<Group>> OpenGroupsAsync(string semesterCode, CancellationToken ct = default);
     void Add(Group group);
     void AddMember(GroupMember member);
@@ -35,6 +36,7 @@ public interface IIdentitySemesterClient
 public interface IGroupService
 {
     Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<GroupDto?> GetMyGroupAsync(string semesterCode, Guid actorUserId, CancellationToken ct = default);
     Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> SeedDemoMembersAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
