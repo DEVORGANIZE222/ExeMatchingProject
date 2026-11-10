@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using EXETeamMatching.Contracts.Events;
 using EXETeamMatching.Notification.Application.Interfaces;
@@ -247,5 +249,76 @@ public class NotificationServiceTests
             emailService.SentEmails.Select(x => x.To));
         Assert.Contains("TỪ CHỐI", emailService.SentEmails[0].Body);
         Assert.Contains($"cid:{EmailService.BrandLogoContentId}", emailService.SentEmails[0].Body);
+    }
+
+    [Fact]
+    public async Task EmailService_WebhookMode_Sends_Json_Payload_With_Embedded_Logo_And_Secret()
+    {
+        string? capturedBody = null;
+        var handler = new StubHttpHandler(req =>
+        {
+            capturedBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            var res = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"ok":true}""", System.Text.Encoding.UTF8, "application/json")
+            };
+            return res;
+        });
+
+        var settings = Options.Create(new EmailSettings
+        {
+            WebhookUrl = "https://script.google.com/macros/s/demo-id/exec",
+            WebhookSecret = "my-secret",
+            SenderName = "ExeMatching Team"
+        });
+
+        var emailService = new EmailService(settings, NullLogger<EmailService>.Instance, new HttpClient(handler));
+        await emailService.SendEmailAsync(
+            "student@fpt.edu.vn",
+            "[ExeMatching] Chào mừng",
+            $"<img src=\"cid:{EmailService.BrandLogoContentId}\" /><p>Hello</p>");
+
+        Assert.NotNull(capturedBody);
+        using var doc = JsonDocument.Parse(capturedBody!);
+        var root = doc.RootElement;
+        Assert.Equal("my-secret", root.GetProperty("secret").GetString());
+        Assert.Equal("student@fpt.edu.vn", root.GetProperty("to").GetString());
+        Assert.Equal("[ExeMatching] Chào mừng", root.GetProperty("subject").GetString());
+        Assert.Equal("ExeMatching Team", root.GetProperty("senderName").GetString());
+        Assert.Equal(EmailService.BrandLogoContentId, root.GetProperty("logoContentId").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("logoBase64").GetString()));
+    }
+
+    [Fact]
+    public async Task EmailService_WebhookMode_Throws_On_Script_Error_Or_Html_Redirect()
+    {
+        var errorHandler = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":false,"error":"Quota exceeded"}""", System.Text.Encoding.UTF8, "application/json")
+        });
+        var settings = Options.Create(new EmailSettings
+        {
+            WebhookUrl = "https://script.google.com/macros/s/demo-id/exec"
+        });
+        var errorService = new EmailService(settings, NullLogger<EmailService>.Instance, new HttpClient(errorHandler));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => errorService.SendEmailAsync("a@b.com", "S", "<p>B</p>"));
+
+        var htmlHandler = new StubHttpHandler(_ =>
+        {
+            var res = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("<html><body>Sign in</body></html>")
+            };
+            res.Content.Headers.ContentType = new MediaTypeHeaderValue("text/html");
+            return res;
+        });
+        var htmlService = new EmailService(settings, NullLogger<EmailService>.Instance, new HttpClient(htmlHandler));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => htmlService.SendEmailAsync("a@b.com", "S", "<p>B</p>"));
+    }
+
+    private sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(responder(request));
     }
 }
