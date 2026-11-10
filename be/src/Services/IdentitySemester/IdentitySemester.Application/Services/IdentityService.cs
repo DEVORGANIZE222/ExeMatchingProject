@@ -214,7 +214,8 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
             students.Add(await BuildStudent(row, semester, initialPassword, ct));
         }
         // Validate the entire file before tracking inserts. SaveChanges is atomic.
-        foreach (var student in students) store.AddStudent(student);
+        // Do not emit per-student welcome emails on bulk roster imports to avoid mass SMTP throttling.
+        foreach (var student in students) store.AddStudent(student, emitImportEvent: false);
         // A roster entry is also the source of truth for Google access. Keep this
         // in the same unit of work so a partially imported roster never grants access.
         await AddRosterEmailsToGoogleAccess(students.Select(x => x.User.Email), ct);

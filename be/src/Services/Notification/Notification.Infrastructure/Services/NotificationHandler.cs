@@ -338,15 +338,19 @@ public class NotificationHandler : INotificationService
     {
         var decisionText = @event.IsAccepted ? "ĐÃ CHẤP NHẬN" : "TỪ CHỐI";
         var groupName = !string.IsNullOrWhiteSpace(@event.GroupName) ? @event.GroupName : $"Nhóm {@event.GroupId}";
-        var subject = $"[EXE Matching] Giảng viên đã {decisionText.ToLower()} yêu cầu hướng dẫn của {groupName}";
+        var mentorLabel = !string.IsNullOrWhiteSpace(@event.MentorName) ? @event.MentorName : "Giảng viên hướng dẫn";
+        var reasonText = string.IsNullOrWhiteSpace(@event.DecisionReason)
+            ? "Không có ghi chú thêm."
+            : @event.DecisionReason;
+        var subject = $"[EXE Matching] {mentorLabel} đã {decisionText.ToLower()} yêu cầu hướng dẫn của {groupName}";
         var body = $"""
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <h3 style="color: #2b5797;">Kết Quả Yêu Cầu Hướng Dẫn: <span style="color: {(@event.IsAccepted ? "green" : "red")};">{decisionText}</span></h3>
                 <p>Xin chào nhóm <strong>{groupName}</strong>,</p>
-                <p>Giảng viên hướng dẫn đã đưa ra quyết định đối với yêu cầu của nhóm:</p>
+                <p><strong>{mentorLabel}</strong> đã đưa ra quyết định đối với yêu cầu hướng dẫn của nhóm:</p>
                 <div style="background-color: #f8f9fa; border-left: 4px solid {(@event.IsAccepted ? "green" : "red")}; padding: 12px; margin: 15px 0;">
                     <p style="margin: 0;"><strong>Kết quả:</strong> {decisionText}</p>
-                    <p style="margin: 5px 0 0 0;"><strong>Lý do / Phản hồi:</strong> {@event.DecisionReason}</p>
+                    <p style="margin: 5px 0 0 0;"><strong>Lý do / Phản hồi:</strong> {reasonText}</p>
                     <p style="margin: 8px 0 0 0; font-size: 12px; color: #666;">Thời gian: {@event.DecidedAt:yyyy-MM-dd HH:mm:ss} UTC</p>
                 </div>
             </div>

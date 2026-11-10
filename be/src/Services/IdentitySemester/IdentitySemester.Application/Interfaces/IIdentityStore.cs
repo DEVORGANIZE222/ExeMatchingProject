@@ -26,7 +26,7 @@ public interface IIdentityStore
     Task<IReadOnlyList<GoogleAllowedEmail>> GoogleAllowedEmails(CancellationToken ct);
     Task<int> DeleteStudentsBySemester(Guid semesterId, CancellationToken ct);
     Task DeleteStudentEnrollment(Guid studentId, CancellationToken ct);
-    void AddStudent(Student student);
+    void AddStudent(Student student, bool emitImportEvent = true);
     void AddUser(User user);
     void RemoveStudent(Student student);
     void AddSemester(Semester semester);

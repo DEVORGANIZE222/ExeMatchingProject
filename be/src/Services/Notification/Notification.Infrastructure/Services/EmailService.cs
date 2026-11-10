@@ -30,7 +30,14 @@ public class EmailService : IEmailService
             return;
         }
 
-        bool isSimulation = _settings.SimulateOnly || string.IsNullOrWhiteSpace(_settings.Username) || string.IsNullOrWhiteSpace(_settings.Password);
+        bool hasPlaceholderCreds =
+            (!string.IsNullOrWhiteSpace(_settings.Username) && _settings.Username.StartsWith("your_", StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrWhiteSpace(_settings.Password) && _settings.Password.StartsWith("your_", StringComparison.OrdinalIgnoreCase));
+
+        bool isSimulation = _settings.SimulateOnly
+            || string.IsNullOrWhiteSpace(_settings.Username)
+            || string.IsNullOrWhiteSpace(_settings.Password)
+            || hasPlaceholderCreds;
 
         if (isSimulation)
         {

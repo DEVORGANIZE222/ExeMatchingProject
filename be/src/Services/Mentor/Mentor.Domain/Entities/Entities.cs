@@ -34,6 +34,7 @@ public class MentorRequest : BaseEntity
     public Guid MentorId { get; set; }
     public MentorUser Mentor { get; set; } = null!;
     public Guid? RequesterUserId { get; set; }
+    public string RequesterEmail { get; set; } = string.Empty;
     public string RequesterName { get; set; } = string.Empty;
     public string GroupName { get; set; } = string.Empty;
     public string Topic { get; set; } = string.Empty;

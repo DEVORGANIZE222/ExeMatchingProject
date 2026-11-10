@@ -83,5 +83,6 @@ public record MentorDecisionEvent(
     DateTime DecidedAt,
     string? RequesterEmail = null,
     string? MentorEmail = null,
-    string? GroupName = null
+    string? GroupName = null,
+    string? MentorName = null
 );

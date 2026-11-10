@@ -101,13 +101,16 @@ public class IdentityRepository(IdentitySemesterDbContext db) : IIdentityStore
         if (query.Page < 1 || query.PageSize is < 1 or > 2000 || (long)(query.Page - 1) * query.PageSize > int.MaxValue)
             throw new IdentityException(400, "Invalid pagination.");
     }
-    public void AddStudent(Student student)
+    public void AddStudent(Student student, bool emitImportEvent = true)
     {
         // Existing users/semester are tracked; mark only new entities as Added.
         if (db.Entry(student.User).State == EntityState.Detached) db.Users.Add(student.User);
         db.Entry(student).State = EntityState.Added;
-        var payload = new StudentImportedEvent(student.Id, student.StudentCode, student.FullName, student.User.Email, student.Semester.Code, DateTime.UtcNow);
-        AddOutboxEvent("student-imported", payload);
+        if (emitImportEvent)
+        {
+            var payload = new StudentImportedEvent(student.Id, student.StudentCode, student.FullName, student.User.Email, student.Semester.Code, DateTime.UtcNow);
+            AddOutboxEvent("student-imported", payload);
+        }
     }
     public void AddUser(User user) => db.Users.Add(user);
     public void RemoveStudent(Student student) => db.Students.Remove(student);

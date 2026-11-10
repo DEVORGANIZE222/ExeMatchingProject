@@ -112,6 +112,7 @@ if (!openApiExportOnly)
         {
             await dbContext.Database.ExecuteSqlRawAsync("""
                 ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterUserId" uuid NULL;
+                ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterEmail" character varying(254) NOT NULL DEFAULT '';
                 ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "RequesterName" character varying(200) NOT NULL DEFAULT '';
                 ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "GroupName" character varying(200) NOT NULL DEFAULT '';
                 ALTER TABLE "MentorRequests" ADD COLUMN IF NOT EXISTS "Topic" character varying(1000) NOT NULL DEFAULT '';
