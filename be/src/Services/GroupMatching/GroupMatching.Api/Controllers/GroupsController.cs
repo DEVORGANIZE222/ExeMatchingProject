@@ -23,6 +23,11 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
     [HttpGet] public async Task<ActionResult<ApiResponse<PageResult<GroupDto>>>> GetGroups([FromQuery] GroupListQuery query, CancellationToken ct)
         => Ok(ApiResponse<PageResult<GroupDto>>.Ok(await service.ListAsync(query, Actor, IsAdmin, ct)));
 
+    [HttpGet("my")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Student")]
+    public async Task<ActionResult<ApiResponse<GroupDto?>>> GetMyGroup([FromQuery] string semesterCode, CancellationToken ct)
+        => Ok(ApiResponse<GroupDto?>.Ok(await service.GetMyGroupAsync(semesterCode, Actor, ct)));
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> GetGroupById(Guid id, CancellationToken ct)
         => Ok(ApiResponse<GroupDto>.Ok(await service.GetAsync(id, Actor, IsAdmin, ct)));
@@ -34,7 +39,7 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
     [HttpPost]
     public async Task<ActionResult<ApiResponse<GroupDto>>> CreateGroup(CreateGroupRequest request, CancellationToken ct)
     {
-        var group = await service.CreateAsync(request, Actor, ct);
+        var group = await service.CreateAsync(request, Actor, ct, IsAdmin);
         return CreatedAtAction(nameof(GetGroupById), new { id = group.Id }, ApiResponse<GroupDto>.Ok(group));
     }
 
@@ -49,9 +54,26 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
         return NoContent();
     }
 
+    [HttpDelete("semester/{semesterCode}")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+    public async Task<ActionResult<ApiResponse<BulkDeleteGroupsResult>>> DeleteUnlockedGroupsBySemester(
+        string semesterCode, CancellationToken ct)
+        => Ok(ApiResponse<BulkDeleteGroupsResult>.Ok(await service.DeleteUnlockedBySemesterAsync(semesterCode, ct)));
+
     [HttpPost("{id:guid}/members")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> AddMember(Guid id, CancellationToken ct)
         => Ok(ApiResponse<GroupDto>.Ok(await service.JoinAsync(id, Actor, ct)));
+
+    [HttpGet("{id:guid}/invite-candidates")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<EnrollmentContext>>>> SearchInviteCandidates(
+        Guid id, [FromQuery] string q, CancellationToken ct)
+        => Ok(ApiResponse<IReadOnlyList<EnrollmentContext>>.Ok(await service.SearchInviteCandidatesAsync(id, q, Actor, IsAdmin, ct)));
+
+    [HttpPost("{id:guid}/invite")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public async Task<ActionResult<ApiResponse<GroupDto>>> InviteMember(Guid id, InviteMemberRequest request, CancellationToken ct)
+        => Ok(ApiResponse<GroupDto>.Ok(await service.InviteMemberAsync(id, request, Actor, IsAdmin, ct)));
 
     [HttpPost("{id:guid}/demo-members")]
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
@@ -70,16 +92,21 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
     }
 
     [HttpDelete("{id:guid}/members/{studentId:guid}")]
-    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
-    public async Task<IActionResult> RemoveMemberAsAdmin(Guid id, Guid studentId, CancellationToken ct)
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public async Task<IActionResult> RemoveMember(Guid id, Guid studentId, CancellationToken ct)
     {
-        await service.RemoveMemberAsAdminAsync(id, studentId, ct);
+        await service.RemoveMemberAsync(id, studentId, Actor, IsAdmin, ct);
         return NoContent();
     }
 
     [HttpPost("{id:guid}/lock")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> LockGroup(Guid id, CancellationToken ct)
-        => Ok(ApiResponse<GroupDto>.Ok(await service.LockAsync(id, Actor, ct)));
+        => Ok(ApiResponse<GroupDto>.Ok(await service.LockAsync(id, Actor, ct, IsAdmin)));
+
+    [HttpPost("{id:guid}/unlock")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public async Task<ActionResult<ApiResponse<GroupDto>>> UnlockGroup(Guid id, CancellationToken ct)
+        => Ok(ApiResponse<GroupDto>.Ok(await service.UnlockAsync(id, Actor, IsAdmin, ct)));
 
     [HttpPost("{id:guid}/topic")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> RegisterTopic(Guid id, RegisterTopicRequest request, CancellationToken ct)

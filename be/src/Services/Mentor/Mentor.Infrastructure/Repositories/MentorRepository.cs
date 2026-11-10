@@ -200,6 +200,33 @@ public class MentorRepository(MentorDbContext db) : IMentorRepository
     public void AddNotification(MentorNotification notification) => db.MentorNotifications.Add(notification);
 
     // ------------------------------------------------------------------
+    // Student notifications
+    // ------------------------------------------------------------------
+
+    public async Task<List<StudentNotificationResponse>> GetStudentNotificationsAsync(Guid groupId, int take, CancellationToken cancellationToken = default)
+        => await db.StudentNotifications.AsNoTracking()
+            .Where(x => x.GroupId == groupId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(take)
+            .Select(x => new StudentNotificationResponse(
+                x.Id, x.GroupId, x.RequestId, x.MentorName, x.GroupName,
+                x.Type, x.Title, x.Message, x.IsRead, x.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+    public async Task<StudentNotification?> GetStudentNotificationForUpdateAsync(Guid id, Guid groupId, CancellationToken cancellationToken = default)
+        => await db.StudentNotifications
+            .SingleOrDefaultAsync(x => x.Id == id && x.GroupId == groupId, cancellationToken);
+
+    public async Task MarkAllStudentNotificationsReadAsync(Guid groupId, CancellationToken cancellationToken = default)
+        => await db.StudentNotifications
+            .Where(x => x.GroupId == groupId && !x.IsRead)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.IsRead, true)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), cancellationToken);
+
+    public void AddStudentNotification(StudentNotification notification) => db.StudentNotifications.Add(notification);
+
+    // ------------------------------------------------------------------
     // Unit of work
     // ------------------------------------------------------------------
 

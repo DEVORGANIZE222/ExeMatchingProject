@@ -153,14 +153,14 @@
 
 .badge-green {
   background-color: var(--primary-light);
-  color: var(--primary);
-  border: 1px solid var(--primary-border);
+  color: #166534; /* Green 800 — >6.3:1 WCAG AA contrast on #DCFCE7 */
+  border: 1px solid #86EFAC;
 }
 
 .badge-teal {
   background-color: var(--teal-light);
-  color: var(--teal-status);
-  border: 1px solid rgba(15, 118, 110, 0.2);
+  color: #115E59; /* Teal 800 — >6.5:1 WCAG AA contrast on #CCFBF1 */
+  border: 1px solid rgba(17, 94, 89, 0.25);
 }
 
 .badge-warning {

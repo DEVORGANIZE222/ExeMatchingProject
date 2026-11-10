@@ -225,6 +225,8 @@
   box-shadow: var(--shadow-xs);
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
@@ -258,6 +260,7 @@
 .group-members-list {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: var(--space-4);
   padding-bottom: var(--space-3);
@@ -268,6 +271,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  max-width: 100%;
   padding: 3px 8px;
   background-color: var(--bg-subtle);
   border: 1px solid var(--border-default);
@@ -286,6 +290,89 @@
   gap: var(--space-2);
   flex-wrap: wrap;
   margin-top: auto;
+}
+
+.group-card-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+}
+
+.group-role-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.group-role-row-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+
+.group-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background-color: #FFFFFF;
+  color: var(--text-main);
+  border: 1px solid var(--border-default);
+}
+
+.group-role-chip.covered {
+  background-color: #EFF6FF;
+  color: #1D4ED8;
+  border-color: #BFDBFE;
+}
+
+.group-role-chip.matched {
+  background-color: #F0FDF4;
+  color: #15803D;
+  border-color: #86EFAC;
+}
+
+.group-role-chip.missing {
+  background-color: #FFFFFF;
+  color: var(--text-muted);
+  border-style: dashed;
+}
+
+.group-fit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.group-fit-banner.match {
+  background-color: #F0FDF4;
+  border-color: #BBF7D0;
+  color: #166534;
+}
+
+.group-fit-banner.mismatch {
+  background-color: #FFFBEB;
+  border-color: #FDE68A;
+  color: #92400E;
 }
 
 /* ── Responsive ──────────────────────────────────────────── */

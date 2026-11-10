@@ -123,6 +123,19 @@ public record MentorNotificationResponse(
     DateTime CreatedAt
 );
 
+public record StudentNotificationResponse(
+    Guid Id,
+    Guid GroupId,
+    Guid? RequestId,
+    string MentorName,
+    string GroupName,
+    string Type,
+    string Title,
+    string Message,
+    bool IsRead,
+    DateTime CreatedAt
+);
+
 public record CreateMentorRequest(
     [Required] Guid GroupId,
     [Required] Guid MentorId,

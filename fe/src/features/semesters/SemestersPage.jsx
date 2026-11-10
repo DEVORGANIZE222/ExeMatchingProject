@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
 import DatePicker from '../../components/DatePicker'
 import SemesterTimelineProgress from '../../components/SemesterTimelineProgress'
+import ConfirmModal from '../../components/ConfirmModal'
 import '../../components/ServicePages.css'
 
 const toUtc = (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null)
@@ -54,6 +55,7 @@ export default function SemestersPage() {
   const [showModal, setShowModal] = useState(false)
   const [editModal, setEditModal] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+  const [confirmState, setConfirmState] = useState(null)
 
   const [form, setForm] = useState({
     code: '',
@@ -184,15 +186,26 @@ export default function SemestersPage() {
   }
 
   // Delete Semester
-  const handleDelete = async (id, code) => {
-    if (!window.confirm(`Xác nhận xóa học kỳ ${code}?`)) return
-    try {
-      await request(`/api/semesters/${id}`, { method: 'DELETE' })
-      toast.success(`Đã xóa học kỳ ${code}`)
-      await load()
-    } catch {
-      toast.error('Không thể xóa học kỳ này.')
-    }
+  const handleDelete = (id, code) => {
+    setConfirmState({
+      title: 'Xóa học kỳ',
+      message: `Xác nhận xóa học kỳ "${code}"? Học kỳ đã có sinh viên sẽ không thể xóa.`,
+      confirmLabel: 'Xóa học kỳ',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/semesters/${id}`, { method: 'DELETE' })
+          toast.success(`Đã xóa học kỳ ${code}`)
+          setConfirmState(null)
+          await load()
+        } catch (err) {
+          toast.error(err.message || 'Không thể xóa học kỳ này.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
   const now = new Date()
@@ -602,6 +615,17 @@ export default function SemestersPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel}
+        tone={confirmState?.tone}
+        busy={busy}
+        onConfirm={() => confirmState?.onConfirm?.()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

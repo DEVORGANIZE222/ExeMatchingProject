@@ -54,4 +54,52 @@ public class MentorRequestsController(IMentorService mentorService) : Controller
     [Authorize(Roles = "Mentor")]
     public async Task<ActionResult<ApiResponse<List<MentorRequestDto>>>> Mine(CancellationToken ct)
         => Ok(ApiResponse<List<MentorRequestDto>>.Ok(await mentorService.GetMyRequestsAsync(this.ActorId(), ct)));
+
+    [HttpGet("student/notifications")]
+    [Authorize(Roles = "Student")]
+    public async Task<ActionResult<ApiResponse<List<StudentNotificationResponse>>>> StudentNotifications(
+        [FromQuery] string? semesterCode, CancellationToken ct)
+    {
+        try
+        {
+            var items = await mentorService.GetMyGroupNotificationsAsync(this.Actor(), semesterCode, ct);
+            return Ok(ApiResponse<List<StudentNotificationResponse>>.Ok(items));
+        }
+        catch (GroupValidationException ex)
+        {
+            return this.GroupValidationResult<List<StudentNotificationResponse>>(ex);
+        }
+    }
+
+    [HttpPut("student/notifications/{id:guid}/read")]
+    [Authorize(Roles = "Student")]
+    public async Task<IActionResult> MarkStudentNotificationRead(
+        Guid id, [FromQuery] string? semesterCode, CancellationToken ct)
+    {
+        try
+        {
+            await mentorService.MarkMyGroupNotificationReadAsync(this.Actor(), semesterCode, id, ct);
+            return NoContent();
+        }
+        catch (GroupValidationException ex)
+        {
+            return this.GroupValidationResult<bool>(ex);
+        }
+    }
+
+    [HttpPut("student/notifications/read-all")]
+    [Authorize(Roles = "Student")]
+    public async Task<IActionResult> MarkAllStudentNotificationsRead(
+        [FromQuery] string? semesterCode, CancellationToken ct)
+    {
+        try
+        {
+            await mentorService.MarkAllMyGroupNotificationsReadAsync(this.Actor(), semesterCode, ct);
+            return NoContent();
+        }
+        catch (GroupValidationException ex)
+        {
+            return this.GroupValidationResult<bool>(ex);
+        }
+    }
 }

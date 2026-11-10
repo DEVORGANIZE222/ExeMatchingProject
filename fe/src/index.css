@@ -19,7 +19,7 @@
   /* Typography Colors */
   --text-main:         #0F172A; /* Slate 900 */
   --text-secondary:    #475569; /* Slate 600 */
-  --text-muted:        #94A3B8; /* Slate 400 */
+  --text-muted:        #64748B; /* Slate 500 — >= 4.7:1 WCAG AA on white */
   --text-inverse:      #FFFFFF;
 
   /* Primary Growth Green */

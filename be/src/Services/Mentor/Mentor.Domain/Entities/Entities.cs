@@ -71,3 +71,15 @@ public class MentorNotification : BaseEntity
     public string Message { get; set; } = string.Empty;
     public bool IsRead { get; set; }
 }
+
+public class StudentNotification : BaseEntity
+{
+    public Guid GroupId { get; set; }
+    public Guid? RequestId { get; set; }
+    public string MentorName { get; set; } = string.Empty;
+    public string GroupName { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public bool IsRead { get; set; }
+}

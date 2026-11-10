@@ -56,6 +56,12 @@ public interface IMentorRepository
     Task MarkAllNotificationsReadAsync(Guid mentorId, CancellationToken cancellationToken = default);
     void AddNotification(MentorNotification notification);
 
+    // Student notifications
+    Task<List<StudentNotificationResponse>> GetStudentNotificationsAsync(Guid groupId, int take, CancellationToken cancellationToken = default);
+    Task<StudentNotification?> GetStudentNotificationForUpdateAsync(Guid id, Guid groupId, CancellationToken cancellationToken = default);
+    Task MarkAllStudentNotificationsReadAsync(Guid groupId, CancellationToken cancellationToken = default);
+    void AddStudentNotification(StudentNotification notification);
+
     // Unit of work
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     Task<IMentorTransaction> BeginTransactionAsync(IsolationLevel isolationLevel, CancellationToken cancellationToken = default);
@@ -91,6 +97,11 @@ public interface IMentorService
     Task<List<MentorNotificationResponse>> GetMyNotificationsAsync(Guid actorUserId, CancellationToken cancellationToken = default);
     Task MarkNotificationReadAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default);
     Task MarkAllNotificationsReadAsync(Guid actorUserId, CancellationToken cancellationToken = default);
+
+    // Student notifications
+    Task<List<StudentNotificationResponse>> GetMyGroupNotificationsAsync(RequestActor actor, string? semesterCode, CancellationToken cancellationToken = default);
+    Task MarkMyGroupNotificationReadAsync(RequestActor actor, string? semesterCode, Guid id, CancellationToken cancellationToken = default);
+    Task MarkAllMyGroupNotificationsReadAsync(RequestActor actor, string? semesterCode, CancellationToken cancellationToken = default);
 }
 
 public interface IMentorQuotaService

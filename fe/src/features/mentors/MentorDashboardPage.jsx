@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Bell, Check, ChevronDown, ChevronUp, Clipboard, Layers, Mail,
-  Pencil, Save, Star, Users, X
+  ArrowRight, ChevronDown, ChevronUp, Clipboard,
+  FolderOpen, Inbox, Layers, Mail, MessageSquare, Pencil, Save, Star, Users, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../hooks/useAuth'
@@ -10,12 +10,8 @@ import './MentorPages.css'
 
 const emptyProfile = { fullName: '', department: '', expertise: '', phone: '' }
 
-function displayDate(value) {
-  return new Date(value).toLocaleString('vi-VN', { dateStyle: 'medium', timeStyle: 'short' })
-}
-
 export default function MentorDashboardPage() {
-  const { account, request } = useAuth()
+  const { account, request, updateMentorProfile } = useAuth()
   const [profile, setProfile] = useState(null)
   const [profileDraft, setProfileDraft] = useState(emptyProfile)
   const [groups, setGroups] = useState([])
@@ -25,19 +21,18 @@ export default function MentorDashboardPage() {
   const [loadingGroupId, setLoadingGroupId] = useState(null)
   const [groupDetailErrors, setGroupDetailErrors] = useState({})
   const [requests, setRequests] = useState([])
-  const [notifications, setNotifications] = useState([])
   const [editingProfile, setEditingProfile] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const loadWorkspace = useCallback(async () => {
-    const [mentor, assignedGroups, mentorRequests, alerts] = await Promise.all([
+    const [mentor, assignedGroups, mentorRequests] = await Promise.all([
       request('/api/mentors/me'),
       request('/api/mentors/me/groups'),
-      request('/api/mentor-requests/mine'),
-      request('/api/mentors/me/notifications')
+      request('/api/mentor-requests/mine')
     ])
     setProfile(mentor)
+    updateMentorProfile(mentor)
     setProfileDraft({ fullName: mentor.fullName, department: mentor.department, expertise: mentor.expertise, phone: mentor.phone || '' })
     setGroups(assignedGroups)
     setGroupDrafts(Object.fromEntries(assignedGroups.map((group) => [group.groupId, {
@@ -46,8 +41,7 @@ export default function MentorDashboardPage() {
       feedback: group.feedback
     }])))
     setRequests(mentorRequests)
-    setNotifications(alerts)
-  }, [request])
+  }, [request, updateMentorProfile])
 
   useEffect(() => {
     let active = true
@@ -63,7 +57,7 @@ export default function MentorDashboardPage() {
   }, [loadWorkspace])
 
   const pendingCount = requests.filter((item) => item.status === 0).length
-  const unreadCount = notifications.filter((item) => !item.isRead).length
+  const feedbackNeededCount = groups.filter((group) => !group.feedback?.trim() || group.progress < 100).length
   const quota = profile?.maxQuota || 0
   const assigned = profile?.currentAssigned || 0
   const availableSlots = Math.max(0, quota - assigned)
@@ -79,8 +73,9 @@ export default function MentorDashboardPage() {
         body: JSON.stringify(profileDraft)
       })
       setProfile(updated)
+      updateMentorProfile(updated)
       setEditingProfile(false)
-      toast.success('Đã cập nhật hồ sơ mentor.')
+      toast.success('Đã cập nhật hồ sơ giảng viên.')
     } catch (error) {
       toast.error(error.message || 'Không thể lưu hồ sơ.')
     } finally {
@@ -156,24 +151,6 @@ export default function MentorDashboardPage() {
     }
   }
 
-  const markAllRead = async () => {
-    try {
-      await request('/api/mentors/me/notifications/read-all', { method: 'PUT' })
-      setNotifications((current) => current.map((item) => ({ ...item, isRead: true })))
-    } catch (error) {
-      toast.error(error.message || 'Không thể cập nhật thông báo.')
-    }
-  }
-
-  const markRead = async (id) => {
-    try {
-      await request(`/api/mentors/me/notifications/${id}/read`, { method: 'PUT' })
-      setNotifications((current) => current.map((item) => item.id === id ? { ...item, isRead: true } : item))
-    } catch (error) {
-      toast.error(error.message || 'Không thể cập nhật thông báo.')
-    }
-  }
-
   if (loading) {
     return <div className="card" role="status">Đang tải không gian mentor...</div>
   }
@@ -189,28 +166,87 @@ export default function MentorDashboardPage() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header" style={{ alignItems: 'center' }}>
         <div>
-          <h1 className="page-title">Không gian Mentor</h1>
-          <p className="page-subtitle">Xin chào {profile.fullName || account?.username}. Theo dõi nhóm, liên hệ sinh viên và cập nhật hồ sơ tại đây.</p>
+          <h1 className="page-title">Không gian Giảng viên hướng dẫn</h1>
+          <p className="page-subtitle" style={{ color: 'var(--text-secondary)' }}>
+            Xin chào {profile.fullName || account?.username}. Theo dõi nhóm, phản hồi tiến độ và quản lý hồ sơ tại đây.
+          </p>
         </div>
-        <Link to="/mentor/requests" className="btn btn-primary">
-          <Users size={16} />
-          <span>{pendingCount} yêu cầu đang chờ</span>
+        <Link
+          to="/mentor/requests"
+          className={pendingCount > 0 ? 'btn btn-primary' : 'btn btn-outline btn-sm'}
+          style={pendingCount > 0 ? undefined : { color: 'var(--text-secondary)' }}
+        >
+          <Inbox size={16} />
+          <span>{pendingCount > 0 ? `${pendingCount} yêu cầu chờ duyệt` : 'Xem yêu cầu (0 chờ)'}</span>
+          {pendingCount > 0 && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 20,
+                height: 20,
+                padding: '0 6px',
+                borderRadius: 9999,
+                backgroundColor: '#EA580C',
+                color: '#FFFFFF',
+                fontSize: 11,
+                fontWeight: 700
+              }}
+            >
+              {pendingCount}
+            </span>
+          )}
         </Link>
+      </div>
+
+      <div className="dashboard-metrics-grid mentor-metrics-grid" style={{ marginBottom: 24 }}>
+        <Link
+          to="/mentor/requests"
+          className="metric-card-clean metric-card-link"
+          style={pendingCount > 0 ? { borderColor: '#FDBA74', backgroundColor: '#FFFBEB' } : undefined}
+        >
+          <div
+            className="metric-icon-box"
+            style={pendingCount > 0 ? { backgroundColor: '#FEF3C7', color: '#B45309' } : undefined}
+          >
+            <Inbox size={20} />
+          </div>
+          <div className="metric-info">
+            <span className="metric-label">Yêu cầu chờ duyệt</span>
+            <span className="metric-number">{pendingCount}</span>
+          </div>
+        </Link>
+        <div className="metric-card-clean">
+          <div className="metric-icon-box"><Layers size={20} /></div>
+          <div className="metric-info"><span className="metric-label">Nhóm đang hướng dẫn</span><span className="metric-number">{groups.length}</span></div>
+        </div>
+        <div className="metric-card-clean">
+          <div className="metric-icon-box"><MessageSquare size={20} /></div>
+          <div className="metric-info"><span className="metric-label">Cột mốc cần phản hồi</span><span className="metric-number">{feedbackNeededCount}</span></div>
+        </div>
       </div>
 
       <section className="quota-hero-card">
         <div className="quota-hero-left">
-          <span className="badge badge-teal" style={{ width: 'fit-content' }}>Giảng viên Mentor</span>
+          <div className="quota-hero-top-row">
+            <span className="badge badge-teal">Giảng viên hướng dẫn</span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setEditingProfile((value) => !value)}
+              title="Chỉnh sửa thông tin hồ sơ giảng viên"
+            >
+              {editingProfile ? <X size={13} /> : <Pencil size={13} />}
+              <span>{editingProfile ? 'Đóng' : 'Chỉnh sửa hồ sơ'}</span>
+            </button>
+          </div>
           <h2 className="quota-hero-title">{profile.fullName}</h2>
           <p className="quota-hero-subtitle">{profile.department} · {profile.email}</p>
           {profile.phone && <p className="quota-hero-subtitle">{profile.phone}</p>}
           <p className="quota-hero-subtitle">{profile.expertise || 'Chưa cập nhật chuyên môn.'}</p>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingProfile((value) => !value)}>
-            {editingProfile ? <X size={14} /> : <Pencil size={14} />}
-            <span>{editingProfile ? 'Đóng chỉnh sửa' : 'Cập nhật hồ sơ'}</span>
-          </button>
         </div>
         <div className="quota-gauge-box">
           <div className="quota-gauge-header">
@@ -219,9 +255,18 @@ export default function MentorDashboardPage() {
           </div>
           <div className="quota-gauge-numbers"><span className="highlight">{assigned}</span> / {quota} nhóm</div>
           <div className="quota-progress-track">
-            <div className={`quota-progress-fill ${quotaPercent >= 100 ? 'full' : quotaPercent >= 75 ? 'amber' : 'green'}`} style={{ width: `${quotaPercent}%` }} />
+            <div
+              className={`quota-progress-fill ${quotaPercent >= 100 ? 'full' : quotaPercent >= 75 ? 'amber' : 'green'}`}
+              style={{
+                width: `${quotaPercent}%`,
+                minWidth: assigned > 0 ? 10 : 0
+              }}
+            />
           </div>
-          <div className="quota-gauge-footer"><span>Đang hướng dẫn</span><span>{quotaPercent}% công suất</span></div>
+          <div className="quota-gauge-footer">
+            <span>Đang hướng dẫn {assigned}/{quota} nhóm</span>
+            <span>{quotaPercent}% công suất</span>
+          </div>
         </div>
       </section>
 
@@ -248,27 +293,22 @@ export default function MentorDashboardPage() {
         </form>
       )}
 
-      <div className="dashboard-metrics-grid" style={{ marginBottom: 24 }}>
-        <div className="metric-card-clean">
-          <div className="metric-icon-box"><Layers size={20} /></div>
-          <div className="metric-info"><span className="metric-label">Nhóm đang hướng dẫn</span><span className="metric-number">{groups.length}</span></div>
-        </div>
-        <div className="metric-card-clean">
-          <div className="metric-icon-box"><Mail size={20} /></div>
-          <div className="metric-info"><span className="metric-label">Nhóm có email liên hệ</span><span className="metric-number">{groups.filter((group) => teamEmails(group.groupId).length > 0).length}</span></div>
-        </div>
-        <div className="metric-card-clean">
-          <div className="metric-icon-box"><Bell size={20} /></div>
-          <div className="metric-info"><span className="metric-label">Thông báo chưa đọc</span><span className="metric-number">{unreadCount}</span></div>
-        </div>
-      </div>
-
       <div className="mentor-workspace-grid">
         <section className="card">
           <div className="mentor-section-heading">
-            <div><h2>Nhóm hướng dẫn</h2><p>Cập nhật mốc hiện tại, phần trăm tiến độ và nhận xét.</p></div>
+            <div><h2>Nhóm hướng dẫn</h2><p>Cập nhật mốc hiện tại, phần trăm tiến độ và nhận xét cho từng nhóm.</p></div>
           </div>
-          {groups.length === 0 ? <p className="mentor-empty-state">Chưa có nhóm được phân công.</p> : (
+          {groups.length === 0 ? (
+            <div className="mentor-empty-state">
+              <div className="mentor-empty-icon"><FolderOpen size={22} /></div>
+              <strong>Chưa có nhóm được phân công</strong>
+              <span>Khi bạn chấp thuận lời mời từ các nhóm sinh viên, danh sách tiến độ và thành viên sẽ xuất hiện tại đây.</span>
+              <Link to="/mentor/requests" className="btn btn-outline btn-sm" style={{ marginTop: 4 }}>
+                <span>Duyệt nhóm & Đề tài</span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          ) : (
             <div className="mentor-workspace-list">
               {groups.map((group) => {
                 const draft = groupDrafts[group.groupId] || group
@@ -388,22 +428,17 @@ export default function MentorDashboardPage() {
                   </article>
                 )
               })}
-              {groups.length === 0 && <p className="mentor-empty-state">Chưa có nhóm được phân công.</p>}
-            </div>
-          </section>
-
-          <section className="card">
-            <div className="mentor-section-heading">
-              <div><h2>Thông báo</h2><p>{unreadCount} thông báo chưa đọc</p></div>
-              {unreadCount > 0 && <button className="btn btn-ghost btn-sm" onClick={markAllRead} type="button"><Check size={14} /> Đánh dấu đã đọc</button>}
-            </div>
-            <div className="mentor-workspace-list">
-              {notifications.slice(0, 8).map((notification) => (
-                <button type="button" className={`mentor-notification ${notification.isRead ? '' : 'unread'}`} key={notification.id} onClick={() => !notification.isRead && markRead(notification.id)}>
-                  <strong>{notification.title}</strong><span>{notification.message}</span><small>{displayDate(notification.createdAt)}</small>
-                </button>
-              ))}
-              {notifications.length === 0 && <p className="mentor-empty-state">Bạn chưa có thông báo.</p>}
+              {groups.length === 0 && (
+                <div className="mentor-empty-state">
+                  <div className="mentor-empty-icon"><Mail size={20} /></div>
+                  <strong>Chưa có danh sách email liên hệ</strong>
+                  <span>Sau khi nhận hướng dẫn nhóm, bạn có thể mở Gmail gửi cả nhóm hoặc sao chép email nhanh tại đây.</span>
+                  <Link to="/mentor/requests" className="btn btn-outline btn-sm" style={{ marginTop: 4 }}>
+                    <span>Xem lời mời hướng dẫn</span>
+                    <ArrowRight size={14} />
+                  </Link>
+                </div>
+              )}
             </div>
           </section>
         </div>

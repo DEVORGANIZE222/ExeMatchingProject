@@ -14,13 +14,56 @@ public sealed class IdentitySemesterClient(HttpClient client, IRequestAccessToke
     public Task<EnrollmentContext> CurrentEnrollmentAsync(string semesterCode, CancellationToken ct = default)
         => GetAsync<EnrollmentContext>($"api/internal/students/current?semesterCode={Uri.EscapeDataString(semesterCode)}", ct);
 
+    public Task<EnrollmentContext> LookupEnrollmentAsync(string semesterCode, string identifier, CancellationToken ct = default)
+        => GetAsync<EnrollmentContext>($"api/internal/students/lookup?semesterCode={Uri.EscapeDataString(semesterCode)}&identifier={Uri.EscapeDataString(identifier)}", ct);
+
+    public async Task<IReadOnlyList<EnrollmentContext>> SearchEnrollmentsAsync(string semesterCode, string query, CancellationToken ct = default)
+        => await GetAsync<List<EnrollmentContext>>($"api/internal/students/search?semesterCode={Uri.EscapeDataString(semesterCode)}&q={Uri.EscapeDataString(query)}", ct);
+
     public Task<SemesterWorkflowContext> WorkflowAsync(string semesterCode, CancellationToken ct = default)
         => GetAsync<SemesterWorkflowContext>($"api/internal/semesters/{Uri.EscapeDataString(semesterCode)}/workflow", ct);
 
     public async Task<IReadOnlyList<EnrollmentContext>> UnmatchedEnrollmentsAsync(string semesterCode, CancellationToken ct = default)
     {
-        var page = await GetAsync<IdentityPage<IdentityStudent>>($"api/students?semesterCode={Uri.EscapeDataString(semesterCode)}&hasGroup=false&page=1&pageSize=2000", ct);
-        return page.Items.Select(x => new EnrollmentContext(x.Id, x.UserId, x.StudentCode, x.FullName, x.SemesterCode, x.HasGroup)).ToList();
+        var all = new List<EnrollmentContext>();
+        var pageNumber = 1;
+        const int pageSize = 2000;
+        while (true)
+        {
+            var page = await GetAsync<IdentityPage<IdentityStudent>>($"api/students?semesterCode={Uri.EscapeDataString(semesterCode)}&hasGroup=false&page={pageNumber}&pageSize={pageSize}", ct);
+            all.AddRange(page.Items.Select(x => new EnrollmentContext(
+                x.Id, x.UserId, x.StudentCode, x.FullName, x.SemesterCode, x.HasGroup,
+                x.Email ?? string.Empty, x.Major ?? string.Empty, x.StrengthRoles, x.AvatarUrl)));
+            if (page.Items.Count == 0 || all.Count >= page.TotalCount) break;
+            pageNumber++;
+        }
+        return all;
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<string>>> StudentStrengthRolesAsync(
+        IReadOnlyCollection<Guid> studentIds, CancellationToken ct = default)
+    {
+        if (studentIds.Count == 0)
+            return new Dictionary<Guid, IReadOnlyList<string>>();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/internal/students/roles")
+        {
+            Content = JsonContent.Create(studentIds)
+        };
+        if (!string.IsNullOrWhiteSpace(accessToken.Value))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.Value);
+
+        using var response = await client.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+            return new Dictionary<Guid, IReadOnlyList<string>>();
+
+        var envelope = await response.Content.ReadFromJsonAsync<ApiEnvelope<Dictionary<Guid, List<string>>>>(cancellationToken: ct);
+        if (envelope?.Data is null)
+            return new Dictionary<Guid, IReadOnlyList<string>>();
+
+        return envelope.Data.ToDictionary(
+            kvp => kvp.Key,
+            kvp => (IReadOnlyList<string>)kvp.Value);
     }
 
     private async Task<T> GetAsync<T>(string path, CancellationToken ct) where T : class
@@ -30,11 +73,20 @@ public sealed class IdentitySemesterClient(HttpClient client, IRequestAccessToke
         using var response = await client.SendAsync(request, ct);
         var envelope = await response.Content.ReadFromJsonAsync<ApiEnvelope<T>>(cancellationToken: ct);
         if (!response.IsSuccessStatusCode || envelope?.Data is null)
-            throw new GroupException(response.StatusCode == HttpStatusCode.Forbidden ? 403 : 409, envelope?.Message ?? "IdentitySemester context is unavailable.");
+        {
+            var statusCode = response.StatusCode switch
+            {
+                HttpStatusCode.Forbidden => 403,
+                HttpStatusCode.NotFound => 404,
+                HttpStatusCode.BadRequest => 400,
+                _ => 409
+            };
+            throw new GroupException(statusCode, envelope?.Message ?? "IdentitySemester context is unavailable.");
+        }
         return envelope.Data;
     }
 
     private sealed record ApiEnvelope<T>(bool Success, string? Message, T? Data);
     private sealed record IdentityPage<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
-    private sealed record IdentityStudent(Guid Id, Guid UserId, string StudentCode, string FullName, string SemesterCode, bool HasGroup);
+    private sealed record IdentityStudent(Guid Id, Guid UserId, string StudentCode, string FullName, string SemesterCode, bool HasGroup, string? Email = null, string? Major = null, IReadOnlyList<string>? StrengthRoles = null, string? AvatarUrl = null);
 }

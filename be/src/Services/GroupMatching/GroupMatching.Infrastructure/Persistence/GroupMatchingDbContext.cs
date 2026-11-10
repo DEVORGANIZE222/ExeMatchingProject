@@ -34,6 +34,9 @@ public class GroupMatchingDbContext(DbContextOptions<GroupMatchingDbContext> opt
             entity.HasIndex(x => x.StudentId).IsUnique();
             entity.Property(x => x.StudentCode).HasMaxLength(30).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(254);
+            entity.Property(x => x.Major).HasMaxLength(100);
+            entity.Property(x => x.StrengthRoles).HasMaxLength(200);
         });
         modelBuilder.Entity<LeaderVote>(entity => entity.HasIndex(x => new { x.GroupId, x.VoterStudentId }).IsUnique());
         modelBuilder.Entity<GroupEventOutbox>(entity =>

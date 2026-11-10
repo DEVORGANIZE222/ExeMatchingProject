@@ -8,11 +8,14 @@ public interface IGroupRepository
     Task<Group?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, CancellationToken ct = default);
     Task<Group?> GetStudentGroupAsync(Guid studentId, string semesterCode, CancellationToken ct = default);
+    Task<HashSet<Guid>> GetSemesterMemberIdsAsync(string semesterCode, CancellationToken ct = default);
     Task<List<Group>> OpenGroupsAsync(string semesterCode, CancellationToken ct = default);
+    Task<int> CountLockedGroupsAsync(string semesterCode, CancellationToken ct = default);
     void Add(Group group);
     void AddMember(GroupMember member);
     void AddVote(LeaderVote vote);
     void Remove(Group group);
+    void RemoveRange(IEnumerable<Group> groups);
     void AddOutbox(GroupEventOutbox item);
     Task SaveAsync(CancellationToken ct = default);
     Task<IGroupTransaction> BeginSerializableTransactionAsync(CancellationToken ct = default);
@@ -26,24 +29,35 @@ public interface IGroupTransaction : IAsyncDisposable
 public interface IIdentitySemesterClient
 {
     Task<EnrollmentContext> CurrentEnrollmentAsync(string semesterCode, CancellationToken ct = default);
+    Task<EnrollmentContext> LookupEnrollmentAsync(string semesterCode, string identifier, CancellationToken ct = default);
+    Task<IReadOnlyList<EnrollmentContext>> SearchEnrollmentsAsync(string semesterCode, string query, CancellationToken ct = default);
     Task<SemesterWorkflowContext> WorkflowAsync(string semesterCode, CancellationToken ct = default);
     Task<IReadOnlyList<EnrollmentContext>> UnmatchedEnrollmentsAsync(string semesterCode, CancellationToken ct = default);
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<string>>> StudentStrengthRolesAsync(
+        IReadOnlyCollection<Guid> studentIds, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<string>>>(new Dictionary<Guid, IReadOnlyList<string>>());
 }
 
 public interface IGroupService
 {
     Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<GroupDto?> GetMyGroupAsync(string semesterCode, Guid actorUserId, CancellationToken ct = default);
     Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> SeedDemoMembersAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
-    Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false);
     Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<BulkDeleteGroupsResult> DeleteUnlockedBySemesterAsync(string semesterCode, CancellationToken ct = default);
     Task<GroupDto> JoinAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> InviteMemberAsync(Guid id, InviteMemberRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task<IReadOnlyList<EnrollmentContext>> SearchInviteCandidatesAsync(Guid id, string query, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task LeaveAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task RemoveMemberAsync(Guid id, Guid studentId, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default);
     Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default, bool allowDemoVotes = false);
-    Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false);
+    Task<GroupDto> UnlockAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> RegisterTopicAsync(Guid id, RegisterTopicRequest request, Guid actorUserId, CancellationToken ct = default);
 }
 

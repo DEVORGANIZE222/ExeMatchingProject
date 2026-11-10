@@ -1,28 +1,155 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   GraduationCap, Layers, Users, Plus, Search,
   CheckCircle2, X, Crown,
-  LogOut, Lock, Shuffle,
-  Trash2, Edit3, UserMinus, Calendar, AlertCircle
+  LogOut, Lock, Unlock, Shuffle,
+  Trash2, Edit3, UserMinus, UserPlus, Sparkles, Calendar, AlertCircle, MoreVertical
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 import { useAuth } from '../../hooks/useAuth'
+import { TEAM_ROLE_OPTIONS, getTeamRoleLabel } from '../../config/teamRoles'
+import StudentCoreModal from '../../components/StudentCoreModal'
+import ConfirmModal from '../../components/ConfirmModal'
+import { fetchAllGroupsBySemester } from '../../utils/groupsApi'
 
-const TEAM_ROLES = ['Frontend', 'Backend', 'Mobile', 'UIUX', 'BusinessAnalysis', 'QualityAssurance', 'DataAI']
+const GROUPS_PER_PAGE = 24
+
+function MemberAvatar({ src, name, size = 28 }) {
+  const [failedSrc, setFailedSrc] = useState('')
+  const validSrc = src && src !== failedSrc ? src : ''
+  const fontSize = size <= 20 ? 10 : 11
+
+  return (
+    <span
+      className="avatar avatar-sm avatar-primary"
+      style={{ width: size, height: size, fontSize, overflow: 'hidden', flexShrink: 0 }}
+    >
+      {validSrc ? (
+        <img
+          key={validSrc}
+          src={validSrc}
+          alt={name || 'Avatar'}
+          referrerPolicy="no-referrer"
+          onError={() => setFailedSrc(validSrc)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+        />
+      ) : (
+        (name || 'U').charAt(0).toUpperCase()
+      )}
+    </span>
+  )
+}
+
 const normalizeSearchText = (value) => value
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .toLocaleLowerCase()
   .replace(/đ/g, 'd')
 
+function analyzeGroupRoles(group, myRoles, isStudent, currentStudentId = null) {
+  const memberRoleCounts = new Map()
+  for (const member of group.members || []) {
+    const memberRoles = member.studentId === currentStudentId && isStudent
+      ? myRoles
+      : (member.strengthRoles || [])
+    const uniqueRoles = new Set(memberRoles)
+    for (const code of uniqueRoles) {
+      memberRoleCounts.set(code, (memberRoleCounts.get(code) || 0) + 1)
+    }
+  }
+
+  const coveredEntries = TEAM_ROLE_OPTIONS
+    .filter((opt) => memberRoleCounts.has(opt.code))
+    .map((opt) => ({
+      code: opt.code,
+      label: opt.label,
+      count: memberRoleCounts.get(opt.code)
+    }))
+
+  const coveredSet = new Set(coveredEntries.map((item) => item.code))
+  const missingStandardRoles = TEAM_ROLE_OPTIONS.filter((opt) => !coveredSet.has(opt.code))
+  const explicitNeeds = group.recruitmentNeeds || []
+  const openSlots = Math.max(0, (group.maxMembers || 5) - (group.members?.length || 0))
+  const isRecruiting = !group.isLocked && openSlots > 0
+
+  let fit = null
+  if (isStudent) {
+    if (!myRoles || myRoles.length === 0) {
+      fit = {
+        status: 'no-core',
+        label: 'Chưa chọn Core',
+        detail: 'Chọn Core thế mạnh của bạn để biết nhóm này có phù hợp không.',
+        matchedRoles: []
+      }
+    } else if (!isRecruiting) {
+      fit = {
+        status: 'closed',
+        label: group.isLocked ? 'Đã khóa nhóm' : 'Đã đủ thành viên',
+        detail: group.isLocked
+          ? 'Nhóm đã khóa danh sách thành viên.'
+          : 'Nhóm đã đủ 5/5 thành viên.',
+        matchedRoles: []
+      }
+    } else if (explicitNeeds.length > 0) {
+      const matchedRoles = explicitNeeds
+        .filter((need) => myRoles.includes(need.roleCode))
+        .map((need) => need.roleCode)
+      if (matchedRoles.length > 0) {
+        fit = {
+          status: 'match',
+          label: 'Phù hợp',
+          detail: `Bạn khớp ${matchedRoles.length} vị trí nhóm đang tuyển: ${matchedRoles.map(getTeamRoleLabel).join(', ')}.`,
+          matchedRoles
+        }
+      } else {
+        fit = {
+          status: 'mismatch',
+          label: 'Chưa khớp role cần tuyển',
+          detail: `Nhóm đang ưu tiên tuyển: ${explicitNeeds.map((n) => getTeamRoleLabel(n.roleCode)).join(', ')}.`,
+          matchedRoles: []
+        }
+      }
+    } else {
+      const complementary = myRoles.filter((code) => !coveredSet.has(code))
+      if (complementary.length > 0) {
+        fit = {
+          status: 'complement',
+          label: 'Bù trừ tốt',
+          detail: `Nhóm còn ${openSlots} chỗ và chưa có role: ${complementary.map(getTeamRoleLabel).join(', ')}.`,
+          matchedRoles: complementary
+        }
+      } else {
+        fit = {
+          status: 'available',
+          label: 'Có thể gia nhập',
+          detail: `Nhóm còn ${openSlots} chỗ trống (nhận mọi role).`,
+          matchedRoles: myRoles
+        }
+      }
+    }
+  }
+
+  return {
+    coveredEntries,
+    coveredSet,
+    missingStandardRoles,
+    explicitNeeds,
+    openSlots,
+    isRecruiting,
+    fit
+  }
+}
+
 export default function GroupsPage() {
   const { account, request, isAdmin, isMentor, isStudent } = useAuth()
   const [groups, setGroups] = useState([])
+  const [myGroup, setMyGroup] = useState(null)
   const [semesters, setSemesters] = useState([])
   const [semesterCode, setSemesterCode] = useState('')
   const [filter, setFilter] = useState('all') // 'all' | 'recruiting' | 'full'
   const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
   const [busy, setBusy] = useState(false)
   const [enrollmentError, setEnrollmentError] = useState(null)
   const [demoSeedEnabled, setDemoSeedEnabled] = useState(false)
@@ -31,6 +158,26 @@ export default function GroupsPage() {
   // Modals state
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCoreModal, setShowCoreModal] = useState(false)
+  const [showRandomConfirm, setShowRandomConfirm] = useState(false)
+  const [confirmState, setConfirmState] = useState(null)
+  const [showAdminMenu, setShowAdminMenu] = useState(false)
+  const adminMenuRef = useRef(null)
+
+  useEffect(() => {
+    if (!showAdminMenu) return
+    const handleOutsideClick = (event) => {
+      if (adminMenuRef.current && !adminMenuRef.current.contains(event.target)) {
+        setShowAdminMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [showAdminMenu])
+  const [inviteIdentifier, setInviteIdentifier] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteCandidates, setInviteCandidates] = useState([])
+  const [searchingCandidates, setSearchingCandidates] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupTopic, setNewGroupTopic] = useState('')
   const [newRecruitmentNeeds, setNewRecruitmentNeeds] = useState([])
@@ -50,6 +197,8 @@ export default function GroupsPage() {
   const [editGroupName, setEditGroupName] = useState('')
   const [editGroupTopic, setEditGroupTopic] = useState('')
   const [editGroupDescription, setEditGroupDescription] = useState('')
+  const [editRecruitmentNeeds, setEditRecruitmentNeeds] = useState([])
+  const [editNeedsDirty, setEditNeedsDirty] = useState(false)
 
   // Student's fixed semester from Admin roster
   const studentSemesterCode = account?.student?.semesterCode
@@ -64,6 +213,26 @@ export default function GroupsPage() {
     const leader = group.members?.find((member) => member.role === 1 || member.role === 'Leader')
     const memberCount = group.memberCount ?? group.members?.length ?? 0
     const isLocked = group.status === 2 || group.status === 'Locked'
+    const currentStudentIdForMap = account?.student?.id
+    const currentStudentRoles = account?.student?.strengthRoles
+    const mappedMembers = (group.members || []).map((member) => {
+      const resolvedRoles = member.studentId === currentStudentIdForMap
+        ? (currentStudentRoles ?? member.strengthRoles ?? [])
+        : (member.strengthRoles ?? [])
+      return {
+        ...member,
+        name: member.fullName,
+        isDemo: Boolean(member.isDemo),
+        isLeader: member.role === 1 || member.role === 'Leader',
+        role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
+        major: member.major || '',
+        avatarUrl: member.avatarUrl || '',
+        strengthRoles: Array.isArray(resolvedRoles) ? resolvedRoles : []
+      }
+    })
+    const firstMemberId = group.createdByStudentId && mappedMembers.some((m) => m.studentId === group.createdByStudentId)
+      ? group.createdByStudentId
+      : mappedMembers[0]?.studentId || null
 
     return {
       ...group,
@@ -73,14 +242,8 @@ export default function GroupsPage() {
       recruitmentNeeds: group.recruitmentNeeds || [],
       leader: leader?.fullName || 'Chưa bầu trưởng nhóm',
       isLocked,
-      members: (group.members || []).map((member) => ({
-        ...member,
-        name: member.fullName,
-        isDemo: Boolean(member.isDemo),
-        isLeader: member.role === 1 || member.role === 'Leader',
-        role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
-        major: member.studentCode
-      })),
+      firstMemberId,
+      members: mappedMembers,
       maxMembers: 5,
       statusText: isLocked
         ? 'Đã khóa nhóm'
@@ -116,36 +279,58 @@ export default function GroupsPage() {
     fetchSemesters()
   }, [account, isAdmin, isMentor, request, semesterCode, studentSemesterCode])
 
-  // 2. Load Groups by Semester
+  // 2. Load Groups by Semester (fetch all pages so >100 groups are never truncated)
   const loadGroups = useCallback(async () => {
     const targetCode = isStudent ? studentSemesterCode : semesterCode
     if (!targetCode) {
       setGroups([])
+      setMyGroup(null)
       return
     }
 
     setBusy(true)
     setEnrollmentError(null)
     try {
-      const result = await request(`/api/groups?semesterCode=${encodeURIComponent(targetCode)}&page=1&pageSize=100`)
-      const mapped = (result.items || []).map(mapGroup)
+      const [{ items: rawItems }, myRaw] = await Promise.all([
+        fetchAllGroupsBySemester(request, targetCode),
+        isStudent
+          ? request(`/api/groups/my?semesterCode=${encodeURIComponent(targetCode)}`).catch(() => null)
+          : Promise.resolve(null)
+      ])
+
+      const mappedMy = myRaw ? mapGroup(myRaw) : null
+      setMyGroup(mappedMy)
+
+      let mapped = rawItems.map(mapGroup)
+      if (mappedMy && !mapped.some((g) => g.id === mappedMy.id)) {
+        mapped = [mappedMy, ...mapped]
+      }
+      const studentId = account?.student?.id
+      mapped.sort((a, b) => {
+        const aIsMine = Boolean(mappedMy?.id === a.id || (studentId && a.members.some((m) => m.studentId === studentId)))
+        const bIsMine = Boolean(mappedMy?.id === b.id || (studentId && b.members.some((m) => m.studentId === studentId)))
+        if (aIsMine !== bIsMine) return aIsMine ? -1 : 1
+        return 0
+      })
+
       setGroups(mapped)
 
       // Refresh currently selected group modal if open
       setSelectedGroup((current) => current
-        ? mapped.find((group) => group.id === current.id) || current
+        ? mapped.find((group) => group.id === current.id) || (mappedMy?.id === current.id ? mappedMy : current)
         : null)
     } catch (error) {
       if (error.message?.includes('No enrollment') || error.status === 409 || error.status === 404) {
         setEnrollmentError('Tài khoản của bạn chưa có danh sách đăng ký học phần (Enrollment) trong học kỳ này.')
         setGroups([])
+        setMyGroup(null)
       } else {
         toast.error(error.message || 'Không thể tải danh sách nhóm.')
       }
     } finally {
       setBusy(false)
     }
-  }, [isStudent, mapGroup, request, semesterCode, studentSemesterCode])
+  }, [account, isStudent, mapGroup, request, semesterCode, studentSemesterCode])
 
   useEffect(() => {
     if (!isAdmin && !isStudent) return
@@ -155,25 +340,57 @@ export default function GroupsPage() {
       .catch((error) => toast.error(error.message || 'Không thể kiểm tra chế độ demo.'))
   }, [isAdmin, isStudent, request])
 
-  const handleSeedDemoMembers = async (group) => {
+  useEffect(() => {
+    const q = inviteIdentifier.trim()
+    if (!selectedGroup || selectedGroup.isLocked || selectedGroup.members.length >= 5 || q.length < 2) {
+      return
+    }
+    let active = true
+    const timer = setTimeout(() => {
+      setSearchingCandidates(true)
+      request(`/api/groups/${selectedGroup.id}/invite-candidates?q=${encodeURIComponent(q)}`)
+        .then((list) => {
+          if (active) setInviteCandidates(Array.isArray(list) ? list : [])
+        })
+        .catch(() => {
+          if (active) setInviteCandidates([])
+        })
+        .finally(() => {
+          if (active) setSearchingCandidates(false)
+        })
+    }, 250)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [inviteIdentifier, request, selectedGroup])
+
+  const handleSeedDemoMembers = (group) => {
     const emptySlots = 5 - group.members.length
     if (emptySlots <= 0) {
       toast.error('Nhóm đã đủ 5 thành viên.')
       return
     }
-    if (!window.confirm(`Thêm ${emptySlots} thành viên demo vào nhóm "${group.name}"? Khi bỏ phiếu, các thành viên demo sẽ vote theo ứng viên bạn chọn.`)) return
-
-    setSeedingDemoMembers(true)
-    try {
-      const updatedGroup = await request(`/api/groups/${group.id}/demo-members`, { method: 'POST' })
-      setSelectedGroup(mapGroup(updatedGroup))
-      toast.success(`Đã thêm ${emptySlots} thành viên demo.`)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể seed thành viên demo.')
-    } finally {
-      setSeedingDemoMembers(false)
-    }
+    setConfirmState({
+      title: 'Seed thành viên demo',
+      message: `Thêm ${emptySlots} thành viên demo vào nhóm "${group.name}"? Khi bỏ phiếu, các thành viên demo sẽ vote theo ứng viên bạn chọn.`,
+      confirmLabel: `Seed +${emptySlots} thành viên`,
+      tone: 'primary',
+      onConfirm: async () => {
+        setSeedingDemoMembers(true)
+        try {
+          const updatedGroup = await request(`/api/groups/${group.id}/demo-members`, { method: 'POST' })
+          setSelectedGroup(mapGroup(updatedGroup))
+          toast.success(`Đã thêm ${emptySlots} thành viên demo.`)
+          setConfirmState(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể seed thành viên demo.')
+        } finally {
+          setSeedingDemoMembers(false)
+        }
+      }
+    })
   }
 
   const openMentorRequest = async (group) => {
@@ -187,7 +404,7 @@ export default function GroupsPage() {
       setMentorRequestMessage('')
       setSelectedGroup(null)
     } catch (error) {
-      toast.error(error.message || 'Không thể tải danh sách mentor.')
+      toast.error(error.message || 'Không thể tải danh sách mentor.', { id: 'mentor-rec-error' })
     } finally {
       setLoadingMentors(false)
     }
@@ -195,6 +412,8 @@ export default function GroupsPage() {
 
   const openGroupDetails = async (group) => {
     setSelectedGroup(group)
+    setInviteIdentifier('')
+    setInviteCandidates([])
     setMentorStatus(null)
     setMentorStatusError('')
     if (!isStudent || !group.isCurrentLeader || !group.canRequestMentor) return
@@ -250,11 +469,17 @@ export default function GroupsPage() {
     if (!targetSemesterCode) {
       toast.error(isStudent
         ? 'Tài khoản chưa được xếp vào học kỳ. Vui lòng liên hệ Admin để được thêm vào danh sách sinh viên.'
-        : 'Chưa có học kỳ áp dụng. Vui lòng tạo hoặc mở một học kỳ trước.')
+        : 'Chưa có học kỳ áp dụng. Vui lòng tạo hoặc mở một học kỳ trước.', { id: 'group-create-error' })
       return
     }
-    if (!newGroupName.trim()) {
-      toast.error('Vui lòng nhập tên nhóm.')
+    const cleanName = newGroupName.trim()
+    const cleanDesc = newGroupTopic.trim() || cleanName
+    if (cleanName.length < 2) {
+      toast.error('Tên nhóm phải có ít nhất 2 ký tự.', { id: 'group-create-error' })
+      return
+    }
+    if (cleanDesc.length < 2) {
+      toast.error('Mô tả tóm tắt đề tài phải có ít nhất 2 ký tự.', { id: 'group-create-error' })
       return
     }
     try {
@@ -263,21 +488,21 @@ export default function GroupsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          groupName: newGroupName.trim(),
+          groupName: cleanName,
           semesterCode: targetSemesterCode,
-          projectDescription: newGroupTopic.trim() || newGroupName.trim(),
+          projectDescription: cleanDesc,
           recruitmentNeeds: newRecruitmentNeeds.map((roleCode) => ({ roleCode, slots: 1 }))
         })
       })
 
-      toast.success(`Đã khởi tạo nhóm "${newGroupName}".`)
+      toast.success(`Đã khởi tạo nhóm "${cleanName}".`)
       setShowCreateModal(false)
       setNewGroupName('')
       setNewGroupTopic('')
       setNewRecruitmentNeeds([])
       await loadGroups()
     } catch (error) {
-      toast.error(error.message || 'Không thể tạo nhóm.')
+      toast.error(error.message || 'Không thể tạo nhóm.', { id: 'group-create-error' })
     } finally {
       setBusy(false)
     }
@@ -299,19 +524,27 @@ export default function GroupsPage() {
   }
 
   // 3. Leave Group (Self)
-  const handleLeaveGroup = async (group) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn rời nhóm "${group.name}"?`)) return
-    try {
-      setBusy(true)
-      await request(`/api/groups/${group.id}/members/me`, { method: 'DELETE' })
-      toast.success('Đã rời khỏi nhóm thành công.')
-      setSelectedGroup(null)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể rời nhóm.')
-    } finally {
-      setBusy(false)
-    }
+  const handleLeaveGroup = (group) => {
+    setConfirmState({
+      title: 'Rời khỏi nhóm',
+      message: `Bạn có chắc chắn muốn rời nhóm "${group.name}"?`,
+      confirmLabel: 'Rời nhóm',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/groups/${group.id}/members/me`, { method: 'DELETE' })
+          toast.success('Đã rời khỏi nhóm thành công.')
+          setConfirmState(null)
+          setSelectedGroup(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể rời nhóm.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
   // 4. Vote Leader
@@ -336,44 +569,83 @@ export default function GroupsPage() {
   }
 
   // 5. Lock Group
-  const handleLockGroup = async (group) => {
-    if (!window.confirm(`Xác nhận khóa nhóm "${group.name}"? Sau khi khóa sẽ không thể thêm/rời thành viên.`)) return
-    try {
-      setBusy(true)
-      await request(`/api/groups/${group.id}/lock`, { method: 'POST' })
-      toast.success(`Đã khóa danh sách nhóm "${group.name}" thành công!`)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể khóa nhóm.')
-    } finally {
-      setBusy(false)
-    }
+  const handleLockGroup = (group) => {
+    setConfirmState({
+      title: 'Khóa nhóm khởi nghiệp',
+      message: `Xác nhận khóa nhóm "${group.name}"? Sau khi khóa sẽ không thể thêm hoặc rời thành viên (có thể gỡ khóa lại trước hạn đề tài).`,
+      confirmLabel: 'Khóa nhóm',
+      tone: 'warning',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          const updated = await request(`/api/groups/${group.id}/lock`, { method: 'POST' })
+          setSelectedGroup(mapGroup(updated))
+          toast.success(`Đã khóa danh sách nhóm "${group.name}" thành công!`)
+          setConfirmState(null)
+          await loadGroups()
+        } catch (error) {
+          setConfirmState(null)
+          toast.error(error.message || 'Không thể khóa nhóm.', { id: 'group-action-error' })
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
-  // 6. Update group details or register its official topic after locking.
+  // 5b. Unlock Group (Leader or Admin)
+  const handleUnlockGroup = (group) => {
+    setConfirmState({
+      title: 'Gỡ khóa nhóm',
+      message: `Xác nhận gỡ khóa nhóm "${group.name}" để mở lại quyền thêm hoặc rời thành viên?`,
+      confirmLabel: 'Gỡ khóa nhóm',
+      tone: 'warning',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          const updated = await request(`/api/groups/${group.id}/unlock`, { method: 'POST' })
+          setSelectedGroup(mapGroup(updated))
+          toast.success(`Đã gỡ khóa nhóm "${group.name}".`)
+          setConfirmState(null)
+          await loadGroups()
+        } catch (error) {
+          setConfirmState(null)
+          toast.error(error.message || 'Không thể gỡ khóa nhóm.', { id: 'group-action-error' })
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
+  }
+
+  // 6. Update group name, topic, project description, and open recruitment needs.
   const handleSaveEdit = async (e) => {
     e.preventDefault()
     if (!selectedGroup) return
+    const cleanTopic = editGroupTopic.trim()
+    if (cleanTopic.length > 0 && cleanTopic.length < 3) {
+      toast.error('Tên đề tài phải có ít nhất 3 ký tự.')
+      return
+    }
+    const remainingSlots = Math.max(0, 5 - (selectedGroup.members?.length || 0))
+    const maxNeeds = Math.min(4, remainingSlots)
+    const recruitmentNeeds = !selectedGroup.isLocked && editNeedsDirty
+      ? editRecruitmentNeeds.slice(0, maxNeeds).map((roleCode) => ({ roleCode, slots: 1 }))
+      : null
     try {
       setBusy(true)
-      if (selectedGroup.isLocked) {
-        await request(`/api/groups/${selectedGroup.id}/topic`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topicTitle: editGroupTopic.trim() })
+      const updated = await request(`/api/groups/${selectedGroup.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupName: editGroupName.trim(),
+          projectDescription: editGroupDescription.trim(),
+          topicTitle: cleanTopic,
+          recruitmentNeeds
         })
-      } else {
-        await request(`/api/groups/${selectedGroup.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            groupName: editGroupName.trim(),
-            projectDescription: editGroupDescription.trim(),
-            recruitmentNeeds: selectedGroup.recruitmentNeeds
-          })
-        })
-      }
-      toast.success(selectedGroup.isLocked ? 'Đã đăng ký đề tài cho nhóm.' : 'Đã cập nhật thông tin nhóm.')
+      })
+      setSelectedGroup(mapGroup(updated))
+      toast.success('Đã cập nhật thông tin nhóm thành công.')
       setEditGroupModal(false)
       await loadGroups()
     } catch (error) {
@@ -383,47 +655,131 @@ export default function GroupsPage() {
     }
   }
 
-  // 7. Delete Group
-  const handleDeleteGroup = async (group) => {
-    if (!window.confirm(`CẢNH BÁO: Bạn có chắc chắn muốn xóa nhóm "${group.name}" không? Thao tác này không thể hoàn tác.`)) return
+  // 6b. Invite / Add friend to group by Email or StudentCode
+  const inviteStudentByIdentifier = async (rawIdentifier) => {
+    const clean = (rawIdentifier || '').trim()
+    if (!selectedGroup || !clean) return
     try {
-      setBusy(true)
-      await request(`/api/groups/${group.id}`, { method: 'DELETE' })
-      toast.success(`Đã xóa nhóm "${group.name}".`)
-      setSelectedGroup(null)
+      setInviting(true)
+      const updatedGroup = await request(`/api/groups/${selectedGroup.id}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: clean })
+      })
+      setSelectedGroup(mapGroup(updatedGroup))
+      setInviteIdentifier('')
+      setInviteCandidates([])
+      toast.success('Đã thêm bạn vào nhóm thành công!')
       await loadGroups()
     } catch (error) {
-      toast.error(error.message || 'Không thể xóa nhóm.')
+      toast.error(error.message || 'Không thể mời sinh viên vào nhóm.')
     } finally {
-      setBusy(false)
+      setInviting(false)
     }
   }
 
-  // 8. Kick Member (Admin only)
-  const handleKickMember = async (groupId, studentId, studentName) => {
-    if (!window.confirm(`Xác nhận xóa sinh viên "${studentName}" khỏi nhóm?`)) return
-    try {
-      setBusy(true)
-      await request(`/api/groups/${groupId}/members/${studentId}`, { method: 'DELETE' })
-      toast.success(`Đã xóa ${studentName} khỏi nhóm.`)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể xóa thành viên.')
-    } finally {
-      setBusy(false)
-    }
+  const handleInviteMember = async (e) => {
+    e.preventDefault()
+    await inviteStudentByIdentifier(inviteIdentifier)
+  }
+
+  // 7. Delete Group
+  const handleDeleteGroup = (group) => {
+    setConfirmState({
+      title: 'Xóa nhóm khởi nghiệp',
+      message: `CẢNH BÁO: Bạn có chắc chắn muốn xóa nhóm "${group.name}" không? Thao tác này không thể hoàn tác.`,
+      confirmLabel: 'Xóa nhóm',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/groups/${group.id}`, { method: 'DELETE' })
+          toast.success(`Đã xóa nhóm "${group.name}".`)
+          setConfirmState(null)
+          setSelectedGroup(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể xóa nhóm.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
+  }
+
+  // 8. Kick Member (Admin or first member of group)
+  const handleKickMember = (groupId, studentId, studentName) => {
+    setConfirmState({
+      title: 'Xóa thành viên khỏi nhóm',
+      message: `Xác nhận xóa "${studentName}" khỏi nhóm? Nếu đã có bầu Leader trước đó, hệ thống sẽ reset để cả nhóm bầu lại.`,
+      confirmLabel: 'Xóa khỏi nhóm',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/groups/${groupId}/members/${studentId}`, { method: 'DELETE' })
+          toast.success(`Đã xóa ${studentName} khỏi nhóm.`)
+          setConfirmState(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể xóa thành viên.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
   // 9. Admin Trigger Random Matching
-  const handleRandomMatching = async () => {
+  const handleRandomMatching = () => {
     const targetCode = isAdmin ? semesterCode : studentSemesterCode
     if (!targetCode) return
-    if (!window.confirm(`Chạy thuật toán tự động ghép nhóm cho các sinh viên chưa có nhóm trong kỳ ${targetCode}?`)) return
+    setShowRandomConfirm(true)
+  }
+
+  // 10. Admin Bulk Delete All Unlocked Groups (preserves Locked groups)
+  const handleDeleteUnlockedGroups = () => {
+    if (!isAdmin || !semesterCode) return
+    const openCount = groups.filter((g) => !g.isLocked).length
+    const lockedCount = groups.filter((g) => g.isLocked).length
+    if (openCount === 0) {
+      toast.error(`Không có nhóm chưa khóa nào trong học kỳ ${semesterCode}.`)
+      return
+    }
+    setConfirmState({
+      title: 'Xóa tất cả nhóm chưa khóa',
+      message: `Xác nhận xóa toàn bộ ${openCount} nhóm chưa khóa trong học kỳ "${semesterCode}"? Hệ thống sẽ giữ nguyên ${lockedCount} nhóm đã khóa (Locked) và không thể hoàn tác với các nhóm đã xóa.`,
+      confirmLabel: `Xóa ${openCount} nhóm chưa khóa`,
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          const res = await request(`/api/groups/semester/${encodeURIComponent(semesterCode)}`, { method: 'DELETE' })
+          const deleted = res?.deletedGroups ?? 0
+          const released = res?.releasedStudents ?? 0
+          const skipped = res?.skippedLockedGroups ?? lockedCount
+          toast.success(`Đã xóa ${deleted} nhóm chưa khóa (giải phóng ${released} sinh viên); giữ nguyên ${skipped} nhóm đã khóa.`, { duration: 5000 })
+          setConfirmState(null)
+          setSelectedGroup((current) => (current?.isLocked ? current : null))
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể xóa danh sách nhóm chưa khóa.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
+  }
+
+  const runRandomMatching = async () => {
+    const targetCode = isAdmin ? semesterCode : studentSemesterCode
+    if (!targetCode) return
     try {
       setBusy(true)
       const res = await request(`/api/matching/random?semesterCode=${encodeURIComponent(targetCode)}`, {
         method: 'POST'
       })
+      setShowRandomConfirm(false)
       toast.success(`Ghép nhóm ngẫu nhiên thành công! Ghép ${res?.matchedStudents || 0} sinh viên (${res?.createdGroups || 0} nhóm mới tạo, ${res?.addedToExistingGroups || 0} bổ sung vào nhóm cũ).`, { duration: 5000 })
       await loadGroups()
     } catch (error) {
@@ -434,35 +790,54 @@ export default function GroupsPage() {
   }
 
   const currentStudentId = account?.student?.id
+  const myRoles = account?.student?.strengthRoles || []
   const activeSemester = semesters.find((s) => s.code === (isAdmin ? semesterCode : studentSemesterCode))
+  const currentStudentGroup = myGroup || groups.find((g) => g.members.some((m) => m.studentId === currentStudentId)) || null
+
+  const matchingGroupsCount = isStudent && myRoles.length > 0
+    ? groups.filter((g) => {
+        if (g.members.some((m) => m.studentId === currentStudentId)) return false
+        const { fit } = analyzeGroupRoles(g, myRoles, true, currentStudentId)
+        return fit?.status === 'match' || fit?.status === 'complement'
+      }).length
+    : 0
 
   const filteredGroups = groups.filter((g) => {
+    const roleFit = filter === 'matching' ? analyzeGroupRoles(g, myRoles, isStudent, currentStudentId).fit : null
+    const isInThisGroup = g.members.some((m) => m.studentId === currentStudentId)
     const matchesFilter =
       filter === 'all' ||
       (filter === 'recruiting' && g.statusType === 'recruiting') ||
-      (filter === 'full' && g.statusType === 'full')
+      (filter === 'full' && g.statusType === 'full') ||
+      (filter === 'matching' && !isInThisGroup && (roleFit?.status === 'match' || roleFit?.status === 'complement'))
 
-    const q = search.toLowerCase()
+    const q = normalizeSearchText(search.trim())
     const matchesSearch =
-      g.name.toLowerCase().includes(q) ||
-      g.topic.toLowerCase().includes(q) ||
-      g.leader.toLowerCase().includes(q)
+      !q ||
+      normalizeSearchText(g.name || '').includes(q) ||
+      normalizeSearchText(g.topic || '').includes(q) ||
+      normalizeSearchText(g.leader || '').includes(q) ||
+      g.members.some((m) => normalizeSearchText(`${m.name || ''} ${m.studentCode || ''}`).includes(q))
 
     return matchesFilter && matchesSearch
   })
 
+  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / GROUPS_PER_PAGE))
+  const safePage = Math.min(currentPage, totalPages)
+  const pagedGroups = filteredGroups.slice((safePage - 1) * GROUPS_PER_PAGE, safePage * GROUPS_PER_PAGE)
+
   return (
     <div>
       {/* ── Page Header ── */}
-      <div className="page-header">
-        <div>
+      <div className="page-header" style={{ alignItems: 'center' }}>
+        <div style={{ flex: '1 1 340px', minWidth: 0 }}>
           <h1 className="page-title">Nhóm & Đề tài Khởi nghiệp</h1>
           <p className="page-subtitle">
             Khám phá danh sách các nhóm Khởi nghiệp, tìm đồng đội bù trừ kỹ năng, bầu trưởng nhóm hoặc đăng ký đề tài.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap', marginLeft: 'auto' }}>
           {isAdmin && (
             <button
               className="btn btn-outline"
@@ -475,7 +850,7 @@ export default function GroupsPage() {
             </button>
           )}
 
-          {/* Student can create group only if they have an assigned semester */}
+          {/* Primary action placed prominently at top-right */}
           {(isAdmin || studentSemesterCode) && (
             <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
               <Plus size={16} />
@@ -511,7 +886,7 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* ── Semester Header / Filter Tabs ── */}
+      {/* ── Semester Header / Filter Tabs & Right Search/Admin Menu ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {/* Admin and Mentor have Semester Dropdown; Student has Fixed Badge */}
@@ -519,8 +894,11 @@ export default function GroupsPage() {
             <select
               className="select input-sm"
               value={semesterCode}
-              onChange={(e) => setSemesterCode(e.target.value)}
-              style={{ fontWeight: 600, minWidth: 160 }}
+              onChange={(e) => {
+                setSemesterCode(e.target.value)
+                setCurrentPage(1)
+              }}
+              style={{ fontWeight: 600, width: 'auto', minWidth: 165, maxWidth: 240 }}
             >
               {semesters.map((s) => (
                 <option key={s.id} value={s.code}>
@@ -529,11 +907,28 @@ export default function GroupsPage() {
               ))}
             </select>
           ) : (
-            <div className="badge badge-teal" style={{ fontSize: 13, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Calendar size={14} />
-              <span>
-                Học kỳ của bạn: <strong>{activeSemester ? `${activeSemester.code} · ${activeSemester.name}` : (studentSemesterCode || 'Chưa xếp kỳ')}</strong>
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div className="badge badge-teal" style={{ fontSize: 13, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Calendar size={14} />
+                <span>
+                  Học kỳ của bạn: <strong>{activeSemester ? `${activeSemester.code} · ${activeSemester.name}` : (studentSemesterCode || 'Chưa xếp kỳ')}</strong>
+                </span>
+              </div>
+              {account?.student && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setShowCoreModal(true)}
+                  title="Xem & chọn thế mạnh chuyên môn (Core) của bạn"
+                >
+                  <Sparkles size={14} color="var(--primary)" />
+                  <span>
+                    Core: {account.student.strengthRoles?.length
+                      ? account.student.strengthRoles.map(getTeamRoleLabel).join(', ')
+                      : 'Chưa chọn'}
+                  </span>
+                </button>
+              )}
             </div>
           )}
 
@@ -541,44 +936,175 @@ export default function GroupsPage() {
           <div className="filter-tab-bar" style={{ margin: 0 }}>
             <button
               className={`tab-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
+              onClick={() => {
+                setFilter('all')
+                setCurrentPage(1)
+              }}
             >
               Tất cả ({groups.length})
             </button>
             <button
               className={`tab-btn ${filter === 'recruiting' ? 'active' : ''}`}
-              onClick={() => setFilter('recruiting')}
+              onClick={() => {
+                setFilter('recruiting')
+                setCurrentPage(1)
+              }}
             >
               Đang tuyển ({groups.filter((g) => g.statusType === 'recruiting').length})
             </button>
             <button
               className={`tab-btn ${filter === 'full' ? 'active' : ''}`}
-              onClick={() => setFilter('full')}
+              onClick={() => {
+                setFilter('full')
+                setCurrentPage(1)
+              }}
             >
               Đã chốt / Đủ người ({groups.filter((g) => g.statusType === 'full').length})
             </button>
+            {isStudent && myRoles.length > 0 && (
+              <button
+                className={`tab-btn ${filter === 'matching' ? 'active' : ''}`}
+                onClick={() => {
+                  setFilter('matching')
+                  setCurrentPage(1)
+                }}
+              >
+                Phù hợp Core ({matchingGroupsCount})
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Search */}
-        <div style={{ position: 'relative', minWidth: 260 }}>
-          <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
-          <input
-            type="text"
-            className="input input-sm"
-            placeholder="Tìm theo tên nhóm, đề tài, leader..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ paddingLeft: 34 }}
-          />
+        {/* Search & Admin Overflow Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flex: '1 1 280px', justifyContent: 'flex-end' }}>
+          <div style={{ position: 'relative', flex: '0 1 320px', width: '100%', minWidth: 220 }}>
+            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              type="text"
+              className="input input-sm"
+              placeholder="Tìm nhóm, đề tài, MSSV, thành viên..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setCurrentPage(1)
+              }}
+              style={{ paddingLeft: 34 }}
+            />
+          </div>
+
+          {isAdmin && (
+            <div ref={adminMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                style={{ padding: '7px 10px' }}
+                onClick={() => setShowAdminMenu((prev) => !prev)}
+                disabled={busy || !semesterCode}
+                aria-expanded={showAdminMenu}
+                aria-haspopup="menu"
+                aria-label="Tác vụ quản trị nhóm"
+                title="Tác vụ quản trị nhóm"
+              >
+                <MoreVertical size={16} />
+              </button>
+
+              {showAdminMenu && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 'calc(100% + 6px)',
+                    minWidth: 260,
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-default)',
+                    borderRadius: 'var(--radius-md)',
+                    boxShadow: 'var(--shadow-lg)',
+                    padding: 6,
+                    zIndex: 35
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    Quản trị kỳ {semesterCode}
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowAdminMenu(false)
+                      handleDeleteUnlockedGroups()
+                    }}
+                    disabled={busy || groups.filter((g) => !g.isLocked).length === 0}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      padding: '9px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: 'none',
+                      background: 'transparent',
+                      color: groups.filter((g) => !g.isLocked).length === 0 ? 'var(--text-muted)' : 'var(--error)',
+                      cursor: groups.filter((g) => !g.isLocked).length === 0 ? 'not-allowed' : 'pointer',
+                      textAlign: 'left',
+                      fontSize: 13
+                    }}
+                  >
+                    <Trash2 size={15} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Xóa nhóm chưa khóa</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {groups.filter((g) => !g.isLocked).length} nhóm đang mở · giữ nguyên {groups.filter((g) => g.isLocked).length} nhóm Locked
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Pinned My Group Strip for Student */}
+      {isStudent && currentStudentGroup && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 'var(--space-5)',
+            backgroundColor: '#F0FDF4',
+            borderColor: '#BBF7D0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            padding: '12px 16px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span className="badge badge-green">Nhóm của bạn</span>
+            <strong style={{ fontSize: 14.5, color: 'var(--text-main)' }}>{currentStudentGroup.name}</strong>
+            <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+              {currentStudentGroup.members.length}/5 thành viên · {currentStudentGroup.statusText}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => openGroupDetails(currentStudentGroup)}
+          >
+            Xem & Quản lý nhóm
+          </button>
+        </div>
+      )}
+
       {/* ── Group Cards Grid ── */}
       <div className="groups-grid">
-        {filteredGroups.map((group) => {
+        {pagedGroups.map((group) => {
           const isFull = group.statusType === 'full'
           const isInGroup = group.members.some((m) => m.studentId === currentStudentId)
+          const roleAnalysis = analyzeGroupRoles(group, myRoles, isStudent, currentStudentId)
+          const showFitBadge = isStudent && !isInGroup && roleAnalysis.isRecruiting && roleAnalysis.fit
 
           return (
             <div className="group-clean-card" key={group.id} style={{ borderColor: isInGroup ? 'var(--primary)' : undefined }}>
@@ -596,9 +1122,16 @@ export default function GroupsPage() {
                     <Users size={12} /> {group.statusText}
                   </span>
                 )}
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  {group.members.length}/{group.maxMembers} thành viên
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {showFitBadge && (roleAnalysis.fit.status === 'match' || roleAnalysis.fit.status === 'complement') && (
+                    <span className="badge badge-green" style={{ fontSize: 10.5 }} title={roleAnalysis.fit.detail}>
+                      ✓ {roleAnalysis.fit.label}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    {group.members.length}/{group.maxMembers} thành viên
+                  </span>
+                </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -609,25 +1142,113 @@ export default function GroupsPage() {
               </div>
               <p className="group-topic">{group.topic}</p>
               <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>{group.projectDescription}</p>
-              {!!group.recruitmentNeeds.length && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>{group.recruitmentNeeds.map((need) => <span className="badge badge-warning" key={need.roleCode}>{need.roleCode} · {need.slots}</span>)}</div>}
+
+              {/* Team Role Coverage & Needs / Compatibility */}
+              <div className="group-card-roles">
+                <div className="group-role-row">
+                  <span className="group-role-row-label">Đang có:</span>
+                  {roleAnalysis.coveredEntries.length > 0 ? (
+                    roleAnalysis.coveredEntries.map((item) => (
+                      <span
+                        className="group-role-chip covered"
+                        key={item.code}
+                        title={`${item.count} thành viên có role ${item.label}`}
+                      >
+                        {item.label}{item.count > 1 ? ` ×${item.count}` : ''}
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Chưa có thành viên chọn Core</span>
+                  )}
+                </div>
+
+                {roleAnalysis.isRecruiting ? (
+                  <div className="group-role-row">
+                    <span className="group-role-row-label">Cần tuyển:</span>
+                    {roleAnalysis.explicitNeeds.length > 0 ? (
+                      roleAnalysis.explicitNeeds.map((need) => {
+                        const isMatch = isStudent && myRoles.includes(need.roleCode)
+                        return (
+                          <span
+                            className={`group-role-chip ${isMatch ? 'matched' : ''}`}
+                            key={need.roleCode}
+                            style={!isMatch ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E' } : undefined}
+                            title={isMatch ? 'Phù hợp với Core của bạn' : undefined}
+                          >
+                            {isMatch ? '✓ ' : ''}{getTeamRoleLabel(need.roleCode)} · {need.slots}
+                          </span>
+                        )
+                      })
+                    ) : (
+                      <>
+                        {roleAnalysis.missingStandardRoles.slice(0, 3).map((opt) => {
+                          const isMatch = isStudent && myRoles.includes(opt.code)
+                          return (
+                            <span
+                              className={`group-role-chip ${isMatch ? 'matched' : 'missing'}`}
+                              key={opt.code}
+                              title={isMatch ? 'Nhóm chưa có role này & khớp Core bạn' : 'Nhóm chưa có role này'}
+                            >
+                              {isMatch ? '✓ ' : ''}{opt.label}
+                            </span>
+                          )
+                        })}
+                        {roleAnalysis.missingStandardRoles.length > 3 && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            +{roleAnalysis.missingStandardRoles.length - 3} role chưa có
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="group-role-row">
+                    <span className="group-role-row-label">Chưa có:</span>
+                    {roleAnalysis.missingStandardRoles.length > 0 ? (
+                      <>
+                        {roleAnalysis.missingStandardRoles.slice(0, 4).map((opt) => (
+                          <span className="group-role-chip missing" key={opt.code}>
+                            {opt.label}
+                          </span>
+                        ))}
+                        {roleAnalysis.missingStandardRoles.length > 4 && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            +{roleAnalysis.missingStandardRoles.length - 4}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 11.5, color: '#15803D', fontWeight: 600 }}>Đủ các role cốt lõi</span>
+                    )}
+                  </div>
+                )}
+
+                {showFitBadge && roleAnalysis.fit.status === 'mismatch' && (
+                  <div style={{ fontSize: 11, color: '#92400E', marginTop: 2 }}>
+                    {roleAnalysis.fit.detail}
+                  </div>
+                )}
+              </div>
 
               {/* Members List */}
               <div className="group-members-list">
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginRight: 2 }}>Đội ngũ:</span>
-                {group.members.map((m, idx) => (
-                  <span key={idx} className="member-avatar-pill" title={`${m.name} (${m.role})`}>
-                    <span className="avatar avatar-sm avatar-primary" style={{ width: 20, height: 20, fontSize: 10 }}>
-                      {m.name.charAt(0)}
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginRight: 2, flexShrink: 0 }}>Đội ngũ:</span>
+                {group.members.map((m, idx) => {
+                  const memberAvatar = m.avatarUrl || (m.studentId === currentStudentId ? (account?.avatarUrl || account?.googlePictureUrl) : '')
+                  const memberRoleText = m.strengthRoles?.length ? ` · Core: ${m.strengthRoles.map(getTeamRoleLabel).join(', ')}` : ''
+                  return (
+                    <span key={idx} className="member-avatar-pill" title={`${m.name} (${m.role})${memberRoleText}`}>
+                      <MemberAvatar src={memberAvatar} name={m.name} size={20} />
+                      <strong>{m.name.split(' ').pop()}</strong>
+                      {m.isLeader && <Crown size={12} color="#EAB308" style={{ marginLeft: 2 }} />}
                     </span>
-                    <strong>{m.name.split(' ').pop()}</strong>
-                    {m.isLeader && <Crown size={12} color="#EAB308" style={{ marginLeft: 2 }} />}
-                  </span>
-                ))}
+                  )
+                })}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
                 <span>Trưởng nhóm: <strong style={{ color: 'var(--text-main)' }}>{group.leader}</strong></span>
-                <span>Mã: <code style={{ fontSize: 11 }}>{group.groupCode}</code></span>
+                <span className="badge badge-neutral" style={{ fontSize: 10.5 }}>{group.semesterCode}</span>
               </div>
 
               {/* Action Buttons */}
@@ -640,7 +1261,7 @@ export default function GroupsPage() {
                   Chi tiết & Quản lý
                 </button>
 
-                {!isInGroup && !isFull && !group.isLocked && (
+                {isStudent && !currentStudentGroup && !isInGroup && !isFull && !group.isLocked && (
                   <button
                     className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
@@ -648,6 +1269,17 @@ export default function GroupsPage() {
                     onClick={() => handleJoin(group)}
                   >
                     Xin gia nhập
+                  </button>
+                )}
+
+                {(isAdmin || isInGroup) && !isFull && !group.isLocked && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={busy}
+                    onClick={() => openGroupDetails(group)}
+                  >
+                    <UserPlus size={14} /> Mời bạn
                   </button>
                 )}
               </div>
@@ -670,6 +1302,46 @@ export default function GroupsPage() {
         )}
       </div>
 
+      {filteredGroups.length > GROUPS_PER_PAGE && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginTop: 'var(--space-6)',
+            paddingTop: 'var(--space-4)',
+            borderTop: '1px solid var(--border-default)'
+          }}
+        >
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            Hiển thị {(safePage - 1) * GROUPS_PER_PAGE + 1}–{Math.min(safePage * GROUPS_PER_PAGE, filteredGroups.length)} / {filteredGroups.length} nhóm
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Trang trước
+            </button>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', padding: '0 6px' }}>
+              Trang {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Trang sau
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Detail & Management Modal ── */}
       {selectedGroup && (
         <div className="modal-backdrop" onClick={() => setSelectedGroup(null)}>
@@ -678,7 +1350,7 @@ export default function GroupsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span className="badge badge-neutral" style={{ fontSize: 11 }}>Mã: {selectedGroup.groupCode}</span>
+                  <span className="badge badge-neutral" style={{ fontSize: 11 }}>{selectedGroup.semesterCode}</span>
                   {selectedGroup.isLocked ? (
                     <span className="badge badge-teal"><Lock size={12} /> Đã khóa nhóm</span>
                   ) : (
@@ -698,29 +1370,21 @@ export default function GroupsPage() {
             <div style={{ backgroundColor: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>ĐỀ TÀI KHỞI NGHIỆP:</span>
-                {(isAdmin || selectedGroup.isCurrentLeader) && !selectedGroup.isLocked && (
+                {(isAdmin || selectedGroup.members.some((m) => m.studentId === currentStudentId)) && (
                   <button
                     className="btn btn-ghost btn-sm"
-                    style={{ fontSize: 11, padding: '2px 8px' }}
+                    style={{ fontSize: 11.5, padding: '3px 8px' }}
                     onClick={() => {
+                      const maxNeeds = Math.min(4, Math.max(0, 5 - (selectedGroup.members?.length || 0)))
                       setEditGroupName(selectedGroup.name)
+                      setEditGroupTopic(selectedGroup.topicTitle || '')
                       setEditGroupDescription(selectedGroup.projectDescription || '')
+                      setEditRecruitmentNeeds((selectedGroup.recruitmentNeeds || []).map((n) => n.roleCode).slice(0, maxNeeds))
+                      setEditNeedsDirty(false)
                       setEditGroupModal(true)
                     }}
                   >
-                    <Edit3 size={12} /> Chỉnh sửa nhóm
-                  </button>
-                )}
-                {account?.role === 'Student' && selectedGroup.isCurrentLeader && selectedGroup.isLocked && !selectedGroup.topicTitle && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    style={{ fontSize: 11, padding: '2px 8px' }}
-                    onClick={() => {
-                      setEditGroupTopic('')
-                      setEditGroupModal(true)
-                    }}
-                  >
-                    <Edit3 size={12} /> Đăng ký đề tài
+                    <Edit3 size={12} /> Chỉnh sửa tên & đề tài
                   </button>
                 )}
               </div>
@@ -732,16 +1396,97 @@ export default function GroupsPage() {
                   {selectedGroup.projectDescription}
                 </p>
               )}
-              {selectedGroup.recruitmentNeeds && selectedGroup.recruitmentNeeds.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', alignSelf: 'center' }}>Vị trí cần tuyển:</span>
-                  {selectedGroup.recruitmentNeeds.map((need) => (
-                    <span className="badge badge-warning" key={need.roleCode} style={{ fontSize: 11 }}>
-                      {need.roleCode} ({need.slots} chỗ)
-                    </span>
-                  ))}
-                </div>
-              )}
+
+              {(() => {
+                const detailRoles = analyzeGroupRoles(selectedGroup, myRoles, isStudent, currentStudentId)
+                const viewerInGroup = selectedGroup.members.some((m) => m.studentId === currentStudentId)
+                return (
+                  <div style={{ borderTop: '1px solid var(--border-default)', marginTop: 12, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {isStudent && detailRoles.fit && (!viewerInGroup || detailRoles.fit.status === 'no-core') && (
+                      <div className={`group-fit-banner ${
+                        detailRoles.fit.status === 'match' || detailRoles.fit.status === 'complement'
+                          ? 'match'
+                          : detailRoles.fit.status === 'mismatch' || detailRoles.fit.status === 'no-core'
+                            ? 'mismatch'
+                            : ''
+                      }`} style={{ marginBottom: 2 }}>
+                        <div>
+                          <strong style={{ display: 'block', marginBottom: 2 }}>
+                            {detailRoles.fit.status === 'match' || detailRoles.fit.status === 'complement'
+                              ? `✓ ${detailRoles.fit.label} với bạn`
+                              : detailRoles.fit.label}
+                          </strong>
+                          <span>{detailRoles.fit.detail}</span>
+                        </div>
+                        {detailRoles.fit.status === 'no-core' && (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => setShowCoreModal(true)}
+                          >
+                            Chọn Core ngay
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="group-role-row">
+                      <span className="group-role-row-label">Role hiện có trong nhóm:</span>
+                      {detailRoles.coveredEntries.length > 0 ? (
+                        detailRoles.coveredEntries.map((item) => (
+                          <span className="group-role-chip covered" key={item.code}>
+                            {item.label}{item.count > 1 ? ` ×${item.count}` : ''}
+                          </span>
+                        ))
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Chưa có thành viên nào chọn Core</span>
+                      )}
+                    </div>
+
+                    {detailRoles.isRecruiting && detailRoles.explicitNeeds.length > 0 && (
+                      <div className="group-role-row">
+                        <span className="group-role-row-label">Vị trí đang cần tuyển:</span>
+                        {detailRoles.explicitNeeds.map((need) => {
+                          const isMatch = isStudent && myRoles.includes(need.roleCode)
+                          return (
+                            <span
+                              className={`group-role-chip ${isMatch ? 'matched' : ''}`}
+                              key={need.roleCode}
+                              style={!isMatch ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E' } : undefined}
+                            >
+                              {isMatch ? '✓ Khớp bạn · ' : ''}{getTeamRoleLabel(need.roleCode)} ({need.slots} chỗ)
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    <div className="group-role-row">
+                      <span className="group-role-row-label">
+                        {detailRoles.isRecruiting && detailRoles.explicitNeeds.length === 0
+                          ? `Còn ${detailRoles.openSlots} chỗ · Role chưa có trong nhóm:`
+                          : 'Role nhóm chưa có:'}
+                      </span>
+                      {detailRoles.missingStandardRoles.length > 0 ? (
+                        detailRoles.missingStandardRoles.map((opt) => {
+                          const isMatch = detailRoles.isRecruiting && isStudent && myRoles.includes(opt.code)
+                          return (
+                            <span
+                              className={`group-role-chip ${isMatch ? 'matched' : 'missing'}`}
+                              key={opt.code}
+                              title={isMatch ? 'Nhóm chưa có role này & khớp với Core của bạn' : undefined}
+                            >
+                              {isMatch ? '✓ Bạn có · ' : ''}{opt.label}
+                            </span>
+                          )
+                        })
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#15803D', fontWeight: 600 }}>Nhóm đã phủ đầy đủ 8 role cốt lõi</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
               {account?.role === 'Student' && selectedGroup.members.some((member) => member.studentId === currentStudentId) && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderTop: '1px solid var(--border-default)', marginTop: 12, paddingTop: 12 }}>
                   <div>
@@ -796,9 +1541,9 @@ export default function GroupsPage() {
                       className="btn btn-outline btn-sm"
                       disabled={seedingDemoMembers}
                       onClick={() => handleSeedDemoMembers(selectedGroup)}
-                      title="Thêm thành viên demo; chỉ hoạt động khi Demo Mode được bật"
+                      title="Thêm nhanh thành viên demo để test bầu Leader & khóa nhóm"
                     >
-                      <Plus size={13} /> {seedingDemoMembers ? 'Đang seed...' : `Seed member (+${5 - selectedGroup.members.length})`}
+                      <Plus size={13} /> {seedingDemoMembers ? 'Đang seed...' : `Seed SV test (+${5 - selectedGroup.members.length})`}
                     </button>
                   )}
                 </div>
@@ -808,6 +1553,10 @@ export default function GroupsPage() {
                 {selectedGroup.members.map((m) => {
                   const isThisMemberMe = m.studentId === currentStudentId
                   const amIInGroup = selectedGroup.members.some((x) => x.studentId === currentStudentId)
+                  const memberEmail = m.email || (isThisMemberMe ? account?.email : '')
+                  const memberCoreRoles = isThisMemberMe
+                    ? (account?.student?.strengthRoles ?? m.strengthRoles ?? [])
+                    : (m.strengthRoles ?? [])
 
                   return (
                     <div
@@ -816,20 +1565,26 @@ export default function GroupsPage() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: '8px 12px',
+                        gap: 10,
+                        padding: '10px 12px',
                         backgroundColor: m.isLeader ? '#F0FDF4' : 'var(--bg-subtle)',
                         border: m.isLeader ? '1px solid #BBF7D0' : '1px solid transparent',
                         borderRadius: 'var(--radius-sm)'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div className="avatar avatar-sm avatar-primary">
-                          {m.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
+                        <MemberAvatar
+                          src={m.avatarUrl || (isThisMemberMe ? (account?.avatarUrl || account?.googlePictureUrl) : '')}
+                          name={m.name}
+                          size={28}
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <strong style={{ fontSize: 13, color: 'var(--text-main)' }}>{m.name}</strong>
                             {isThisMemberMe && <span className="badge badge-neutral" style={{ fontSize: 10 }}>Bạn</span>}
+                            {m.studentId === selectedGroup.firstMemberId && !m.isDemo && (
+                              <span className="badge badge-neutral" style={{ fontSize: 10 }}>Người tạo / Đầu nhóm</span>
+                            )}
                             {m.isDemo && <span className="badge badge-neutral" style={{ fontSize: 10 }}>DEMO</span>}
                             {m.isLeader && (
                               <span className="badge badge-warning" style={{ fontSize: 10 }}>
@@ -837,7 +1592,32 @@ export default function GroupsPage() {
                               </span>
                             )}
                           </div>
-                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{m.studentCode}</span>
+                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', display: 'block' }}>
+                            {memberEmail ? `${memberEmail} · ${m.studentCode}` : m.studentCode}
+                            {m.major && m.major !== m.studentCode ? ` · ${m.major}` : ''}
+                          </span>
+                          {!m.isDemo && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 5 }}>
+                              {memberCoreRoles.length > 0 ? (
+                                memberCoreRoles.map((code) => (
+                                  <span key={code} className="group-role-chip covered" style={{ fontSize: 10.5, padding: '1px 7px' }}>
+                                    {getTeamRoleLabel(code)}
+                                  </span>
+                                ))
+                              ) : isThisMemberMe ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ fontSize: 11, padding: '1px 7px', color: 'var(--primary)', border: '1px dashed var(--primary-border)' }}
+                                  onClick={() => setShowCoreModal(true)}
+                                >
+                                  + Chọn Core của bạn
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Chưa chọn role</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -856,8 +1636,9 @@ export default function GroupsPage() {
                           </button>
                         )}
 
-                        {/* Kick Button (Admin only) */}
-                        {isAdmin && !selectedGroup.isLocked && (
+                        {/* Kick Button (Admin or first member of group for later members) */}
+                        {!selectedGroup.isLocked &&
+                          (isAdmin || (selectedGroup.firstMemberId === currentStudentId && m.studentId !== currentStudentId)) && (
                           <button
                             className="btn btn-ghost btn-sm"
                             style={{ color: 'var(--error)', padding: '3px 6px' }}
@@ -873,13 +1654,102 @@ export default function GroupsPage() {
                   )
                 })}
               </div>
+
+              {(isAdmin || selectedGroup.members.some((x) => x.studentId === currentStudentId)) &&
+                !selectedGroup.isLocked && selectedGroup.members.length < 5 && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-default)' }}>
+                  <form onSubmit={handleInviteMember} style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      className="input input-sm"
+                      placeholder="Tìm hoặc nhập Email / MSSV bạn (VD: SE196620, tên, email...)"
+                      value={inviteIdentifier}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setInviteIdentifier(val)
+                        if (val.trim().length < 2) setInviteCandidates([])
+                      }}
+                      disabled={inviting}
+                    />
+                    <button
+                      type="submit"
+                      className="btn btn-primary btn-sm"
+                      disabled={inviting || !inviteIdentifier.trim()}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      <UserPlus size={14} /> {inviting ? 'Đang thêm...' : 'Mời vào nhóm'}
+                    </button>
+                  </form>
+
+                  {inviteIdentifier.trim().length >= 2 && (
+                    <div style={{ marginTop: 8, border: '1px solid var(--border-default)', borderRadius: 8, backgroundColor: 'var(--bg-card)', maxHeight: 210, overflowY: 'auto' }}>
+                      {searchingCandidates ? (
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                          Đang tìm kiếm sinh viên trong học kỳ...
+                        </div>
+                      ) : inviteCandidates.length === 0 ? (
+                        <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                          Không tìm thấy sinh viên phù hợp trong học kỳ {selectedGroup.semesterCode}.
+                        </div>
+                      ) : (
+                        inviteCandidates.map((cand) => (
+                          <div
+                            key={cand.studentId}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              gap: 10,
+                              padding: '8px 12px',
+                              borderBottom: '1px solid var(--border-default)'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                              <MemberAvatar src={cand.avatarUrl} name={cand.fullName} size={26} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <strong style={{ fontSize: 12.5, color: 'var(--text-main)' }}>{cand.fullName}</strong>
+                                  <span className="badge badge-neutral" style={{ fontSize: 10 }}>{cand.studentCode}</span>
+                                  <span className={`badge ${cand.hasGroup ? 'badge-neutral' : 'badge-green'}`} style={{ fontSize: 10 }}>
+                                    {cand.hasGroup ? 'Đã có nhóm' : 'Chưa có nhóm'}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                  {cand.email}{cand.major ? ` · ${cand.major}` : ''}
+                                </div>
+                                {cand.strengthRoles?.length > 0 && (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                                    {cand.strengthRoles.map((r) => (
+                                      <span key={r} className="badge badge-teal" style={{ fontSize: 9.5 }}>
+                                        {getTeamRoleLabel(r)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              style={{ whiteSpace: 'nowrap', fontSize: 11.5 }}
+                              disabled={inviting || cand.hasGroup}
+                              onClick={() => inviteStudentByIdentifier(cand.studentCode)}
+                            >
+                              {cand.hasGroup ? 'Đã vào nhóm' : 'Chọn & Mời'}
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Modal Actions Footer */}
             <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', gap: 8 }}>
-                {/* Delete Group (Leader or Admin) */}
-                {(isAdmin || selectedGroup.leaderStudentId === currentStudentId) && (
+                {/* Delete Group (Open group only: Admin or creator) */}
+                {!selectedGroup.isLocked && (isAdmin || selectedGroup.firstMemberId === currentStudentId) && (
                   <button
                     className="btn btn-outline btn-sm"
                     style={{ color: 'var(--error)', borderColor: 'var(--border-default)' }}
@@ -901,6 +1771,18 @@ export default function GroupsPage() {
                     <Lock size={13} /> Khóa nhóm
                   </button>
                 )}
+
+                {/* Unlock Group (Leader or Admin) */}
+                {(isAdmin || selectedGroup.leaderStudentId === currentStudentId) && selectedGroup.isLocked && (
+                  <button
+                    className="btn btn-outline btn-sm"
+                    disabled={busy}
+                    onClick={() => handleUnlockGroup(selectedGroup)}
+                    title="Gỡ khóa để cho phép chỉnh sửa thành viên"
+                  >
+                    <Unlock size={13} /> Gỡ khóa nhóm
+                  </button>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
@@ -920,8 +1802,8 @@ export default function GroupsPage() {
                   </button>
                 )}
 
-                {/* Join Group Button if User is NOT inside and group is Open */}
-                {!selectedGroup.members.some((m) => m.studentId === currentStudentId) &&
+                {/* Join Group Button if Student has no group yet and group is Open */}
+                {isStudent && !currentStudentGroup && !selectedGroup.members.some((m) => m.studentId === currentStudentId) &&
                   !selectedGroup.isLocked &&
                   selectedGroup.members.length < 5 && (
                     <button
@@ -940,11 +1822,11 @@ export default function GroupsPage() {
 
       {/* ── Edit Group Modal ── */}
       {editGroupModal && (
-        <div className="modal-backdrop" onClick={() => setEditGroupModal(false)}>
+        <div className="modal-backdrop" style={{ zIndex: 1050 }} onClick={() => setEditGroupModal(false)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>
-                {selectedGroup?.isLocked ? 'Đăng ký đề tài chính thức' : 'Chỉnh sửa thông tin nhóm'}
+                Chỉnh sửa tên nhóm & đề tài
               </h2>
               <button className="btn btn-ghost btn-sm" onClick={() => setEditGroupModal(false)} style={{ padding: 4 }}>
                 <X size={18} />
@@ -952,43 +1834,80 @@ export default function GroupsPage() {
             </div>
 
             <form onSubmit={handleSaveEdit}>
-              {selectedGroup?.isLocked ? (
+              <div style={{ marginBottom: 14 }}>
+                <label className="input-label">Tên nhóm *</label>
+                <input
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  className="input"
+                  value={editGroupName}
+                  onChange={(e) => setEditGroupName(e.target.value)}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label className="input-label">
+                  Tên đề tài khởi nghiệp {selectedGroup?.isLocked ? '*' : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(tùy chọn)</span>}
+                </label>
+                <input
+                  required={Boolean(selectedGroup?.isLocked)}
+                  maxLength={300}
+                  className="input"
+                  placeholder="Nhập tên đề tài khởi nghiệp của nhóm..."
+                  value={editGroupTopic}
+                  onChange={(e) => setEditGroupTopic(e.target.value)}
+                />
+              </div>
+              <div style={{ marginBottom: 18 }}>
+                <label className="input-label">Mô tả dự án *</label>
+                <textarea
+                  required
+                  minLength={2}
+                  maxLength={1200}
+                  rows={3}
+                  className="textarea"
+                  value={editGroupDescription}
+                  onChange={(e) => setEditGroupDescription(e.target.value)}
+                />
+              </div>
+
+              {!selectedGroup?.isLocked && 5 - (selectedGroup?.members?.length || 0) > 0 && (
                 <div style={{ marginBottom: 18 }}>
-                  <label className="input-label">Tên đề tài khởi nghiệp chính thức *</label>
-                  <textarea
-                    required
-                    minLength={3}
-                    maxLength={300}
-                    rows={3}
-                    className="textarea"
-                    value={editGroupTopic}
-                    onChange={(e) => setEditGroupTopic(e.target.value)}
-                  />
+                  <label className="input-label">
+                    Đang cần tuyển role nào?{' '}
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
+                      (tối đa {Math.min(4, 5 - (selectedGroup?.members?.length || 0))} vị trí)
+                    </span>
+                  </label>
+                  <div role="group" aria-label="Cập nhật role nhóm đang cần tuyển" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                    {TEAM_ROLE_OPTIONS.map((role) => {
+                      const selected = editRecruitmentNeeds.includes(role.code)
+                      const maxNeeds = Math.min(4, 5 - (selectedGroup?.members?.length || 0))
+                      return (
+                        <button
+                          key={role.code}
+                          type="button"
+                          aria-pressed={selected}
+                          className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`}
+                          onClick={() => {
+                            setEditNeedsDirty(true)
+                            setEditRecruitmentNeeds((prev) => {
+                              if (selected) return prev.filter((item) => item !== role.code)
+                              const clamped = prev.slice(0, maxNeeds)
+                              if (clamped.length >= maxNeeds) {
+                                toast.error(`Nhóm chỉ còn tối đa ${maxNeeds} chỗ trống.`)
+                                return clamped
+                              }
+                              return [...clamped, role.code]
+                            })
+                          }}
+                        >
+                          {role.label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              ) : (
-                <>
-                  <div style={{ marginBottom: 14 }}>
-                    <label className="input-label">Tên nhóm *</label>
-                    <input
-                      required
-                      className="input"
-                      value={editGroupName}
-                      onChange={(e) => setEditGroupName(e.target.value)}
-                    />
-                  </div>
-                  <div style={{ marginBottom: 18 }}>
-                    <label className="input-label">Mô tả dự án *</label>
-                    <textarea
-                      required
-                      minLength={3}
-                      maxLength={1200}
-                      rows={3}
-                      className="textarea"
-                      value={editGroupDescription}
-                      onChange={(e) => setEditGroupDescription(e.target.value)}
-                    />
-                  </div>
-                </>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -1000,7 +1919,7 @@ export default function GroupsPage() {
                   Hủy
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {selectedGroup?.isLocked ? 'Đăng ký đề tài' : 'Lưu thay đổi'}
+                  {busy ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>
@@ -1038,6 +1957,8 @@ export default function GroupsPage() {
                 <label className="input-label">Tên nhóm / Tên dự án *</label>
                 <input
                   required
+                  minLength={2}
+                  maxLength={120}
                   className="input"
                   placeholder="Ví dụ: AI HealthTech Core"
                   value={newGroupName}
@@ -1048,6 +1969,7 @@ export default function GroupsPage() {
               <div style={{ marginBottom: 18 }}>
                 <label className="input-label">Mô tả tóm tắt đề tài khởi nghiệp</label>
                 <textarea
+                  maxLength={1200}
                   rows={3}
                   className="textarea"
                   placeholder="Nêu ngắn gọn bài toán giải quyết, đối tượng khách hàng và công nghệ cốt lõi..."
@@ -1059,9 +1981,9 @@ export default function GroupsPage() {
               <div style={{ marginBottom: 18 }}>
                 <label className="input-label">Đang cần tuyển role nào? <span style={{ color: 'var(--text-muted)' }}>(tối đa 4)</span></label>
                 <div role="group" aria-label="Role nhóm đang cần tuyển" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                  {TEAM_ROLES.map((role) => {
-                    const selected = newRecruitmentNeeds.includes(role)
-                    return <button key={role} type="button" aria-pressed={selected} className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`} onClick={() => setNewRecruitmentNeeds((roles) => selected ? roles.filter((item) => item !== role) : roles.length < 4 ? [...roles, role] : roles)}>{role}</button>
+                  {TEAM_ROLE_OPTIONS.map((role) => {
+                    const selected = newRecruitmentNeeds.includes(role.code)
+                    return <button key={role.code} type="button" aria-pressed={selected} className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline'}`} onClick={() => setNewRecruitmentNeeds((roles) => selected ? roles.filter((item) => item !== role.code) : roles.length < 4 ? [...roles, role.code] : roles)}>{role.label}</button>
                   })}
                 </div>
               </div>
@@ -1127,6 +2049,49 @@ export default function GroupsPage() {
           </form>
         </div>
       )}
+      {showRandomConfirm && (
+        <div className="modal-backdrop" onClick={() => !busy && setShowRandomConfirm(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Shuffle size={18} color="var(--primary)" /> Ghép nhóm ngẫu nhiên
+              </h2>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowRandomConfirm(false)} disabled={busy} style={{ padding: 4 }}>
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 18 }}>
+              Chạy ghép nhóm tự động cho toàn bộ sinh viên chưa có nhóm trong học kỳ <strong>{isAdmin ? semesterCode : studentSemesterCode}</strong>?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowRandomConfirm(false)} disabled={busy}>
+                Hủy
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={runRandomMatching} disabled={busy}>
+                {busy ? 'Đang ghép...' : 'Xác nhận ghép ngay'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCoreModal && (
+        <StudentCoreModal
+          onClose={() => setShowCoreModal(false)}
+          onSaved={() => loadGroups()}
+        />
+      )}
+
+      <ConfirmModal
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel}
+        tone={confirmState?.tone}
+        busy={busy || seedingDemoMembers}
+        onConfirm={() => confirmState?.onConfirm?.()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

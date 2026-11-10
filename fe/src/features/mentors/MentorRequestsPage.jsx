@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, CheckCircle2, Inbox, Search, XCircle } from 'lucide-react'
+import {
+  ArrowLeft, Calendar, CheckCircle2, Copy, Inbox,
+  MessageSquareText, Search, User, XCircle
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../hooks/useAuth'
@@ -8,8 +11,10 @@ import './MentorPages.css'
 const requestStatus = {
   0: { label: 'Chờ duyệt', className: 'badge-warning' },
   1: { label: 'Đã chấp thuận', className: 'badge-green' },
-  2: { label: 'Đã từ chối', className: 'badge-neutral' }
+  2: { label: 'Đã từ chối', className: 'badge-error' }
 }
+
+const shortGroupCode = (groupId) => (groupId ? `#${String(groupId).slice(0, 8)}` : '#N/A')
 
 export default function MentorRequestsPage() {
   const { request } = useAuth()
@@ -73,76 +78,159 @@ export default function MentorRequestsPage() {
     }
   }
 
+  const copyGroupId = async (groupId) => {
+    if (!groupId) return
+    try {
+      await navigator.clipboard.writeText(String(groupId))
+      toast.success(`Đã sao chép mã nhóm ${shortGroupCode(groupId)}.`, { id: 'copy-group-id' })
+    } catch {
+      toast.error('Không thể sao chép mã nhóm.')
+    }
+  }
+
+  const assignedCount = mentor?.currentAssigned ?? 0
+  const maxQuota = mentor?.maxQuota ?? 0
+  const remainingQuota = Math.max(0, maxQuota - assignedCount)
+  const quotaPercent = maxQuota > 0 ? Math.min(100, Math.round((assignedCount / maxQuota) * 100)) : 0
+
   return (
     <div>
       <div style={{ marginBottom: 12 }}>
-        <Link to="/mentor/dashboard" className="btn btn-ghost btn-sm" style={{ paddingLeft: 0 }}>
-          <ArrowLeft size={14} /> Về không gian mentor
+        <Link to="/" className="btn btn-ghost btn-sm" style={{ paddingLeft: 0 }}>
+          <ArrowLeft size={14} /> Về trang Tổng quan
         </Link>
       </div>
-      <div className="page-header">
+      <div className="page-header" style={{ alignItems: 'center' }}>
         <div>
           <h1 className="page-title">Yêu cầu hướng dẫn</h1>
           <p className="page-subtitle">Xem xét và phản hồi lời mời từ các nhóm sinh viên.</p>
         </div>
-        {mentor && <span className="badge badge-teal">{mentor.currentAssigned}/{mentor.maxQuota} nhóm</span>}
+        {mentor && (
+          <div
+            className="mentor-mini-quota"
+            title={`Hạn ngạch còn lại: ${remainingQuota} suất hướng dẫn`}
+          >
+            <div className="mentor-mini-quota-top">
+              <span>Đang nhận: <strong>{assignedCount}/{maxQuota} nhóm</strong></span>
+              <span style={{ color: '#166534', fontWeight: 600 }}>Còn {remainingQuota} suất</span>
+            </div>
+            <div className="mentor-mini-quota-track">
+              <div
+                className="mentor-mini-quota-fill"
+                style={{ width: `${quotaPercent}%`, minWidth: assignedCount > 0 ? 6 : 0 }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mentor-request-toolbar">
-        <div className="proposal-filter-tabs" style={{ margin: 0, border: 0 }}>
+        <div className="proposal-filter-tabs" style={{ margin: 0, border: 0, paddingBottom: 0 }}>
           {[
             ['all', `Tất cả (${counts.all})`],
             ['0', `Chờ duyệt (${counts.pending})`],
             ['1', `Đã chấp thuận (${counts.approved})`],
             ['2', `Đã từ chối (${counts.rejected})`]
           ].map(([value, label]) => (
-            <button type="button" className={`proposal-tab-btn ${filter === value ? 'active' : ''}`} key={value} onClick={() => setFilter(value)}>
+            <button
+              type="button"
+              className={`proposal-tab-btn ${filter === value ? 'active' : ''}`}
+              key={value}
+              aria-pressed={filter === value}
+              onClick={() => setFilter(value)}
+            >
               {label}
             </button>
           ))}
         </div>
         <label className="mentor-search">
-          <Search size={15} />
-          <input className="input input-sm" placeholder="Tìm nhóm hoặc đề tài" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Search size={15} className="mentor-search-icon" />
+          <input
+            className="input input-sm"
+            placeholder="Tìm nhóm hoặc đề tài..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
         </label>
       </div>
 
       {filtered.length === 0 ? (
         <div className="card mentor-empty-state">
-          <Inbox size={34} />
+          <div className="mentor-empty-icon"><Inbox size={22} /></div>
           <strong>Không có yêu cầu phù hợp</strong>
-          <span>Thử đổi bộ lọc hoặc từ khóa tìm kiếm.</span>
+          <span>Thử đổi bộ lọc trạng thái hoặc từ khóa tìm kiếm khác.</span>
         </div>
       ) : (
         <div className="proposal-card-grid">
           {filtered.map((item) => (
             <article className={`proposal-card ${item.status === 1 ? 'approved' : item.status === 2 ? 'rejected' : ''}`} key={item.id}>
               <div className="proposal-card-top">
-                <div>
-                  <h2 className="proposal-group-name">{item.groupName || 'Nhóm sinh viên'}</h2>
-                  <p className="proposal-topic-title">{item.topic || 'Chưa có mô tả đề tài.'}</p>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <h2 className="proposal-group-name">{item.groupName || 'Nhóm sinh viên'}</h2>
+                    <span className="mentor-meta-code">{shortGroupCode(item.groupId)}</span>
+                  </div>
+                  <p className="proposal-topic-title">
+                    <span style={{ color: 'var(--text-secondary)', fontWeight: 500, marginRight: 6 }}>Đề tài:</span>
+                    {item.topic || 'Chưa có mô tả đề tài.'}
+                  </p>
                 </div>
                 <span className={`badge ${requestStatus[item.status]?.className || 'badge-neutral'}`}>
                   {requestStatus[item.status]?.label || 'Không xác định'}
                 </span>
               </div>
-              <p className="team-pitch-quote">{item.message}</p>
-              <div className="mentor-request-meta">
-                <span>Người gửi: {item.requesterName || 'Trưởng nhóm'}</span>
-                <span>Mã nhóm: {item.groupId}</span>
-                <span>Gửi ngày {new Date(item.createdAt).toLocaleDateString('vi-VN')}</span>
+
+              <div className="team-pitch-quote">
+                <span className="team-pitch-label">
+                  <MessageSquareText size={13} />
+                  <span>Lời nhắn từ sinh viên</span>
+                </span>
+                <div>{item.message}</div>
               </div>
-              {item.decisionReason && <p className="mentor-decision-note">Phản hồi: {item.decisionReason}</p>}
+
+              {item.decisionReason && (
+                <div className={`mentor-feedback-box ${item.status === 2 ? 'rejected' : item.status === 1 ? 'approved' : ''}`}>
+                  <span className="mentor-feedback-label">
+                    {item.status === 2 ? 'Lý do từ chối:' : 'Phản hồi từ Giảng viên:'}
+                  </span>
+                  <span>{item.decisionReason}</span>
+                </div>
+              )}
+
+              <div className="mentor-request-meta">
+                <span className="mentor-meta-cell">
+                  <User size={13} />
+                  <span>Người đại diện: <strong style={{ color: 'var(--text-main)' }}>{item.requesterName || 'Trưởng nhóm'}</strong></span>
+                </span>
+                <span className="mentor-meta-cell">
+                  <span>Mã nhóm:</span>
+                  <span className="mentor-meta-code">{shortGroupCode(item.groupId)}</span>
+                  <button
+                    type="button"
+                    className="mentor-copy-id-btn"
+                    onClick={() => copyGroupId(item.groupId)}
+                    title="Sao chép mã đầy đủ"
+                    aria-label="Sao chép mã nhóm đầy đủ"
+                  >
+                    <Copy size={12} />
+                  </button>
+                </span>
+                <span className="mentor-meta-cell" style={{ justifyContent: 'flex-end' }}>
+                  <Calendar size={13} />
+                  <span>Gửi ngày: {new Date(item.createdAt).toLocaleDateString('vi-VN')}</span>
+                </span>
+              </div>
+
               {item.status === 0 && (
-                <div className="decision-buttons-group">
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setSelected(item); setDecision(false) }}>
+                <div className="decision-buttons-group" style={{ marginTop: 14, justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setSelected(item); setDecision(false); setDecisionReason('') }}>
                     <XCircle size={14} /> Từ chối
                   </button>
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
                     disabled={mentor?.currentAssigned >= mentor?.maxQuota}
-                    onClick={() => { setSelected(item); setDecision(true) }}
+                    onClick={() => { setSelected(item); setDecision(true); setDecisionReason('') }}
                   >
                     <CheckCircle2 size={14} /> Chấp nhận
                   </button>
@@ -156,14 +244,29 @@ export default function MentorRequestsPage() {
       {selected && decision !== null && (
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <form className="modal-dialog" onSubmit={submitDecision} onClick={(event) => event.stopPropagation()}>
-            <h2>{decision ? 'Chấp nhận hướng dẫn nhóm?' : 'Từ chối yêu cầu?'}</h2>
-            <p className="page-subtitle">{selected.groupName}</p>
-            <label className="mentor-field" style={{ marginTop: 16 }}>Lời nhắn phản hồi
-              <textarea className="textarea" rows={4} maxLength={2000} value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} />
+            <h2>{decision ? 'Chấp nhận hướng dẫn nhóm?' : 'Từ chối yêu cầu hướng dẫn?'}</h2>
+            <p className="page-subtitle">Nhóm: {selected.groupName}</p>
+            <label className="mentor-field" style={{ marginTop: 16 }}>
+              {decision ? 'Lời nhắn chào mừng / Ghi chú hướng dẫn' : 'Lý do từ chối *'}
+              <textarea
+                className="textarea"
+                required={!decision}
+                rows={4}
+                maxLength={2000}
+                placeholder={decision ? 'Ghi chú lịch gặp đầu tiên hoặc định hướng đề tài...' : 'Nhập lý do từ chối để sinh viên nắm được thông tin...'}
+                value={decisionReason}
+                onChange={(event) => setDecisionReason(event.target.value)}
+              />
             </label>
             <div className="decision-buttons-group" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
               <button type="button" className="btn btn-secondary" onClick={() => setSelected(null)}>Hủy</button>
-              <button type="submit" className="btn btn-primary">{decision ? 'Xác nhận nhận nhóm' : 'Xác nhận từ chối'}</button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={!decision ? { backgroundColor: '#dc2626', borderColor: '#dc2626' } : undefined}
+              >
+                {decision ? 'Xác nhận nhận nhóm' : 'Xác nhận từ chối'}
+              </button>
             </div>
           </form>
         </div>
