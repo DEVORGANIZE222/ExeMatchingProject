@@ -33,6 +33,9 @@ public interface IIdentitySemesterClient
     Task<IReadOnlyList<EnrollmentContext>> SearchEnrollmentsAsync(string semesterCode, string query, CancellationToken ct = default);
     Task<SemesterWorkflowContext> WorkflowAsync(string semesterCode, CancellationToken ct = default);
     Task<IReadOnlyList<EnrollmentContext>> UnmatchedEnrollmentsAsync(string semesterCode, CancellationToken ct = default);
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<string>>> StudentStrengthRolesAsync(
+        IReadOnlyCollection<Guid> studentIds, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<string>>>(new Dictionary<Guid, IReadOnlyList<string>>());
 }
 
 public interface IGroupService

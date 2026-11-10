@@ -40,6 +40,32 @@ public sealed class IdentitySemesterClient(HttpClient client, IRequestAccessToke
         return all;
     }
 
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<string>>> StudentStrengthRolesAsync(
+        IReadOnlyCollection<Guid> studentIds, CancellationToken ct = default)
+    {
+        if (studentIds.Count == 0)
+            return new Dictionary<Guid, IReadOnlyList<string>>();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/internal/students/roles")
+        {
+            Content = JsonContent.Create(studentIds)
+        };
+        if (!string.IsNullOrWhiteSpace(accessToken.Value))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.Value);
+
+        using var response = await client.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+            return new Dictionary<Guid, IReadOnlyList<string>>();
+
+        var envelope = await response.Content.ReadFromJsonAsync<ApiEnvelope<Dictionary<Guid, List<string>>>>(cancellationToken: ct);
+        if (envelope?.Data is null)
+            return new Dictionary<Guid, IReadOnlyList<string>>();
+
+        return envelope.Data.ToDictionary(
+            kvp => kvp.Key,
+            kvp => (IReadOnlyList<string>)kvp.Value);
+    }
+
     private async Task<T> GetAsync<T>(string path, CancellationToken ct) where T : class
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);

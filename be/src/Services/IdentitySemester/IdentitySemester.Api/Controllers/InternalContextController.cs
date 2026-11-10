@@ -39,6 +39,28 @@ public sealed class InternalContextController(IdentityService service, IdentityS
     public async Task<ActionResult<ApiResponse<SemesterWorkflowResponse>>> Workflow(string semesterCode, CancellationToken ct)
         => Ok(ApiResponse<SemesterWorkflowResponse>.Ok(await service.Workflow(semesterCode, ct)));
 
+    [HttpPost("students/roles")]
+    public async Task<ActionResult<ApiResponse<Dictionary<Guid, List<string>>>>> StudentStrengthRoles(
+        [FromBody] IReadOnlyList<Guid>? studentIds,
+        CancellationToken ct)
+    {
+        var ids = (studentIds ?? []).Where(id => id != Guid.Empty).Distinct().Take(2000).ToList();
+        if (ids.Count == 0)
+            return Ok(ApiResponse<Dictionary<Guid, List<string>>>.Ok(new Dictionary<Guid, List<string>>()));
+
+        var rows = await db.Students.AsNoTracking()
+            .Where(s => ids.Contains(s.Id))
+            .Select(s => new
+            {
+                s.Id,
+                Roles = s.StrengthRoles.OrderBy(r => r.RoleCode).Select(r => r.RoleCode).ToList()
+            })
+            .ToListAsync(ct);
+
+        return Ok(ApiResponse<Dictionary<Guid, List<string>>>.Ok(
+            rows.ToDictionary(x => x.Id, x => x.Roles)));
+    }
+
     [HttpGet("mentor-team-contacts")]
     [Authorize(Policy = "MentorTeamContacts")]
     public async Task<ActionResult<ApiResponse<List<MentorTeamContactResponse>>>> MentorTeamContacts(

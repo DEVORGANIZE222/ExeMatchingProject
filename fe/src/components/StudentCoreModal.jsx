@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import { TEAM_ROLE_OPTIONS } from '../config/teamRoles'
 
-export default function StudentCoreModal({ onClose }) {
+export default function StudentCoreModal({ onClose, onSaved }) {
   const { account, request, updateStudentProfile } = useAuth()
   const student = account?.student
   const [selectedRoles, setSelectedRoles] = useState(() => student?.strengthRoles || [])
@@ -38,6 +38,7 @@ export default function StudentCoreModal({ onClose }) {
       })
       updateStudentProfile(updated)
       toast.success('Đã cập nhật Core chuyên môn của bạn!')
+      if (onSaved) await onSaved(updated)
       onClose()
     } catch (error) {
       toast.error(error.message || 'Không thể cập nhật Core chuyên môn.')

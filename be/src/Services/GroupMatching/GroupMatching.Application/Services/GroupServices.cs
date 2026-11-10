@@ -13,7 +13,8 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
     public async Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
     {
         query.SemesterCode = Code(query.SemesterCode);
-        return await repository.ListAsync(query, ct);
+        var page = await repository.ListAsync(query, ct);
+        return page with { Items = (await EnrichListAsync(page.Items, ct)).ToList() };
     }
 
     public async Task<GroupDto?> GetMyGroupAsync(string semesterCode, Guid actorUserId, CancellationToken ct = default)
@@ -21,13 +22,13 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         var semester = Code(semesterCode);
         var actor = await Enrollment(actorUserId, semester, ct);
         var group = await repository.GetStudentGroupAsync(actor.StudentId, semester, ct);
-        return group is null ? null : Map(group);
+        return group is null ? null : await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
     {
         var group = await Group(id, ct);
-        return Map(group);
+        return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> SeedDemoMembersAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
@@ -66,7 +67,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         group.UpdatedAt = DateTime.UtcNow;
         await repository.SaveAsync(ct);
         await tx.CommitAsync(ct);
-        return Map(group);
+        return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default)
@@ -77,7 +78,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
             throw Forbidden("Only the elected group leader can request a mentor.");
         if (group.Status != GroupStatus.Locked || string.IsNullOrWhiteSpace(group.TopicTitle))
             throw Conflict("A mentor can only be requested for a locked group with a registered topic.");
-        return Map(group);
+        return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false)
@@ -115,7 +116,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         }
         await repository.SaveAsync(ct);
         await tx.CommitAsync(ct);
-        return Map(group);
+        return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
@@ -139,7 +140,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
             ApplyRecruitmentNeeds(group, request.RecruitmentNeeds);
         group.UpdatedAt = DateTime.UtcNow;
         await repository.SaveAsync(ct);
-        return Map(group);
+        return await EnrichAsync(Map(group), ct);
     }
 
     public async Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
@@ -195,7 +196,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         group.UpdatedAt = DateTime.UtcNow;
         MembershipEvent(actor.StudentId, true);
         await repository.SaveAsync(ct); await tx.CommitAsync(ct);
-        return Map(group);
+        return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> InviteMemberAsync(Guid id, InviteMemberRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
@@ -225,7 +226,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         MembershipEvent(target.StudentId, true);
         await repository.SaveAsync(ct);
         await tx.CommitAsync(ct);
-        return Map(group);
+        return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<IReadOnlyList<EnrollmentContext>> SearchInviteCandidatesAsync(Guid id, string query, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
@@ -334,7 +335,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
             foreach (var member in group.Members) member.Role = member.StudentId == winner.Key ? MemberRole.Leader : MemberRole.Member;
             Event("leader-elected", new LeaderElectedEvent(group.Id, winner.Key, DateTime.UtcNow));
         }
-        await repository.SaveAsync(ct); return Map(group);
+        await repository.SaveAsync(ct); return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false)
@@ -355,7 +356,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
             Event("topic-registered", new TopicRegisteredEvent(group.Id, group.GroupCode, group.TopicTitle, group.TopicRegisteredAt.Value));
         }
         Event("group-locked", new GroupLockedEvent(group.Id, group.GroupCode, group.Members.Count, DateTime.UtcNow));
-        await repository.SaveAsync(ct); return Map(group);
+        await repository.SaveAsync(ct); return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> UnlockAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
@@ -372,7 +373,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         group.Status = GroupStatus.Open;
         group.UpdatedAt = DateTime.UtcNow;
         await repository.SaveAsync(ct);
-        return Map(group);
+        return await EnrichAsync(Map(group), ct);
     }
 
     public async Task<GroupDto> RegisterTopicAsync(Guid id, RegisterTopicRequest request, Guid actorUserId, CancellationToken ct = default)
@@ -385,7 +386,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         group.TopicRegisteredAt ??= DateTime.UtcNow;
         group.UpdatedAt = DateTime.UtcNow;
         Event("topic-registered", new TopicRegisteredEvent(group.Id, group.GroupCode, group.TopicTitle, group.TopicRegisteredAt.Value));
-        await repository.SaveAsync(ct); return Map(group);
+        await repository.SaveAsync(ct); return await EnrichAsync(Map(group), ct);
     }
 
     private async Task<EnrollmentContext> Enrollment(Guid actorUserId, string semester, CancellationToken ct)
@@ -416,16 +417,60 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         FullName = item.FullName,
         Email = item.Email ?? string.Empty,
         Major = item.Major ?? string.Empty,
+        StrengthRoles = SerializeRoles(item.StrengthRoles),
         AvatarUrl = item.AvatarUrl,
         JoinedAt = DateTime.UtcNow
     };
+    private async Task<GroupDto> EnrichAsync(GroupDto dto, CancellationToken ct)
+    {
+        var list = await EnrichListAsync([dto], ct);
+        return list[0];
+    }
+    private async Task<IReadOnlyList<GroupDto>> EnrichListAsync(IReadOnlyList<GroupDto> groups, CancellationToken ct)
+    {
+        var studentIds = groups
+            .SelectMany(g => g.Members)
+            .Where(m => !m.IsDemo)
+            .Select(m => m.StudentId)
+            .Distinct()
+            .ToList();
+        if (studentIds.Count == 0) return groups;
+
+        IReadOnlyDictionary<Guid, IReadOnlyList<string>> rolesMap;
+        try
+        {
+            rolesMap = await identity.StudentStrengthRolesAsync(studentIds, ct);
+        }
+        catch
+        {
+            return groups;
+        }
+        if (rolesMap.Count == 0) return groups;
+
+        return groups.Select(g => g with
+        {
+            Members = g.Members.Select(m => !m.IsDemo && rolesMap.TryGetValue(m.StudentId, out var roles)
+                ? m with { StrengthRoles = roles }
+                : m).ToList()
+        }).ToList();
+    }
+    private static string SerializeRoles(IEnumerable<string>? roles)
+    {
+        var raw = string.Join(',', (roles ?? []).Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
+        return raw.Length <= 200 ? raw : raw[..200];
+    }
+    private static IReadOnlyList<string> ParseRoles(string? raw)
+        => string.IsNullOrWhiteSpace(raw)
+            ? []
+            : raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     private static Guid? ResolveFirstMemberStudentId(Group group) =>
         group.CreatedByStudentId.HasValue && group.Members.Any(x => x.StudentId == group.CreatedByStudentId.Value)
             ? group.CreatedByStudentId.Value
             : group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).FirstOrDefault()?.StudentId;
     private static GroupDto Map(Group group) => new(group.Id, group.GroupCode, group.GroupName, group.SemesterCode, group.Status,
         group.LeaderStudentId, group.TopicTitle, group.TopicRegisteredAt, group.Members.Count,
-        group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).Select(x => new GroupMemberDto(x.StudentId, x.StudentCode, x.FullName, x.Role, x.JoinedAt, x.IsDemo, x.Email, x.Major, x.AvatarUrl)).ToList(),
+        group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).Select(x => new GroupMemberDto(
+            x.StudentId, x.StudentCode, x.FullName, x.Role, x.JoinedAt, x.IsDemo, x.Email, x.Major, x.AvatarUrl, ParseRoles(x.StrengthRoles))).ToList(),
         group.ProjectDescription,
         group.RecruitmentNeeds.OrderBy(x => x.RoleCode).Select(x => new RecruitmentNeedDto(x.RoleCode, x.Slots)).ToList(),
         group.CreatedByStudentId);

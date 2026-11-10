@@ -47,6 +47,100 @@ const normalizeSearchText = (value) => value
   .toLocaleLowerCase()
   .replace(/đ/g, 'd')
 
+function analyzeGroupRoles(group, myRoles, isStudent, currentStudentId = null) {
+  const memberRoleCounts = new Map()
+  for (const member of group.members || []) {
+    const memberRoles = member.studentId === currentStudentId && isStudent
+      ? myRoles
+      : (member.strengthRoles || [])
+    const uniqueRoles = new Set(memberRoles)
+    for (const code of uniqueRoles) {
+      memberRoleCounts.set(code, (memberRoleCounts.get(code) || 0) + 1)
+    }
+  }
+
+  const coveredEntries = TEAM_ROLE_OPTIONS
+    .filter((opt) => memberRoleCounts.has(opt.code))
+    .map((opt) => ({
+      code: opt.code,
+      label: opt.label,
+      count: memberRoleCounts.get(opt.code)
+    }))
+
+  const coveredSet = new Set(coveredEntries.map((item) => item.code))
+  const missingStandardRoles = TEAM_ROLE_OPTIONS.filter((opt) => !coveredSet.has(opt.code))
+  const explicitNeeds = group.recruitmentNeeds || []
+  const openSlots = Math.max(0, (group.maxMembers || 5) - (group.members?.length || 0))
+  const isRecruiting = !group.isLocked && openSlots > 0
+
+  let fit = null
+  if (isStudent) {
+    if (!myRoles || myRoles.length === 0) {
+      fit = {
+        status: 'no-core',
+        label: 'Chưa chọn Core',
+        detail: 'Chọn Core thế mạnh của bạn để biết nhóm này có phù hợp không.',
+        matchedRoles: []
+      }
+    } else if (!isRecruiting) {
+      fit = {
+        status: 'closed',
+        label: group.isLocked ? 'Đã khóa nhóm' : 'Đã đủ thành viên',
+        detail: group.isLocked
+          ? 'Nhóm đã khóa danh sách thành viên.'
+          : 'Nhóm đã đủ 5/5 thành viên.',
+        matchedRoles: []
+      }
+    } else if (explicitNeeds.length > 0) {
+      const matchedRoles = explicitNeeds
+        .filter((need) => myRoles.includes(need.roleCode))
+        .map((need) => need.roleCode)
+      if (matchedRoles.length > 0) {
+        fit = {
+          status: 'match',
+          label: 'Phù hợp',
+          detail: `Bạn khớp ${matchedRoles.length} vị trí nhóm đang tuyển: ${matchedRoles.map(getTeamRoleLabel).join(', ')}.`,
+          matchedRoles
+        }
+      } else {
+        fit = {
+          status: 'mismatch',
+          label: 'Chưa khớp role cần tuyển',
+          detail: `Nhóm đang ưu tiên tuyển: ${explicitNeeds.map((n) => getTeamRoleLabel(n.roleCode)).join(', ')}.`,
+          matchedRoles: []
+        }
+      }
+    } else {
+      const complementary = myRoles.filter((code) => !coveredSet.has(code))
+      if (complementary.length > 0) {
+        fit = {
+          status: 'complement',
+          label: 'Bù trừ tốt',
+          detail: `Nhóm còn ${openSlots} chỗ và chưa có role: ${complementary.map(getTeamRoleLabel).join(', ')}.`,
+          matchedRoles: complementary
+        }
+      } else {
+        fit = {
+          status: 'available',
+          label: 'Có thể gia nhập',
+          detail: `Nhóm còn ${openSlots} chỗ trống (nhận mọi role).`,
+          matchedRoles: myRoles
+        }
+      }
+    }
+  }
+
+  return {
+    coveredEntries,
+    coveredSet,
+    missingStandardRoles,
+    explicitNeeds,
+    openSlots,
+    isRecruiting,
+    fit
+  }
+}
+
 export default function GroupsPage() {
   const { account, request, isAdmin, isMentor, isStudent } = useAuth()
   const [groups, setGroups] = useState([])
@@ -119,15 +213,23 @@ export default function GroupsPage() {
     const leader = group.members?.find((member) => member.role === 1 || member.role === 'Leader')
     const memberCount = group.memberCount ?? group.members?.length ?? 0
     const isLocked = group.status === 2 || group.status === 'Locked'
-    const mappedMembers = (group.members || []).map((member) => ({
-      ...member,
-      name: member.fullName,
-      isDemo: Boolean(member.isDemo),
-      isLeader: member.role === 1 || member.role === 'Leader',
-      role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
-      major: member.major || '',
-      avatarUrl: member.avatarUrl || ''
-    }))
+    const currentStudentIdForMap = account?.student?.id
+    const currentStudentRoles = account?.student?.strengthRoles
+    const mappedMembers = (group.members || []).map((member) => {
+      const resolvedRoles = member.studentId === currentStudentIdForMap
+        ? (currentStudentRoles ?? member.strengthRoles ?? [])
+        : (member.strengthRoles ?? [])
+      return {
+        ...member,
+        name: member.fullName,
+        isDemo: Boolean(member.isDemo),
+        isLeader: member.role === 1 || member.role === 'Leader',
+        role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
+        major: member.major || '',
+        avatarUrl: member.avatarUrl || '',
+        strengthRoles: Array.isArray(resolvedRoles) ? resolvedRoles : []
+      }
+    })
     const firstMemberId = group.createdByStudentId && mappedMembers.some((m) => m.studentId === group.createdByStudentId)
       ? group.createdByStudentId
       : mappedMembers[0]?.studentId || null
@@ -688,14 +790,26 @@ export default function GroupsPage() {
   }
 
   const currentStudentId = account?.student?.id
+  const myRoles = account?.student?.strengthRoles || []
   const activeSemester = semesters.find((s) => s.code === (isAdmin ? semesterCode : studentSemesterCode))
   const currentStudentGroup = myGroup || groups.find((g) => g.members.some((m) => m.studentId === currentStudentId)) || null
 
+  const matchingGroupsCount = isStudent && myRoles.length > 0
+    ? groups.filter((g) => {
+        if (g.members.some((m) => m.studentId === currentStudentId)) return false
+        const { fit } = analyzeGroupRoles(g, myRoles, true, currentStudentId)
+        return fit?.status === 'match' || fit?.status === 'complement'
+      }).length
+    : 0
+
   const filteredGroups = groups.filter((g) => {
+    const roleFit = filter === 'matching' ? analyzeGroupRoles(g, myRoles, isStudent, currentStudentId).fit : null
+    const isInThisGroup = g.members.some((m) => m.studentId === currentStudentId)
     const matchesFilter =
       filter === 'all' ||
       (filter === 'recruiting' && g.statusType === 'recruiting') ||
-      (filter === 'full' && g.statusType === 'full')
+      (filter === 'full' && g.statusType === 'full') ||
+      (filter === 'matching' && !isInThisGroup && (roleFit?.status === 'match' || roleFit?.status === 'complement'))
 
     const q = normalizeSearchText(search.trim())
     const matchesSearch =
@@ -847,6 +961,17 @@ export default function GroupsPage() {
             >
               Đã chốt / Đủ người ({groups.filter((g) => g.statusType === 'full').length})
             </button>
+            {isStudent && myRoles.length > 0 && (
+              <button
+                className={`tab-btn ${filter === 'matching' ? 'active' : ''}`}
+                onClick={() => {
+                  setFilter('matching')
+                  setCurrentPage(1)
+                }}
+              >
+                Phù hợp Core ({matchingGroupsCount})
+              </button>
+            )}
           </div>
         </div>
 
@@ -978,6 +1103,8 @@ export default function GroupsPage() {
         {pagedGroups.map((group) => {
           const isFull = group.statusType === 'full'
           const isInGroup = group.members.some((m) => m.studentId === currentStudentId)
+          const roleAnalysis = analyzeGroupRoles(group, myRoles, isStudent, currentStudentId)
+          const showFitBadge = isStudent && !isInGroup && roleAnalysis.isRecruiting && roleAnalysis.fit
 
           return (
             <div className="group-clean-card" key={group.id} style={{ borderColor: isInGroup ? 'var(--primary)' : undefined }}>
@@ -995,9 +1122,16 @@ export default function GroupsPage() {
                     <Users size={12} /> {group.statusText}
                   </span>
                 )}
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  {group.members.length}/{group.maxMembers} thành viên
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {showFitBadge && (roleAnalysis.fit.status === 'match' || roleAnalysis.fit.status === 'complement') && (
+                    <span className="badge badge-green" style={{ fontSize: 10.5 }} title={roleAnalysis.fit.detail}>
+                      ✓ {roleAnalysis.fit.label}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    {group.members.length}/{group.maxMembers} thành viên
+                  </span>
+                </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -1008,30 +1142,102 @@ export default function GroupsPage() {
               </div>
               <p className="group-topic">{group.topic}</p>
               <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>{group.projectDescription}</p>
-              {!isFull && !group.isLocked && (
-                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
-                  <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontWeight: 600 }}>Cần tuyển:</span>
-                  {group.recruitmentNeeds.length > 0 ? (
-                    group.recruitmentNeeds.map((need) => (
-                      <span className="badge badge-warning" key={need.roleCode}>
-                        {getTeamRoleLabel(need.roleCode)} · {need.slots}
+
+              {/* Team Role Coverage & Needs / Compatibility */}
+              <div className="group-card-roles">
+                <div className="group-role-row">
+                  <span className="group-role-row-label">Đang có:</span>
+                  {roleAnalysis.coveredEntries.length > 0 ? (
+                    roleAnalysis.coveredEntries.map((item) => (
+                      <span
+                        className="group-role-chip covered"
+                        key={item.code}
+                        title={`${item.count} thành viên có role ${item.label}`}
+                      >
+                        {item.label}{item.count > 1 ? ` ×${item.count}` : ''}
                       </span>
                     ))
                   ) : (
-                    <span className="badge badge-neutral" style={{ fontSize: 11 }}>
-                      Tất cả role · {5 - group.members.length} chỗ
-                    </span>
+                    <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Chưa có thành viên chọn Core</span>
                   )}
                 </div>
-              )}
+
+                {roleAnalysis.isRecruiting ? (
+                  <div className="group-role-row">
+                    <span className="group-role-row-label">Cần tuyển:</span>
+                    {roleAnalysis.explicitNeeds.length > 0 ? (
+                      roleAnalysis.explicitNeeds.map((need) => {
+                        const isMatch = isStudent && myRoles.includes(need.roleCode)
+                        return (
+                          <span
+                            className={`group-role-chip ${isMatch ? 'matched' : ''}`}
+                            key={need.roleCode}
+                            style={!isMatch ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E' } : undefined}
+                            title={isMatch ? 'Phù hợp với Core của bạn' : undefined}
+                          >
+                            {isMatch ? '✓ ' : ''}{getTeamRoleLabel(need.roleCode)} · {need.slots}
+                          </span>
+                        )
+                      })
+                    ) : (
+                      <>
+                        {roleAnalysis.missingStandardRoles.slice(0, 3).map((opt) => {
+                          const isMatch = isStudent && myRoles.includes(opt.code)
+                          return (
+                            <span
+                              className={`group-role-chip ${isMatch ? 'matched' : 'missing'}`}
+                              key={opt.code}
+                              title={isMatch ? 'Nhóm chưa có role này & khớp Core bạn' : 'Nhóm chưa có role này'}
+                            >
+                              {isMatch ? '✓ ' : ''}{opt.label}
+                            </span>
+                          )
+                        })}
+                        {roleAnalysis.missingStandardRoles.length > 3 && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            +{roleAnalysis.missingStandardRoles.length - 3} role chưa có
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="group-role-row">
+                    <span className="group-role-row-label">Chưa có:</span>
+                    {roleAnalysis.missingStandardRoles.length > 0 ? (
+                      <>
+                        {roleAnalysis.missingStandardRoles.slice(0, 4).map((opt) => (
+                          <span className="group-role-chip missing" key={opt.code}>
+                            {opt.label}
+                          </span>
+                        ))}
+                        {roleAnalysis.missingStandardRoles.length > 4 && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            +{roleAnalysis.missingStandardRoles.length - 4}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 11.5, color: '#15803D', fontWeight: 600 }}>Đủ các role cốt lõi</span>
+                    )}
+                  </div>
+                )}
+
+                {showFitBadge && roleAnalysis.fit.status === 'mismatch' && (
+                  <div style={{ fontSize: 11, color: '#92400E', marginTop: 2 }}>
+                    {roleAnalysis.fit.detail}
+                  </div>
+                )}
+              </div>
 
               {/* Members List */}
               <div className="group-members-list">
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginRight: 2, flexShrink: 0 }}>Đội ngũ:</span>
                 {group.members.map((m, idx) => {
                   const memberAvatar = m.avatarUrl || (m.studentId === currentStudentId ? (account?.avatarUrl || account?.googlePictureUrl) : '')
+                  const memberRoleText = m.strengthRoles?.length ? ` · Core: ${m.strengthRoles.map(getTeamRoleLabel).join(', ')}` : ''
                   return (
-                    <span key={idx} className="member-avatar-pill" title={`${m.name} (${m.role})`}>
+                    <span key={idx} className="member-avatar-pill" title={`${m.name} (${m.role})${memberRoleText}`}>
                       <MemberAvatar src={memberAvatar} name={m.name} size={20} />
                       <strong>{m.name.split(' ').pop()}</strong>
                       {m.isLeader && <Crown size={12} color="#EAB308" style={{ marginLeft: 2 }} />}
@@ -1190,22 +1396,97 @@ export default function GroupsPage() {
                   {selectedGroup.projectDescription}
                 </p>
               )}
-              {!selectedGroup.isLocked && selectedGroup.members.length < 5 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', alignSelf: 'center' }}>Vị trí cần tuyển:</span>
-                  {selectedGroup.recruitmentNeeds && selectedGroup.recruitmentNeeds.length > 0 ? (
-                    selectedGroup.recruitmentNeeds.map((need) => (
-                      <span className="badge badge-warning" key={need.roleCode} style={{ fontSize: 11 }}>
-                        {getTeamRoleLabel(need.roleCode)} ({need.slots} chỗ)
+
+              {(() => {
+                const detailRoles = analyzeGroupRoles(selectedGroup, myRoles, isStudent, currentStudentId)
+                const viewerInGroup = selectedGroup.members.some((m) => m.studentId === currentStudentId)
+                return (
+                  <div style={{ borderTop: '1px solid var(--border-default)', marginTop: 12, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {isStudent && detailRoles.fit && (!viewerInGroup || detailRoles.fit.status === 'no-core') && (
+                      <div className={`group-fit-banner ${
+                        detailRoles.fit.status === 'match' || detailRoles.fit.status === 'complement'
+                          ? 'match'
+                          : detailRoles.fit.status === 'mismatch' || detailRoles.fit.status === 'no-core'
+                            ? 'mismatch'
+                            : ''
+                      }`} style={{ marginBottom: 2 }}>
+                        <div>
+                          <strong style={{ display: 'block', marginBottom: 2 }}>
+                            {detailRoles.fit.status === 'match' || detailRoles.fit.status === 'complement'
+                              ? `✓ ${detailRoles.fit.label} với bạn`
+                              : detailRoles.fit.label}
+                          </strong>
+                          <span>{detailRoles.fit.detail}</span>
+                        </div>
+                        {detailRoles.fit.status === 'no-core' && (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => setShowCoreModal(true)}
+                          >
+                            Chọn Core ngay
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="group-role-row">
+                      <span className="group-role-row-label">Role hiện có trong nhóm:</span>
+                      {detailRoles.coveredEntries.length > 0 ? (
+                        detailRoles.coveredEntries.map((item) => (
+                          <span className="group-role-chip covered" key={item.code}>
+                            {item.label}{item.count > 1 ? ` ×${item.count}` : ''}
+                          </span>
+                        ))
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Chưa có thành viên nào chọn Core</span>
+                      )}
+                    </div>
+
+                    {detailRoles.isRecruiting && detailRoles.explicitNeeds.length > 0 && (
+                      <div className="group-role-row">
+                        <span className="group-role-row-label">Vị trí đang cần tuyển:</span>
+                        {detailRoles.explicitNeeds.map((need) => {
+                          const isMatch = isStudent && myRoles.includes(need.roleCode)
+                          return (
+                            <span
+                              className={`group-role-chip ${isMatch ? 'matched' : ''}`}
+                              key={need.roleCode}
+                              style={!isMatch ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', color: '#92400E' } : undefined}
+                            >
+                              {isMatch ? '✓ Khớp bạn · ' : ''}{getTeamRoleLabel(need.roleCode)} ({need.slots} chỗ)
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    <div className="group-role-row">
+                      <span className="group-role-row-label">
+                        {detailRoles.isRecruiting && detailRoles.explicitNeeds.length === 0
+                          ? `Còn ${detailRoles.openSlots} chỗ · Role chưa có trong nhóm:`
+                          : 'Role nhóm chưa có:'}
                       </span>
-                    ))
-                  ) : (
-                    <span className="badge badge-neutral" style={{ fontSize: 11 }}>
-                      Tất cả role (còn {5 - selectedGroup.members.length} chỗ)
-                    </span>
-                  )}
-                </div>
-              )}
+                      {detailRoles.missingStandardRoles.length > 0 ? (
+                        detailRoles.missingStandardRoles.map((opt) => {
+                          const isMatch = detailRoles.isRecruiting && isStudent && myRoles.includes(opt.code)
+                          return (
+                            <span
+                              className={`group-role-chip ${isMatch ? 'matched' : 'missing'}`}
+                              key={opt.code}
+                              title={isMatch ? 'Nhóm chưa có role này & khớp với Core của bạn' : undefined}
+                            >
+                              {isMatch ? '✓ Bạn có · ' : ''}{opt.label}
+                            </span>
+                          )
+                        })
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#15803D', fontWeight: 600 }}>Nhóm đã phủ đầy đủ 8 role cốt lõi</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
               {account?.role === 'Student' && selectedGroup.members.some((member) => member.studentId === currentStudentId) && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderTop: '1px solid var(--border-default)', marginTop: 12, paddingTop: 12 }}>
                   <div>
@@ -1273,6 +1554,9 @@ export default function GroupsPage() {
                   const isThisMemberMe = m.studentId === currentStudentId
                   const amIInGroup = selectedGroup.members.some((x) => x.studentId === currentStudentId)
                   const memberEmail = m.email || (isThisMemberMe ? account?.email : '')
+                  const memberCoreRoles = isThisMemberMe
+                    ? (account?.student?.strengthRoles ?? m.strengthRoles ?? [])
+                    : (m.strengthRoles ?? [])
 
                   return (
                     <div
@@ -1281,19 +1565,20 @@ export default function GroupsPage() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: '8px 12px',
+                        gap: 10,
+                        padding: '10px 12px',
                         backgroundColor: m.isLeader ? '#F0FDF4' : 'var(--bg-subtle)',
                         border: m.isLeader ? '1px solid #BBF7D0' : '1px solid transparent',
                         borderRadius: 'var(--radius-sm)'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
                         <MemberAvatar
                           src={m.avatarUrl || (isThisMemberMe ? (account?.avatarUrl || account?.googlePictureUrl) : '')}
                           name={m.name}
                           size={28}
                         />
-                        <div>
+                        <div style={{ minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <strong style={{ fontSize: 13, color: 'var(--text-main)' }}>{m.name}</strong>
                             {isThisMemberMe && <span className="badge badge-neutral" style={{ fontSize: 10 }}>Bạn</span>}
@@ -1307,10 +1592,32 @@ export default function GroupsPage() {
                               </span>
                             )}
                           </div>
-                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', display: 'block' }}>
                             {memberEmail ? `${memberEmail} · ${m.studentCode}` : m.studentCode}
                             {m.major && m.major !== m.studentCode ? ` · ${m.major}` : ''}
                           </span>
+                          {!m.isDemo && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 5 }}>
+                              {memberCoreRoles.length > 0 ? (
+                                memberCoreRoles.map((code) => (
+                                  <span key={code} className="group-role-chip covered" style={{ fontSize: 10.5, padding: '1px 7px' }}>
+                                    {getTeamRoleLabel(code)}
+                                  </span>
+                                ))
+                              ) : isThisMemberMe ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ fontSize: 11, padding: '1px 7px', color: 'var(--primary)', border: '1px dashed var(--primary-border)' }}
+                                  onClick={() => setShowCoreModal(true)}
+                                >
+                                  + Chọn Core của bạn
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Chưa chọn role</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1768,7 +2075,12 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {showCoreModal && <StudentCoreModal onClose={() => setShowCoreModal(false)} />}
+      {showCoreModal && (
+        <StudentCoreModal
+          onClose={() => setShowCoreModal(false)}
+          onSaved={() => loadGroups()}
+        />
+      )}
 
       <ConfirmModal
         open={Boolean(confirmState)}

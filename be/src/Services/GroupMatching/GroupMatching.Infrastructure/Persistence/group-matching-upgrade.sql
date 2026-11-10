@@ -5,6 +5,7 @@ ALTER TABLE "Groups" ADD COLUMN IF NOT EXISTS "ProjectDescription" varchar(1200)
 ALTER TABLE "GroupMembers" ADD COLUMN IF NOT EXISTS "IsDemo" boolean NOT NULL DEFAULT false;
 ALTER TABLE "GroupMembers" ADD COLUMN IF NOT EXISTS "Email" varchar(254) NOT NULL DEFAULT '';
 ALTER TABLE "GroupMembers" ADD COLUMN IF NOT EXISTS "Major" varchar(100) NOT NULL DEFAULT '';
+ALTER TABLE "GroupMembers" ADD COLUMN IF NOT EXISTS "StrengthRoles" varchar(200) NOT NULL DEFAULT '';
 ALTER TABLE "GroupMembers" ADD COLUMN IF NOT EXISTS "AvatarUrl" text NULL;
 -- A group is created before its members elect a leader.
 ALTER TABLE "Groups" ALTER COLUMN "LeaderStudentId" DROP NOT NULL;

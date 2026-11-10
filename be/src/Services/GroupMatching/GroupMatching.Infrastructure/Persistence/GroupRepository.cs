@@ -64,7 +64,11 @@ public sealed class GroupRepository(GroupMatchingDbContext db) : IGroupRepositor
 
     public static GroupDto Map(Group group) => new(group.Id, group.GroupCode, group.GroupName, group.SemesterCode, group.Status,
         group.LeaderStudentId, group.TopicTitle, group.TopicRegisteredAt, group.Members.Count,
-        group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).Select(m => new GroupMemberDto(m.StudentId, m.StudentCode, m.FullName, m.Role, m.JoinedAt, m.IsDemo, m.Email, m.Major, m.AvatarUrl)).ToList(),
+        group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).Select(m => new GroupMemberDto(
+            m.StudentId, m.StudentCode, m.FullName, m.Role, m.JoinedAt, m.IsDemo, m.Email, m.Major, m.AvatarUrl,
+            string.IsNullOrWhiteSpace(m.StrengthRoles)
+                ? []
+                : m.StrengthRoles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))).ToList(),
         group.ProjectDescription,
         group.RecruitmentNeeds.OrderBy(x => x.RoleCode).Select(x => new RecruitmentNeedDto(x.RoleCode, x.Slots)).ToList(),
         group.CreatedByStudentId);
