@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   GraduationCap, Layers, Users, Plus, Search,
   CheckCircle2, X, Crown,
-  LogOut, Lock, Shuffle,
+  LogOut, Lock, Unlock, Shuffle,
   Trash2, Edit3, UserMinus, UserPlus, Sparkles, Calendar, AlertCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -10,9 +10,36 @@ import '../../components/ServicePages.css'
 import { useAuth } from '../../hooks/useAuth'
 import { TEAM_ROLE_OPTIONS, getTeamRoleLabel } from '../../config/teamRoles'
 import StudentCoreModal from '../../components/StudentCoreModal'
+import ConfirmModal from '../../components/ConfirmModal'
 import { fetchAllGroupsBySemester } from '../../utils/groupsApi'
 
 const GROUPS_PER_PAGE = 24
+
+function MemberAvatar({ src, name, size = 28 }) {
+  const [failedSrc, setFailedSrc] = useState('')
+  const validSrc = src && src !== failedSrc ? src : ''
+  const fontSize = size <= 20 ? 10 : 11
+
+  return (
+    <span
+      className="avatar avatar-sm avatar-primary"
+      style={{ width: size, height: size, fontSize, overflow: 'hidden', flexShrink: 0 }}
+    >
+      {validSrc ? (
+        <img
+          key={validSrc}
+          src={validSrc}
+          alt={name || 'Avatar'}
+          referrerPolicy="no-referrer"
+          onError={() => setFailedSrc(validSrc)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+        />
+      ) : (
+        (name || 'U').charAt(0).toUpperCase()
+      )}
+    </span>
+  )
+}
 
 const normalizeSearchText = (value) => value
   .normalize('NFD')
@@ -39,6 +66,7 @@ export default function GroupsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showCoreModal, setShowCoreModal] = useState(false)
   const [showRandomConfirm, setShowRandomConfirm] = useState(false)
+  const [confirmState, setConfirmState] = useState(null)
   const [inviteIdentifier, setInviteIdentifier] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteCandidates, setInviteCandidates] = useState([])
@@ -78,6 +106,18 @@ export default function GroupsPage() {
     const leader = group.members?.find((member) => member.role === 1 || member.role === 'Leader')
     const memberCount = group.memberCount ?? group.members?.length ?? 0
     const isLocked = group.status === 2 || group.status === 'Locked'
+    const mappedMembers = (group.members || []).map((member) => ({
+      ...member,
+      name: member.fullName,
+      isDemo: Boolean(member.isDemo),
+      isLeader: member.role === 1 || member.role === 'Leader',
+      role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
+      major: member.major || '',
+      avatarUrl: member.avatarUrl || ''
+    }))
+    const firstMemberId = group.createdByStudentId && mappedMembers.some((m) => m.studentId === group.createdByStudentId)
+      ? group.createdByStudentId
+      : mappedMembers[0]?.studentId || null
 
     return {
       ...group,
@@ -87,14 +127,8 @@ export default function GroupsPage() {
       recruitmentNeeds: group.recruitmentNeeds || [],
       leader: leader?.fullName || 'Chưa bầu trưởng nhóm',
       isLocked,
-      members: (group.members || []).map((member) => ({
-        ...member,
-        name: member.fullName,
-        isDemo: Boolean(member.isDemo),
-        isLeader: member.role === 1 || member.role === 'Leader',
-        role: member.role === 1 || member.role === 'Leader' ? 'Trưởng nhóm' : 'Thành viên',
-        major: member.major || ''
-      })),
+      firstMemberId,
+      members: mappedMembers,
       maxMembers: 5,
       statusText: isLocked
         ? 'Đã khóa nhóm'
@@ -216,25 +250,32 @@ export default function GroupsPage() {
     }
   }, [inviteIdentifier, request, selectedGroup])
 
-  const handleSeedDemoMembers = async (group) => {
+  const handleSeedDemoMembers = (group) => {
     const emptySlots = 5 - group.members.length
     if (emptySlots <= 0) {
       toast.error('Nhóm đã đủ 5 thành viên.')
       return
     }
-    if (!window.confirm(`Thêm ${emptySlots} thành viên demo vào nhóm "${group.name}"? Khi bỏ phiếu, các thành viên demo sẽ vote theo ứng viên bạn chọn.`)) return
-
-    setSeedingDemoMembers(true)
-    try {
-      const updatedGroup = await request(`/api/groups/${group.id}/demo-members`, { method: 'POST' })
-      setSelectedGroup(mapGroup(updatedGroup))
-      toast.success(`Đã thêm ${emptySlots} thành viên demo.`)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể seed thành viên demo.')
-    } finally {
-      setSeedingDemoMembers(false)
-    }
+    setConfirmState({
+      title: 'Seed thành viên demo',
+      message: `Thêm ${emptySlots} thành viên demo vào nhóm "${group.name}"? Khi bỏ phiếu, các thành viên demo sẽ vote theo ứng viên bạn chọn.`,
+      confirmLabel: `Seed +${emptySlots} thành viên`,
+      tone: 'primary',
+      onConfirm: async () => {
+        setSeedingDemoMembers(true)
+        try {
+          const updatedGroup = await request(`/api/groups/${group.id}/demo-members`, { method: 'POST' })
+          setSelectedGroup(mapGroup(updatedGroup))
+          toast.success(`Đã thêm ${emptySlots} thành viên demo.`)
+          setConfirmState(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể seed thành viên demo.')
+        } finally {
+          setSeedingDemoMembers(false)
+        }
+      }
+    })
   }
 
   const openMentorRequest = async (group) => {
@@ -248,7 +289,7 @@ export default function GroupsPage() {
       setMentorRequestMessage('')
       setSelectedGroup(null)
     } catch (error) {
-      toast.error(error.message || 'Không thể tải danh sách mentor.')
+      toast.error(error.message || 'Không thể tải danh sách mentor.', { id: 'mentor-rec-error' })
     } finally {
       setLoadingMentors(false)
     }
@@ -362,19 +403,27 @@ export default function GroupsPage() {
   }
 
   // 3. Leave Group (Self)
-  const handleLeaveGroup = async (group) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn rời nhóm "${group.name}"?`)) return
-    try {
-      setBusy(true)
-      await request(`/api/groups/${group.id}/members/me`, { method: 'DELETE' })
-      toast.success('Đã rời khỏi nhóm thành công.')
-      setSelectedGroup(null)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể rời nhóm.')
-    } finally {
-      setBusy(false)
-    }
+  const handleLeaveGroup = (group) => {
+    setConfirmState({
+      title: 'Rời khỏi nhóm',
+      message: `Bạn có chắc chắn muốn rời nhóm "${group.name}"?`,
+      confirmLabel: 'Rời nhóm',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/groups/${group.id}/members/me`, { method: 'DELETE' })
+          toast.success('Đã rời khỏi nhóm thành công.')
+          setConfirmState(null)
+          setSelectedGroup(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể rời nhóm.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
   // 4. Vote Leader
@@ -399,18 +448,51 @@ export default function GroupsPage() {
   }
 
   // 5. Lock Group
-  const handleLockGroup = async (group) => {
-    if (!window.confirm(`Xác nhận khóa nhóm "${group.name}"? Sau khi khóa sẽ không thể thêm/rời thành viên.`)) return
-    try {
-      setBusy(true)
-      await request(`/api/groups/${group.id}/lock`, { method: 'POST' })
-      toast.success(`Đã khóa danh sách nhóm "${group.name}" thành công!`)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể khóa nhóm.')
-    } finally {
-      setBusy(false)
-    }
+  const handleLockGroup = (group) => {
+    setConfirmState({
+      title: 'Khóa nhóm khởi nghiệp',
+      message: `Xác nhận khóa nhóm "${group.name}"? Sau khi khóa sẽ không thể thêm hoặc rời thành viên (có thể gỡ khóa lại trước hạn đề tài).`,
+      confirmLabel: 'Khóa nhóm',
+      tone: 'warning',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          const updated = await request(`/api/groups/${group.id}/lock`, { method: 'POST' })
+          setSelectedGroup(mapGroup(updated))
+          toast.success(`Đã khóa danh sách nhóm "${group.name}" thành công!`)
+          setConfirmState(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể khóa nhóm.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
+  }
+
+  // 5b. Unlock Group (Leader or Admin)
+  const handleUnlockGroup = (group) => {
+    setConfirmState({
+      title: 'Gỡ khóa nhóm',
+      message: `Xác nhận gỡ khóa nhóm "${group.name}" để mở lại quyền thêm hoặc rời thành viên?`,
+      confirmLabel: 'Gỡ khóa nhóm',
+      tone: 'warning',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          const updated = await request(`/api/groups/${group.id}/unlock`, { method: 'POST' })
+          setSelectedGroup(mapGroup(updated))
+          toast.success(`Đã gỡ khóa nhóm "${group.name}".`)
+          setConfirmState(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể gỡ khóa nhóm.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
   // 6. Update group name, topic, project description, and open recruitment needs.
@@ -479,34 +561,50 @@ export default function GroupsPage() {
   }
 
   // 7. Delete Group
-  const handleDeleteGroup = async (group) => {
-    if (!window.confirm(`CẢNH BÁO: Bạn có chắc chắn muốn xóa nhóm "${group.name}" không? Thao tác này không thể hoàn tác.`)) return
-    try {
-      setBusy(true)
-      await request(`/api/groups/${group.id}`, { method: 'DELETE' })
-      toast.success(`Đã xóa nhóm "${group.name}".`)
-      setSelectedGroup(null)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể xóa nhóm.')
-    } finally {
-      setBusy(false)
-    }
+  const handleDeleteGroup = (group) => {
+    setConfirmState({
+      title: 'Xóa nhóm khởi nghiệp',
+      message: `CẢNH BÁO: Bạn có chắc chắn muốn xóa nhóm "${group.name}" không? Thao tác này không thể hoàn tác.`,
+      confirmLabel: 'Xóa nhóm',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/groups/${group.id}`, { method: 'DELETE' })
+          toast.success(`Đã xóa nhóm "${group.name}".`)
+          setConfirmState(null)
+          setSelectedGroup(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể xóa nhóm.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
-  // 8. Kick Member (Admin only)
-  const handleKickMember = async (groupId, studentId, studentName) => {
-    if (!window.confirm(`Xác nhận xóa sinh viên "${studentName}" khỏi nhóm?`)) return
-    try {
-      setBusy(true)
-      await request(`/api/groups/${groupId}/members/${studentId}`, { method: 'DELETE' })
-      toast.success(`Đã xóa ${studentName} khỏi nhóm.`)
-      await loadGroups()
-    } catch (error) {
-      toast.error(error.message || 'Không thể xóa thành viên.')
-    } finally {
-      setBusy(false)
-    }
+  // 8. Kick Member (Admin or first member of group)
+  const handleKickMember = (groupId, studentId, studentName) => {
+    setConfirmState({
+      title: 'Xóa thành viên khỏi nhóm',
+      message: `Xác nhận xóa "${studentName}" khỏi nhóm? Nếu đã có bầu Leader trước đó, hệ thống sẽ reset để cả nhóm bầu lại.`,
+      confirmLabel: 'Xóa khỏi nhóm',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/groups/${groupId}/members/${studentId}`, { method: 'DELETE' })
+          toast.success(`Đã xóa ${studentName} khỏi nhóm.`)
+          setConfirmState(null)
+          await loadGroups()
+        } catch (error) {
+          toast.error(error.message || 'Không thể xóa thành viên.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
   // 9. Admin Trigger Random Matching
@@ -802,15 +900,16 @@ export default function GroupsPage() {
               {/* Members List */}
               <div className="group-members-list">
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginRight: 2, flexShrink: 0 }}>Đội ngũ:</span>
-                {group.members.map((m, idx) => (
-                  <span key={idx} className="member-avatar-pill" title={`${m.name} (${m.role})`}>
-                    <span className="avatar avatar-sm avatar-primary" style={{ width: 20, height: 20, fontSize: 10 }}>
-                      {m.name.charAt(0)}
+                {group.members.map((m, idx) => {
+                  const memberAvatar = m.avatarUrl || (m.studentId === currentStudentId ? (account?.avatarUrl || account?.googlePictureUrl) : '')
+                  return (
+                    <span key={idx} className="member-avatar-pill" title={`${m.name} (${m.role})`}>
+                      <MemberAvatar src={memberAvatar} name={m.name} size={20} />
+                      <strong>{m.name.split(' ').pop()}</strong>
+                      {m.isLeader && <Crown size={12} color="#EAB308" style={{ marginLeft: 2 }} />}
                     </span>
-                    <strong>{m.name.split(' ').pop()}</strong>
-                    {m.isLeader && <Crown size={12} color="#EAB308" style={{ marginLeft: 2 }} />}
-                  </span>
-                ))}
+                  )
+                })}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
@@ -1061,13 +1160,18 @@ export default function GroupsPage() {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div className="avatar avatar-sm avatar-primary">
-                          {m.name.charAt(0)}
-                        </div>
+                        <MemberAvatar
+                          src={m.avatarUrl || (isThisMemberMe ? (account?.avatarUrl || account?.googlePictureUrl) : '')}
+                          name={m.name}
+                          size={28}
+                        />
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <strong style={{ fontSize: 13, color: 'var(--text-main)' }}>{m.name}</strong>
                             {isThisMemberMe && <span className="badge badge-neutral" style={{ fontSize: 10 }}>Bạn</span>}
+                            {m.studentId === selectedGroup.firstMemberId && !m.isDemo && (
+                              <span className="badge badge-neutral" style={{ fontSize: 10 }}>Người tạo / Đầu nhóm</span>
+                            )}
                             {m.isDemo && <span className="badge badge-neutral" style={{ fontSize: 10 }}>DEMO</span>}
                             {m.isLeader && (
                               <span className="badge badge-warning" style={{ fontSize: 10 }}>
@@ -1097,8 +1201,9 @@ export default function GroupsPage() {
                           </button>
                         )}
 
-                        {/* Kick Button (Admin only) */}
-                        {isAdmin && !selectedGroup.isLocked && (
+                        {/* Kick Button (Admin or first member of group for later members) */}
+                        {!selectedGroup.isLocked &&
+                          (isAdmin || (selectedGroup.firstMemberId === currentStudentId && m.studentId !== currentStudentId)) && (
                           <button
                             className="btn btn-ghost btn-sm"
                             style={{ color: 'var(--error)', padding: '3px 6px' }}
@@ -1163,26 +1268,29 @@ export default function GroupsPage() {
                               borderBottom: '1px solid var(--border-default)'
                             }}
                           >
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <strong style={{ fontSize: 12.5, color: 'var(--text-main)' }}>{cand.fullName}</strong>
-                                <span className="badge badge-neutral" style={{ fontSize: 10 }}>{cand.studentCode}</span>
-                                <span className={`badge ${cand.hasGroup ? 'badge-neutral' : 'badge-green'}`} style={{ fontSize: 10 }}>
-                                  {cand.hasGroup ? 'Đã có nhóm' : 'Chưa có nhóm'}
-                                </span>
-                              </div>
-                              <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
-                                {cand.email}{cand.major ? ` · ${cand.major}` : ''}
-                              </div>
-                              {cand.strengthRoles?.length > 0 && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                                  {cand.strengthRoles.map((r) => (
-                                    <span key={r} className="badge badge-teal" style={{ fontSize: 9.5 }}>
-                                      {getTeamRoleLabel(r)}
-                                    </span>
-                                  ))}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                              <MemberAvatar src={cand.avatarUrl} name={cand.fullName} size={26} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <strong style={{ fontSize: 12.5, color: 'var(--text-main)' }}>{cand.fullName}</strong>
+                                  <span className="badge badge-neutral" style={{ fontSize: 10 }}>{cand.studentCode}</span>
+                                  <span className={`badge ${cand.hasGroup ? 'badge-neutral' : 'badge-green'}`} style={{ fontSize: 10 }}>
+                                    {cand.hasGroup ? 'Đã có nhóm' : 'Chưa có nhóm'}
+                                  </span>
                                 </div>
-                              )}
+                                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                  {cand.email}{cand.major ? ` · ${cand.major}` : ''}
+                                </div>
+                                {cand.strengthRoles?.length > 0 && (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                                    {cand.strengthRoles.map((r) => (
+                                      <span key={r} className="badge badge-teal" style={{ fontSize: 9.5 }}>
+                                        {getTeamRoleLabel(r)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             <button
                               type="button"
@@ -1205,8 +1313,8 @@ export default function GroupsPage() {
             {/* Modal Actions Footer */}
             <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', gap: 8 }}>
-                {/* Delete Group (Leader or Admin) */}
-                {(isAdmin || selectedGroup.leaderStudentId === currentStudentId) && (
+                {/* Delete Group (Open group only: Admin or creator) */}
+                {!selectedGroup.isLocked && (isAdmin || selectedGroup.firstMemberId === currentStudentId) && (
                   <button
                     className="btn btn-outline btn-sm"
                     style={{ color: 'var(--error)', borderColor: 'var(--border-default)' }}
@@ -1226,6 +1334,18 @@ export default function GroupsPage() {
                     title="Khóa nhóm để hoàn tất thành viên"
                   >
                     <Lock size={13} /> Khóa nhóm
+                  </button>
+                )}
+
+                {/* Unlock Group (Leader or Admin) */}
+                {(isAdmin || selectedGroup.leaderStudentId === currentStudentId) && selectedGroup.isLocked && (
+                  <button
+                    className="btn btn-outline btn-sm"
+                    disabled={busy}
+                    onClick={() => handleUnlockGroup(selectedGroup)}
+                    title="Gỡ khóa để cho phép chỉnh sửa thành viên"
+                  >
+                    <Unlock size={13} /> Gỡ khóa nhóm
                   </button>
                 )}
               </div>
@@ -1518,6 +1638,17 @@ export default function GroupsPage() {
       )}
 
       {showCoreModal && <StudentCoreModal onClose={() => setShowCoreModal(false)} />}
+
+      <ConfirmModal
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel}
+        tone={confirmState?.tone}
+        busy={busy || seedingDemoMembers}
+        onConfirm={() => confirmState?.onConfirm?.()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

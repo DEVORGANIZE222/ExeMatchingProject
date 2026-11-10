@@ -68,6 +68,7 @@ export default function AppLayout() {
   }
 
   const userInitial = account?.username ? account.username.charAt(0).toUpperCase() : 'U'
+  const avatarSrc = account?.avatarUrl || account?.googlePictureUrl || ''
 
   return (
     <div className="app-shell">
@@ -106,9 +107,16 @@ export default function AppLayout() {
           {/* Right: User Profile & Actions */}
           <div className="topbar-actions">
             <div className="user-profile-badge">
-              <div className="avatar avatar-sm avatar-primary">
-                {account?.avatarUrl && account.avatarUrl !== failedAvatarUrl ? (
-                  <img src={account.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarUrl(account.avatarUrl)} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              <div className="avatar avatar-sm avatar-primary" style={{ overflow: 'hidden' }}>
+                {avatarSrc && avatarSrc !== failedAvatarUrl ? (
+                  <img
+                    key={avatarSrc}
+                    src={avatarSrc}
+                    alt={account?.username || 'Avatar'}
+                    referrerPolicy="no-referrer"
+                    onError={() => setFailedAvatarUrl(avatarSrc)}
+                    style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                  />
                 ) : userInitial}
               </div>
               <div style={{ textAlign: 'left' }}>

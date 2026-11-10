@@ -86,16 +86,21 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
     }
 
     [HttpDelete("{id:guid}/members/{studentId:guid}")]
-    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
-    public async Task<IActionResult> RemoveMemberAsAdmin(Guid id, Guid studentId, CancellationToken ct)
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public async Task<IActionResult> RemoveMember(Guid id, Guid studentId, CancellationToken ct)
     {
-        await service.RemoveMemberAsAdminAsync(id, studentId, ct);
+        await service.RemoveMemberAsync(id, studentId, Actor, IsAdmin, ct);
         return NoContent();
     }
 
     [HttpPost("{id:guid}/lock")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> LockGroup(Guid id, CancellationToken ct)
         => Ok(ApiResponse<GroupDto>.Ok(await service.LockAsync(id, Actor, ct)));
+
+    [HttpPost("{id:guid}/unlock")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
+    public async Task<ActionResult<ApiResponse<GroupDto>>> UnlockGroup(Guid id, CancellationToken ct)
+        => Ok(ApiResponse<GroupDto>.Ok(await service.UnlockAsync(id, Actor, IsAdmin, ct)));
 
     [HttpPost("{id:guid}/topic")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> RegisterTopic(Guid id, RegisterTopicRequest request, CancellationToken ct)

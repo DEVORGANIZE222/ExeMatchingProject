@@ -45,6 +45,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         if (group.Members.Count >= 5)
             throw Conflict("This group already has the maximum of 5 members.");
 
+        var baseTime = DateTime.UtcNow;
         var missingMembers = 5 - group.Members.Count;
         for (var index = 1; index <= missingMembers; index++)
         {
@@ -56,7 +57,7 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
                 FullName = $"Demo Member {index}",
                 Major = "Thành viên Test",
                 IsDemo = true,
-                JoinedAt = DateTime.UtcNow
+                JoinedAt = baseTime.AddTicks(index)
             };
             group.Members.Add(member);
             repository.AddMember(member);
@@ -212,19 +213,35 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         group.Votes.Clear();
         group.LeaderStudentId = null;
         foreach (var item in group.Members) item.Role = MemberRole.Member;
+        if (group.CreatedByStudentId == member.StudentId)
+            group.CreatedByStudentId = group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).FirstOrDefault()?.StudentId;
         MembershipEvent(member.StudentId, false);
         if (group.Members.Count == 0) repository.Remove(group); else group.UpdatedAt = DateTime.UtcNow;
         await repository.SaveAsync(ct);
     }
 
-    public async Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default)
+    public Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default)
+        => RemoveMemberAsync(id, studentId, Guid.Empty, isAdmin: true, ct);
+
+    public async Task RemoveMemberAsync(Guid id, Guid studentId, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
     {
         var group = await Group(id, ct);
-        if (group.Status != GroupStatus.Open) throw Conflict("A locked group cannot be changed.");
+        if (group.Status != GroupStatus.Open) throw Conflict("Nhóm đã khóa, cần gỡ khóa trước khi xóa thành viên.");
+        if (!isAdmin)
+        {
+            var actor = await Enrollment(actorUserId, group.SemesterCode, ct);
+            var firstMemberId = ResolveFirstMemberStudentId(group);
+            if (firstMemberId != actor.StudentId)
+                throw Forbidden("Chỉ người vào nhóm đầu tiên hoặc Quản trị viên mới có quyền xóa thành viên.");
+            if (studentId == actor.StudentId)
+                throw BadRequest("Vui lòng dùng chức năng Rời nhóm để tự thoát khỏi nhóm.");
+        }
         var member = group.Members.SingleOrDefault(x => x.StudentId == studentId) ?? throw new GroupException(404, "Member not found in this group.");
         group.Members.Remove(member);
         group.Votes.Clear(); group.LeaderStudentId = null;
         foreach (var item in group.Members) item.Role = MemberRole.Member;
+        if (group.CreatedByStudentId == member.StudentId)
+            group.CreatedByStudentId = group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).FirstOrDefault()?.StudentId;
         MembershipEvent(member.StudentId, false);
         if (group.Members.Count == 0) repository.Remove(group); else group.UpdatedAt = DateTime.UtcNow;
         await repository.SaveAsync(ct);
@@ -287,8 +304,30 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         if (group.LeaderStudentId != actor.StudentId) throw Forbidden("Only the elected leader can lock this group.");
         if (group.Members.Count is < 4 or > 5) throw Conflict("A group must contain 4 or 5 members before it can be locked.");
         group.Status = GroupStatus.Locked; group.UpdatedAt = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(group.TopicTitle) && group.TopicRegisteredAt is null)
+        {
+            group.TopicRegisteredAt = DateTime.UtcNow;
+            Event("topic-registered", new TopicRegisteredEvent(group.Id, group.GroupCode, group.TopicTitle, group.TopicRegisteredAt.Value));
+        }
         Event("group-locked", new GroupLockedEvent(group.Id, group.GroupCode, group.Members.Count, DateTime.UtcNow));
         await repository.SaveAsync(ct); return Map(group);
+    }
+
+    public async Task<GroupDto> UnlockAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default)
+    {
+        var group = await Group(id, ct);
+        if (!isAdmin)
+        {
+            var actor = await Enrollment(actorUserId, group.SemesterCode, ct);
+            await TopicWindow(group.SemesterCode, ct);
+            if (group.LeaderStudentId != actor.StudentId)
+                throw Forbidden("Chỉ trưởng nhóm hoặc Quản trị viên mới có quyền gỡ khóa nhóm.");
+        }
+        if (group.Status != GroupStatus.Locked) throw Conflict("Nhóm hiện chưa khóa.");
+        group.Status = GroupStatus.Open;
+        group.UpdatedAt = DateTime.UtcNow;
+        await repository.SaveAsync(ct);
+        return Map(group);
     }
 
     public async Task<GroupDto> RegisterTopicAsync(Guid id, RegisterTopicRequest request, Guid actorUserId, CancellationToken ct = default)
@@ -332,13 +371,19 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         FullName = item.FullName,
         Email = item.Email ?? string.Empty,
         Major = item.Major ?? string.Empty,
+        AvatarUrl = item.AvatarUrl,
         JoinedAt = DateTime.UtcNow
     };
+    private static Guid? ResolveFirstMemberStudentId(Group group) =>
+        group.CreatedByStudentId.HasValue && group.Members.Any(x => x.StudentId == group.CreatedByStudentId.Value)
+            ? group.CreatedByStudentId.Value
+            : group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).FirstOrDefault()?.StudentId;
     private static GroupDto Map(Group group) => new(group.Id, group.GroupCode, group.GroupName, group.SemesterCode, group.Status,
         group.LeaderStudentId, group.TopicTitle, group.TopicRegisteredAt, group.Members.Count,
-        group.Members.OrderBy(x => x.JoinedAt).Select(x => new GroupMemberDto(x.StudentId, x.StudentCode, x.FullName, x.Role, x.JoinedAt, x.IsDemo, x.Email, x.Major)).ToList(),
+        group.Members.OrderBy(x => x.JoinedAt).ThenBy(x => x.Id).Select(x => new GroupMemberDto(x.StudentId, x.StudentCode, x.FullName, x.Role, x.JoinedAt, x.IsDemo, x.Email, x.Major, x.AvatarUrl)).ToList(),
         group.ProjectDescription,
-        group.RecruitmentNeeds.OrderBy(x => x.RoleCode).Select(x => new RecruitmentNeedDto(x.RoleCode, x.Slots)).ToList());
+        group.RecruitmentNeeds.OrderBy(x => x.RoleCode).Select(x => new RecruitmentNeedDto(x.RoleCode, x.Slots)).ToList(),
+        group.CreatedByStudentId);
     private static void ApplyRecruitmentNeeds(Group group, IEnumerable<RecruitmentNeedRequest>? source)
     {
         var requested = (source ?? []).ToList();
@@ -437,7 +482,14 @@ public sealed class MatchingService(IGroupRepository repository, IIdentitySemest
         {
             var rawCode = $"GRP-{code}-{Guid.NewGuid():N}";
             var group = new Group { GroupCode = rawCode[..Math.Min(64, rawCode.Length)], GroupName = $"Nhóm ghép ngẫu nhiên {created + 1}", ProjectDescription = "Nhóm được tạo từ thuật toán ghép ngẫu nhiên.", SemesterCode = code };
-            for (var i = 0; i < size; i++) group.Members.Add(GroupService.Member(candidates[index++]));
+            var joinedBase = DateTime.UtcNow;
+            for (var i = 0; i < size; i++)
+            {
+                var member = GroupService.Member(candidates[index++]);
+                member.JoinedAt = joinedBase.AddTicks(i);
+                group.Members.Add(member);
+            }
+            group.CreatedByStudentId = group.Members.FirstOrDefault()?.StudentId;
             AssignMissingRecruitmentNeeds(group, studentRoles);
             repository.Add(group); created++;
         }

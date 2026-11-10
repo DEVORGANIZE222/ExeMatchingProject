@@ -8,15 +8,20 @@ import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
 
 import { TEAM_ROLES } from '../../config/teamRoles'
+import ConfirmModal from '../../components/ConfirmModal'
+import UploadProgressBar from '../../components/UploadProgressBar'
+import { uploadFormDataWithProgress } from '../../utils/uploadWithProgress'
 
 export default function StudentsPage() {
-  const { request, isAdmin } = useAuth()
+  const { request, isAdmin, token } = useAuth()
   const [semesters, setSemesters] = useState([])
   const [selectedSemester, setSelectedSemester] = useState('')
   const [hasGroupFilter, setHasGroupFilter] = useState('all') // 'all' | 'true' | 'false'
   const [students, setStudents] = useState([])
   const [studentTotal, setStudentTotal] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(null)
+  const [confirmState, setConfirmState] = useState(null)
   const [search, setSearch] = useState('')
   const [bulkDeleteSemester, setBulkDeleteSemester] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -113,11 +118,29 @@ export default function StudentsPage() {
         data.append('semesterCode', importForm.semesterCode)
       }
 
-      const result = await request('/api/students/import/excel', { method: 'POST', body: data })
-      toast.success(`Đã thêm ${result?.importedCount || 0} sinh viên và cấp quyền Google Access.`)
+      const result = await uploadFormDataWithProgress(
+        '/api/students/import/excel',
+        data,
+        token,
+        setUploadProgress
+      )
+      const count = result?.importedCount || 0
+      setUploadProgress({
+        phase: 'done',
+        percent: 100,
+        label: `Hoàn tất: đã nạp thành công ${count} sinh viên!`,
+        detail: 'Đã tạo hồ sơ học phần và đồng bộ quyền đăng nhập Google Access.'
+      })
+      toast.success(`Đã thêm ${count} sinh viên và cấp quyền Google Access.`)
       setImportForm((prev) => ({ ...prev, file: null }))
       await load()
     } catch (error) {
+      setUploadProgress({
+        phase: 'error',
+        percent: 100,
+        label: 'Import danh sách sinh viên thất bại',
+        detail: error.message || 'Vui lòng kiểm tra lại định dạng file Excel và thử lại.'
+      })
       toast.error(error.message || 'Import danh sách sinh viên không thành công.')
     } finally {
       setBusy(false)
@@ -196,18 +219,26 @@ export default function StudentsPage() {
   }
 
   // 5. Delete Student (DELETE /api/students/{id})
-  const handleDeleteStudent = async (student) => {
-    if (!window.confirm(`Xác nhận xóa sinh viên ${student.fullName} (${student.studentCode}) khỏi hệ thống?`)) return
-    try {
-      setBusy(true)
-      await request(`/api/students/${student.id}`, { method: 'DELETE' })
-      toast.success(`Đã xóa sinh viên ${student.studentCode}`)
-      await load()
-    } catch (error) {
-      toast.error(error.message || 'Không thể xóa sinh viên này (sinh viên có thể đang nằm trong nhóm).')
-    } finally {
-      setBusy(false)
-    }
+  const handleDeleteStudent = (student) => {
+    setConfirmState({
+      title: 'Xóa sinh viên khỏi hệ thống',
+      message: `Xác nhận xóa sinh viên "${student.fullName}" (${student.studentCode}) khỏi hệ thống?`,
+      confirmLabel: 'Xóa sinh viên',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/students/${student.id}`, { method: 'DELETE' })
+          toast.success(`Đã xóa sinh viên ${student.studentCode}`)
+          setConfirmState(null)
+          await load()
+        } catch (error) {
+          toast.error(error.message || 'Không thể xóa sinh viên này (sinh viên có thể đang nằm trong nhóm).')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
   // 6. Delete all students by semester
@@ -337,7 +368,10 @@ export default function StudentsPage() {
                       required
                       type="file"
                       accept=".xlsx"
-                      onChange={(e) => setImportForm({ ...importForm, file: e.target.files?.[0] || null })}
+                      onChange={(e) => {
+                        setUploadProgress(null)
+                        setImportForm({ ...importForm, file: e.target.files?.[0] || null })
+                      }}
                     />
                     {importForm.file ? (
                       <FileSpreadsheet size={26} color="var(--primary)" />
@@ -349,8 +383,16 @@ export default function StudentsPage() {
                   </label>
                 </div>
 
+                <UploadProgressBar progress={uploadProgress} />
+
                 <button className="btn btn-primary" type="submit" disabled={busy || !importForm.file} style={{ width: '100%', marginTop: 4 }}>
-                  {busy ? 'Đang xử lý...' : 'Import & Cấp quyền Google'}
+                  {busy && uploadProgress?.phase === 'uploading'
+                    ? `Đang tải lên (${uploadProgress.percent}%)...`
+                    : busy && uploadProgress?.phase === 'processing'
+                      ? 'Đã nhận tệp — đang nạp vào DB...'
+                      : busy
+                        ? 'Đang xử lý...'
+                        : 'Import & Cấp quyền Google'}
                 </button>
               </form>
             </div>
@@ -805,6 +847,17 @@ export default function StudentsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel}
+        tone={confirmState?.tone}
+        busy={busy}
+        onConfirm={() => confirmState?.onConfirm?.()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

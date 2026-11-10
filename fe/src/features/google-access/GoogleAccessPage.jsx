@@ -5,6 +5,9 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import toast from 'react-hot-toast'
+import ConfirmModal from '../../components/ConfirmModal'
+import UploadProgressBar from '../../components/UploadProgressBar'
+import { uploadFormDataWithProgress } from '../../utils/uploadWithProgress'
 import '../../components/ServicePages.css'
 
 export default function GoogleAccessPage() {
@@ -13,6 +16,8 @@ export default function GoogleAccessPage() {
   const [file, setFile] = useState(null)
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(null)
+  const [confirmState, setConfirmState] = useState(null)
 
   const load = useCallback(async () => {
     if (!token || !isAdmin) return
@@ -44,30 +49,56 @@ export default function GoogleAccessPage() {
       const form = new FormData()
       form.append('file', file)
 
-      const result = await request('/api/google-access/import/excel', {
-        method: 'POST',
-        body: form
-      })
+      const result = await uploadFormDataWithProgress(
+        '/api/google-access/import/excel',
+        form,
+        token,
+        setUploadProgress
+      )
 
+      const count = result?.importedCount || 0
+      setUploadProgress({
+        phase: 'done',
+        percent: 100,
+        label: `Hoàn tất: đã thêm ${count} email vào whitelist!`,
+        detail: 'Các email đã được cấp quyền đăng nhập Google ngay lập tức.'
+      })
       setFile(null)
-      toast.success(`Đã thêm ${result?.importedCount || 0} email vào whitelist.`)
+      toast.success(`Đã thêm ${count} email vào whitelist.`)
       await load()
     } catch (error) {
+      setUploadProgress({
+        phase: 'error',
+        percent: 100,
+        label: 'Import Google Access thất bại',
+        detail: error.message || 'Vui lòng kiểm tra lại định dạng tệp Excel.'
+      })
       toast.error(error.message || 'Có lỗi xảy ra khi tải lên tệp Excel.')
     } finally {
       setBusy(false)
     }
   }
 
-  const handleRemove = async (id, email) => {
-    if (!window.confirm(`Xác nhận gỡ quyền đăng nhập Google của "${email}"?`)) return
-    try {
-      await request(`/api/google-access/${id}`, { method: 'DELETE' })
-      toast.success(`Đã xóa ${email} khỏi whitelist.`)
-      await load()
-    } catch {
-      toast.error('Không thể gỡ email này khỏi hệ thống.')
-    }
+  const handleRemove = (id, email) => {
+    setConfirmState({
+      title: 'Gỡ quyền đăng nhập Google',
+      message: `Xác nhận gỡ quyền đăng nhập Google của "${email}"?`,
+      confirmLabel: 'Gỡ khỏi whitelist',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setBusy(true)
+          await request(`/api/google-access/${id}`, { method: 'DELETE' })
+          toast.success(`Đã xóa ${email} khỏi whitelist.`)
+          setConfirmState(null)
+          await load()
+        } catch {
+          toast.error('Không thể gỡ email này khỏi hệ thống.')
+        } finally {
+          setBusy(false)
+        }
+      }
+    })
   }
 
   const filteredItems = items.filter((item) =>
@@ -119,7 +150,10 @@ export default function GoogleAccessPage() {
             <input
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                setUploadProgress(null)
+                setFile(e.target.files?.[0] || null)
+              }}
             />
             {file ? (
               <FileSpreadsheet size={28} color="var(--primary)" />
@@ -129,6 +163,8 @@ export default function GoogleAccessPage() {
             <strong>{file ? file.name : 'Chọn tệp Excel (.xlsx)'}</strong>
             <span>Hỗ trợ tối đa 2.000 email trong một lần import</span>
           </label>
+
+          <UploadProgressBar progress={uploadProgress} />
 
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             {file && (
@@ -219,6 +255,17 @@ export default function GoogleAccessPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        open={Boolean(confirmState)}
+        title={confirmState?.title}
+        message={confirmState?.message}
+        confirmLabel={confirmState?.confirmLabel}
+        tone={confirmState?.tone}
+        busy={busy}
+        onConfirm={() => confirmState?.onConfirm?.()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

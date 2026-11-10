@@ -47,9 +47,11 @@ public interface IGroupService
     Task<GroupDto> InviteMemberAsync(Guid id, InviteMemberRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<IReadOnlyList<EnrollmentContext>> SearchInviteCandidatesAsync(Guid id, string query, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task LeaveAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
+    Task RemoveMemberAsync(Guid id, Guid studentId, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default);
     Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default, bool allowDemoVotes = false);
     Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> UnlockAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> RegisterTopicAsync(Guid id, RegisterTopicRequest request, Guid actorUserId, CancellationToken ct = default);
 }
 

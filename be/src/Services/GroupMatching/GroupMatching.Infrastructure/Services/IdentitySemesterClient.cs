@@ -33,7 +33,7 @@ public sealed class IdentitySemesterClient(HttpClient client, IRequestAccessToke
             var page = await GetAsync<IdentityPage<IdentityStudent>>($"api/students?semesterCode={Uri.EscapeDataString(semesterCode)}&hasGroup=false&page={pageNumber}&pageSize={pageSize}", ct);
             all.AddRange(page.Items.Select(x => new EnrollmentContext(
                 x.Id, x.UserId, x.StudentCode, x.FullName, x.SemesterCode, x.HasGroup,
-                x.Email ?? string.Empty, x.Major ?? string.Empty, x.StrengthRoles)));
+                x.Email ?? string.Empty, x.Major ?? string.Empty, x.StrengthRoles, x.AvatarUrl)));
             if (page.Items.Count == 0 || all.Count >= page.TotalCount) break;
             pageNumber++;
         }
@@ -62,5 +62,5 @@ public sealed class IdentitySemesterClient(HttpClient client, IRequestAccessToke
 
     private sealed record ApiEnvelope<T>(bool Success, string? Message, T? Data);
     private sealed record IdentityPage<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
-    private sealed record IdentityStudent(Guid Id, Guid UserId, string StudentCode, string FullName, string SemesterCode, bool HasGroup, string? Email = null, string? Major = null, IReadOnlyList<string>? StrengthRoles = null);
+    private sealed record IdentityStudent(Guid Id, Guid UserId, string StudentCode, string FullName, string SemesterCode, bool HasGroup, string? Email = null, string? Major = null, IReadOnlyList<string>? StrengthRoles = null, string? AvatarUrl = null);
 }

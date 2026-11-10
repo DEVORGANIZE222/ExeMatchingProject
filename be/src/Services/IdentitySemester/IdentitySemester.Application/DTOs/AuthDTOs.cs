@@ -12,7 +12,7 @@ public record ActivateMentorRequest([Required, EmailAddress, StringLength(254)] 
 public record UpdateAccountRequest([Required, StringLength(100)] string Username);
 public record ChangePasswordRequest([Required] string CurrentPassword, [Required, StringLength(128, MinimumLength = 12)] string NewPassword);
 public record StudentResponse(Guid Id, Guid UserId, string StudentCode, string FullName, string Email, string Major, string SemesterCode, bool HasGroup,
-    IReadOnlyList<string>? StrengthRoles = null);
+    IReadOnlyList<string>? StrengthRoles = null, string? AvatarUrl = null);
 public record StudentImportDto(
     [Required, StringLength(30)] string StudentCode,
     [Required, StringLength(200)] string FullName,
@@ -45,6 +45,6 @@ public class ListQuery
 }
 public record PageResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize);
 public record GroupEnrollmentResponse(Guid StudentId, Guid UserId, string StudentCode, string FullName, string SemesterCode, bool HasGroup,
-    string Email = "", string Major = "", IReadOnlyList<string>? StrengthRoles = null);
+    string Email = "", string Major = "", IReadOnlyList<string>? StrengthRoles = null, string? AvatarUrl = null);
 public record SemesterWorkflowResponse(string SemesterCode, bool IsActive, DateTime StartDate, DateTime EndDate,
     DateTime? RegistrationDeadline, DateTime? TopicDeadline, DateTime? MentorDeadline);

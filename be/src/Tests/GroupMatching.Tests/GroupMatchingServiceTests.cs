@@ -206,6 +206,63 @@ public class GroupMatchingServiceTests
         Assert.Equal(lockedGroup.Id, myGroup!.Id);
     }
 
+    [Fact]
+    public async Task First_member_can_kick_later_members_and_leader_can_lock_with_topic_then_unlock()
+    {
+        var store = new MemoryStore();
+        var students = Enumerable.Range(1, 4)
+            .Select(i => new EnrollmentContext(Guid.NewGuid(), Guid.NewGuid(), $"K{i}", $"Member {i}", "FA26", false, $"k{i}@fpt.edu.vn", "SE"))
+            .ToArray();
+        var identity = new FakeIdentity { Current = students[0], Unmatched = [.. students] };
+        var service = new GroupService(store, identity);
+
+        var group = await service.CreateAsync(new CreateGroupRequest
+        {
+            GroupName = "Host Kick Test",
+            SemesterCode = "FA26",
+            ProjectDescription = "Test first member kick and unlock flow"
+        }, students[0].UserId);
+
+        for (var i = 1; i < 4; i++)
+        {
+            identity.Current = students[i];
+            group = await service.JoinAsync(group.Id, students[i].UserId);
+        }
+
+        // Later member cannot kick anyone
+        identity.Current = students[1];
+        await Assert.ThrowsAsync<GroupException>(() => service.RemoveMemberAsync(group.Id, students[2].StudentId, students[1].UserId, false));
+
+        // First member (creator) can kick later member, and cannot self-kick
+        identity.Current = students[0];
+        await Assert.ThrowsAsync<GroupException>(() => service.RemoveMemberAsync(group.Id, students[0].StudentId, students[0].UserId, false));
+        await service.RemoveMemberAsync(group.Id, students[3].StudentId, students[0].UserId, false);
+        Assert.Equal(3, store.Groups.Single().Members.Count);
+
+        // Re-join 4th member, elect leader, set topic while Open, lock group -> TopicRegisteredAt should be populated -> unlock works
+        identity.Current = students[3];
+        group = await service.JoinAsync(group.Id, students[3].UserId);
+        await service.UpdateAsync(group.Id, new UpdateGroupRequest
+        {
+            GroupName = "Host Kick Test",
+            ProjectDescription = "Test first member kick and unlock flow",
+            TopicTitle = "Ready Topic Before Lock"
+        }, students[3].UserId, false);
+
+        foreach (var voter in students.Take(3))
+        {
+            identity.Current = voter;
+            group = await service.VoteAsync(group.Id, new VoteLeaderRequest(students[0].StudentId), voter.UserId);
+        }
+        identity.Current = students[0];
+        group = await service.LockAsync(group.Id, students[0].UserId);
+        Assert.Equal(GroupStatus.Locked, group.Status);
+        Assert.NotNull(group.TopicRegisteredAt);
+
+        group = await service.UnlockAsync(group.Id, students[0].UserId, false);
+        Assert.Equal(GroupStatus.Open, group.Status);
+    }
+
     private sealed class FakeIdentity : IIdentitySemesterClient
     {
         public EnrollmentContext Current { get; set; } = null!;

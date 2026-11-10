@@ -180,7 +180,7 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
     }
     private static GroupEnrollmentResponse MapEnrollment(Student student) => new(
         student.Id, student.UserId, student.StudentCode, student.FullName, student.Semester.Code, student.HasGroup,
-        student.User.Email, student.Major, student.StrengthRoles.OrderBy(x => x.RoleCode).Select(x => x.RoleCode).ToList());
+        student.User.Email, student.Major, student.StrengthRoles.OrderBy(x => x.RoleCode).Select(x => x.RoleCode).ToList(), student.User.GooglePictureUrl);
     public async Task<SemesterWorkflowResponse> Workflow(string semesterCode, CancellationToken ct)
     {
         var semester = await store.SemesterByCode(Required(semesterCode).ToUpperInvariant(), ct) ?? throw new IdentityException(404, "Semester not found.");
@@ -390,6 +390,6 @@ public class IdentityService(IIdentityStore store, IPasswordService passwords, I
         return result;
     }
     public static StudentResponse Map(Student s) => new(s.Id, s.UserId, s.StudentCode, s.FullName, s.User.Email, s.Major, s.Semester.Code, s.HasGroup,
-        s.StrengthRoles.OrderBy(x => x.RoleCode).Select(x => x.RoleCode).ToList());
+        s.StrengthRoles.OrderBy(x => x.RoleCode).Select(x => x.RoleCode).ToList(), s.User.GooglePictureUrl);
     public static SemesterDto Map(Semester s) => new(s.Id, s.Code, s.Name, s.StartDate, s.EndDate, s.IsActive, s.RegistrationDeadline, s.TopicDeadline, s.MentorDeadline);
 }

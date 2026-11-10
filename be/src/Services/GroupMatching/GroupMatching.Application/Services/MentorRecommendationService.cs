@@ -15,7 +15,7 @@ public sealed class MentorRecommendationService(IGroupService groups, IMentorRec
         bool isAdmin, CancellationToken ct = default)
     {
         var group = await groups.GetAsync(groupId, actorUserId, isAdmin, ct);
-        if (group.Status != GroupStatus.Locked || group.TopicRegisteredAt is null)
+        if (group.Status != GroupStatus.Locked || (group.TopicRegisteredAt is null && string.IsNullOrWhiteSpace(group.TopicTitle)))
             throw new GroupException(409, "Mentor recommendations are available only after a locked group registers its topic.");
 
         return await mentors.GetAvailableAsync(ct);
