@@ -127,11 +127,11 @@ services:
         value: smtp.gmail.com
       - key: EmailSettings__SmtpPort
         value: "587"
-      - key: EmailSettings__SmtpUser
+      - key: EmailSettings__Username
         sync: false
-      - key: EmailSettings__SmtpPassword
+      - key: EmailSettings__Password
         sync: false
       - key: EmailSettings__SenderEmail
         sync: false
       - key: EmailSettings__SenderName
-        value: EXE Team Matching
+        value: ExeMatching Team
