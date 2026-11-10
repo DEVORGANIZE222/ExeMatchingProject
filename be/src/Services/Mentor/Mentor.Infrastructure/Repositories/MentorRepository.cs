@@ -63,6 +63,12 @@ public class MentorRepository(MentorDbContext db) : IMentorRepository
         => await db.Mentors.Include(x => x.Quota)
             .SingleOrDefaultAsync(x => x.UserId == userId, cancellationToken);
 
+    public async Task<MentorUser?> GetByEmailForUpdateAsync(string normalizedEmail, CancellationToken cancellationToken = default)
+        => await db.Mentors.Include(x => x.Quota)
+            .Where(x => x.Email.ToLower() == normalizedEmail)
+            .OrderBy(x => x.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public async Task<Guid?> GetIdByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
         => await db.Mentors.Where(x => x.UserId == userId)
             .Select(x => (Guid?)x.Id)

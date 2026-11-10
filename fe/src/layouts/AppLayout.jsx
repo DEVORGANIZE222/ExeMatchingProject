@@ -220,7 +220,7 @@ export default function AppLayout() {
                   <item.icon size={15} />
                   <span>{item.label}</span>
                   {item.badge && (
-                    <span className="nav-pill-badge" title={`${item.badge} yêu cầu chờ duyệt`}>
+                    <span className="notification-count-badge nav-pill-badge" title={`${item.badge} yêu cầu chờ duyệt`}>
                       {item.badge}
                     </span>
                   )}
@@ -244,7 +244,7 @@ export default function AppLayout() {
                 >
                   <Bell size={18} />
                   {unreadNotificationsCount > 0 && (
-                    <span className="topbar-bell-badge">
+                    <span className="notification-count-badge topbar-bell-badge">
                       {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
                     </span>
                   )}
@@ -418,7 +418,7 @@ export default function AppLayout() {
                 <item.icon size={16} />
                 <span>{item.label}</span>
                 {item.badge && (
-                  <span className="nav-pill-badge" style={{ marginLeft: 'auto' }}>
+                  <span className="notification-count-badge nav-pill-badge" style={{ marginLeft: 'auto' }}>
                     {item.badge}
                   </span>
                 )}

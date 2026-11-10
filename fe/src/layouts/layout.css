@@ -141,20 +141,8 @@
 
 .topbar-bell-badge {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9999px;
-  background-color: #DC2626;
-  color: #FFFFFF;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  top: -6px;
+  right: -6px;
   box-shadow: 0 0 0 2px var(--bg-surface);
 }
 
@@ -524,16 +512,6 @@
 
 /* ── Notification / Pending Count Pill on Nav ────────────── */
 .nav-pill-badge {
-  background-color: var(--primary);
-  color: #FFFFFF;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 2px 6px;
-  border-radius: 9999px;
   margin-left: 2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 

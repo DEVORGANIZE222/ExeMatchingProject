@@ -60,6 +60,14 @@ public record UpdateMentorProfileRequest(
     [StringLength(40)] string Phone
 );
 
+public record AdminUpdateMentorRequest(
+    [Required, StringLength(200)] string FullName,
+    [Required, StringLength(200)] string Department,
+    [StringLength(1000)] string Expertise,
+    [StringLength(40)] string Phone,
+    [Range(1, 50)] int? MaxQuota = null
+);
+
 public record MentorProgressRequest(
     [Required, StringLength(200)] string Milestone,
     [Range(0, 100)] int Progress,

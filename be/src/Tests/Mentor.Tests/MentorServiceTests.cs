@@ -223,6 +223,68 @@ public class MentorServiceTests
         transaction.Verify(t => t.DisposeAsync(), Times.Once);
     }
 
+    // ------------------------------------------------------------------
+    // Admin update & Email-rebind self lookup
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task UpdateMentorAsync_UpdatesProfileAndQuota_AndSaves()
+    {
+        var mentor = CreateMentor("Dr. Le Van C", maxQuota: 5, currentAssigned: 2);
+        _repository.Setup(r => r.GetByIdForUpdateAsync(mentor.Id, It.IsAny<CancellationToken>())).ReturnsAsync(mentor);
+        _repository.Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var updated = await _service.UpdateMentorAsync(mentor.Id, new AdminUpdateMentorRequest(
+            "  TS. Le Van C  ",
+            " Software Engineering ",
+            " Cloud, Microservices ",
+            " 0901234567 ",
+            MaxQuota: 6));
+
+        Assert.Equal("TS. Le Van C", updated.FullName);
+        Assert.Equal("Software Engineering", updated.Department);
+        Assert.Equal("Cloud, Microservices", updated.Expertise);
+        Assert.Equal("0901234567", updated.Phone);
+        Assert.Equal(6, updated.MaxQuota);
+        _repository.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateMentorAsync_QuotaBelowAssigned_ThrowsAndDoesNotSave()
+    {
+        var mentor = CreateMentor("Dr. Le Van C", maxQuota: 5, currentAssigned: 3);
+        _repository.Setup(r => r.GetByIdForUpdateAsync(mentor.Id, It.IsAny<CancellationToken>())).ReturnsAsync(mentor);
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _service.UpdateMentorAsync(mentor.Id, new AdminUpdateMentorRequest(
+            "Dr. Le Van C",
+            "Software Engineering",
+            "AI",
+            "",
+            MaxQuota: 2)));
+
+        Assert.Equal("Quota cannot be lower than the number of assigned groups.", ex.Message);
+        _repository.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetMyProfileAsync_WhenUserIdChangedButEmailMatches_RebindsUserIdAndReturnsProfile()
+    {
+        var mentor = CreateMentor("ThS. Dang Hung", maxQuota: 5, currentAssigned: 0);
+        mentor.Email = "danghung25022005@gmail.com";
+        var newUserId = Guid.NewGuid();
+
+        _repository.Setup(r => r.GetByUserIdForUpdateAsync(newUserId, It.IsAny<CancellationToken>())).ReturnsAsync((MentorUser?)null);
+        _repository.Setup(r => r.GetByEmailForUpdateAsync("danghung25022005@gmail.com", It.IsAny<CancellationToken>())).ReturnsAsync(mentor);
+        _repository.Setup(r => r.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var profile = await _service.GetMyProfileAsync(newUserId, CancellationToken.None, "DangHung25022005@gmail.com");
+
+        Assert.Equal(newUserId, profile.UserId);
+        Assert.Equal(newUserId, mentor.UserId);
+        Assert.Equal("ThS. Dang Hung", profile.FullName);
+        _repository.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private Mock<IMentorTransaction> SetupTransaction(List<string>? calls = null)
     {
         var transaction = new Mock<IMentorTransaction>();

@@ -47,14 +47,14 @@ public class MentorRequestsController(IMentorService mentorService) : Controller
     public async Task<ActionResult<ApiResponse<bool>>> DecisionMentor([FromBody] MentorDecisionDto decision, CancellationToken ct)
     {
         var actor = this.Actor();
-        await mentorService.ProcessDecisionAsync(actor.UserId, decision, ct, actor.AuthorizationHeader, actor.TokenVersion);
+        await mentorService.ProcessDecisionAsync(actor.UserId, decision, ct, actor.AuthorizationHeader, actor.TokenVersion, actor.Email);
         return Ok(ApiResponse<bool>.Ok(true));
     }
 
     [HttpGet("mine")]
     [Authorize(Roles = "Mentor")]
     public async Task<ActionResult<ApiResponse<List<MentorRequestDto>>>> Mine(CancellationToken ct)
-        => Ok(ApiResponse<List<MentorRequestDto>>.Ok(await mentorService.GetMyRequestsAsync(this.ActorId(), ct)));
+        => Ok(ApiResponse<List<MentorRequestDto>>.Ok(await mentorService.GetMyRequestsAsync(this.ActorId(), ct, this.ActorEmail())));
 
     [HttpGet("student/notifications")]
     [Authorize(Roles = "Student")]

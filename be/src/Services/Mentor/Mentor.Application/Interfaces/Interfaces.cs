@@ -24,6 +24,7 @@ public interface IMentorRepository
         string? search, string? department, string? expertise, int skip, int take,
         CancellationToken cancellationToken = default);
     Task<MentorUser?> GetByUserIdForUpdateAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<MentorUser?> GetByEmailForUpdateAsync(string normalizedEmail, CancellationToken cancellationToken = default);
     Task<Guid?> GetIdByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<bool> ExistsByUserIdOrEmailAsync(Guid userId, string email, CancellationToken cancellationToken = default);
     Task<MentorQuota?> GetQuotaByMentorIdAsync(Guid mentorId, CancellationToken cancellationToken = default);
@@ -75,28 +76,29 @@ public interface IMentorService
     Task<MentorResponse?> GetMentorByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<MentorQuotaDto?> GetMentorQuotaAsync(Guid mentorId, CancellationToken cancellationToken = default);
     Task<MentorResponse> CreateMentorAsync(CreateMentorProfileRequest request, CancellationToken cancellationToken = default);
+    Task<MentorResponse> UpdateMentorAsync(Guid id, AdminUpdateMentorRequest request, CancellationToken cancellationToken = default);
     Task<MentorResponse> UpdateQuotaAsync(Guid id, int maxQuota, CancellationToken cancellationToken = default);
     Task DeleteMentorAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<MentorResponse> GetMyProfileAsync(Guid actorUserId, CancellationToken cancellationToken = default);
-    Task<MentorResponse> UpdateMyProfileAsync(Guid actorUserId, UpdateMentorProfileRequest request, CancellationToken cancellationToken = default);
+    Task<MentorResponse> GetMyProfileAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null);
+    Task<MentorResponse> UpdateMyProfileAsync(Guid actorUserId, UpdateMentorProfileRequest request, CancellationToken cancellationToken = default, string? actorEmail = null);
 
     // Mentor requests
     Task RequestMentorAsync(RequestActor actor, CreateMentorRequest request, CancellationToken cancellationToken = default);
     Task<GroupMentorStatusResponse> GetGroupMentorStatusAsync(Guid groupId, string? authorizationHeader, CancellationToken cancellationToken = default);
-    Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null, string? tokenVersion = null);
-    Task<List<MentorRequestDto>> GetMyRequestsAsync(Guid actorUserId, CancellationToken cancellationToken = default);
+    Task ProcessDecisionAsync(Guid actorUserId, MentorDecisionDto decision, CancellationToken cancellationToken = default, string? authorizationHeader = null, string? tokenVersion = null, string? actorEmail = null);
+    Task<List<MentorRequestDto>> GetMyRequestsAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null);
 
     // Mentor workspace
-    Task<List<MentorProgressResponse>> GetMyGroupsAsync(Guid actorUserId, CancellationToken cancellationToken = default);
+    Task<List<MentorProgressResponse>> GetMyGroupsAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null);
     Task<MentorTeamDetailsResponse> GetMyGroupDetailsAsync(RequestActor actor, Guid groupId, CancellationToken cancellationToken = default);
-    Task<MentorProgressResponse> UpdateGroupProgressAsync(Guid actorUserId, Guid groupId, MentorProgressRequest request, CancellationToken cancellationToken = default);
-    Task<List<MentorAppointmentResponse>> GetMyAppointmentsAsync(Guid actorUserId, CancellationToken cancellationToken = default);
-    Task<MentorAppointmentResponse> CreateAppointmentAsync(Guid actorUserId, MentorAppointmentRequest request, CancellationToken cancellationToken = default);
-    Task<MentorAppointmentResponse> UpdateAppointmentAsync(Guid actorUserId, Guid id, MentorAppointmentRequest request, CancellationToken cancellationToken = default);
-    Task DeleteAppointmentAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default);
-    Task<List<MentorNotificationResponse>> GetMyNotificationsAsync(Guid actorUserId, CancellationToken cancellationToken = default);
-    Task MarkNotificationReadAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default);
-    Task MarkAllNotificationsReadAsync(Guid actorUserId, CancellationToken cancellationToken = default);
+    Task<MentorProgressResponse> UpdateGroupProgressAsync(Guid actorUserId, Guid groupId, MentorProgressRequest request, CancellationToken cancellationToken = default, string? actorEmail = null);
+    Task<List<MentorAppointmentResponse>> GetMyAppointmentsAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null);
+    Task<MentorAppointmentResponse> CreateAppointmentAsync(Guid actorUserId, MentorAppointmentRequest request, CancellationToken cancellationToken = default, string? actorEmail = null);
+    Task<MentorAppointmentResponse> UpdateAppointmentAsync(Guid actorUserId, Guid id, MentorAppointmentRequest request, CancellationToken cancellationToken = default, string? actorEmail = null);
+    Task DeleteAppointmentAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default, string? actorEmail = null);
+    Task<List<MentorNotificationResponse>> GetMyNotificationsAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null);
+    Task MarkNotificationReadAsync(Guid actorUserId, Guid id, CancellationToken cancellationToken = default, string? actorEmail = null);
+    Task MarkAllNotificationsReadAsync(Guid actorUserId, CancellationToken cancellationToken = default, string? actorEmail = null);
 
     // Student notifications
     Task<List<StudentNotificationResponse>> GetMyGroupNotificationsAsync(RequestActor actor, string? semesterCode, CancellationToken cancellationToken = default);
