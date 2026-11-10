@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   GraduationCap, Layers, Users, Plus, Search,
   CheckCircle2, X, Crown,
   LogOut, Lock, Unlock, Shuffle,
-  Trash2, Edit3, UserMinus, UserPlus, Sparkles, Calendar, AlertCircle
+  Trash2, Edit3, UserMinus, UserPlus, Sparkles, Calendar, AlertCircle, MoreVertical
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import '../../components/ServicePages.css'
@@ -67,6 +67,19 @@ export default function GroupsPage() {
   const [showCoreModal, setShowCoreModal] = useState(false)
   const [showRandomConfirm, setShowRandomConfirm] = useState(false)
   const [confirmState, setConfirmState] = useState(null)
+  const [showAdminMenu, setShowAdminMenu] = useState(false)
+  const adminMenuRef = useRef(null)
+
+  useEffect(() => {
+    if (!showAdminMenu) return
+    const handleOutsideClick = (event) => {
+      if (adminMenuRef.current && !adminMenuRef.current.contains(event.target)) {
+        setShowAdminMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [showAdminMenu])
   const [inviteIdentifier, setInviteIdentifier] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteCandidates, setInviteCandidates] = useState([])
@@ -694,29 +707,15 @@ export default function GroupsPage() {
   return (
     <div>
       {/* ── Page Header ── */}
-      <div className="page-header">
-        <div>
+      <div className="page-header" style={{ alignItems: 'center' }}>
+        <div style={{ flex: '1 1 340px', minWidth: 0 }}>
           <h1 className="page-title">Nhóm & Đề tài Khởi nghiệp</h1>
           <p className="page-subtitle">
             Khám phá danh sách các nhóm Khởi nghiệp, tìm đồng đội bù trừ kỹ năng, bầu trưởng nhóm hoặc đăng ký đề tài.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {isAdmin && (
-            <button
-              type="button"
-              className="btn btn-outline"
-              style={{ color: 'var(--error)', borderColor: '#fecaca' }}
-              onClick={handleDeleteUnlockedGroups}
-              disabled={busy || !semesterCode || groups.filter((g) => !g.isLocked).length === 0}
-              title="Xóa tất cả nhóm chưa khóa trong học kỳ (không xóa nhóm đã khóa)"
-            >
-              <Trash2 size={16} />
-              <span>Xóa nhóm chưa khóa</span>
-            </button>
-          )}
-
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap', marginLeft: 'auto' }}>
           {isAdmin && (
             <button
               className="btn btn-outline"
@@ -729,7 +728,7 @@ export default function GroupsPage() {
             </button>
           )}
 
-          {/* Student can create group only if they have an assigned semester */}
+          {/* Primary action placed prominently at top-right */}
           {(isAdmin || studentSemesterCode) && (
             <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
               <Plus size={16} />
@@ -765,7 +764,7 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* ── Semester Header / Filter Tabs ── */}
+      {/* ── Semester Header / Filter Tabs & Right Search/Admin Menu ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {/* Admin and Mentor have Semester Dropdown; Student has Fixed Badge */}
@@ -777,7 +776,7 @@ export default function GroupsPage() {
                 setSemesterCode(e.target.value)
                 setCurrentPage(1)
               }}
-              style={{ fontWeight: 600, minWidth: 160 }}
+              style={{ fontWeight: 600, width: 'auto', minWidth: 165, maxWidth: 240 }}
             >
               {semesters.map((s) => (
                 <option key={s.id} value={s.code}>
@@ -843,20 +842,93 @@ export default function GroupsPage() {
           </div>
         </div>
 
-        {/* Search */}
-        <div style={{ position: 'relative', minWidth: 260 }}>
-          <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
-          <input
-            type="text"
-            className="input input-sm"
-            placeholder="Tìm nhóm, đề tài, MSSV, thành viên..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setCurrentPage(1)
-            }}
-            style={{ paddingLeft: 34 }}
-          />
+        {/* Search & Admin Overflow Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flex: '1 1 280px', justifyContent: 'flex-end' }}>
+          <div style={{ position: 'relative', flex: '0 1 320px', width: '100%', minWidth: 220 }}>
+            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              type="text"
+              className="input input-sm"
+              placeholder="Tìm nhóm, đề tài, MSSV, thành viên..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setCurrentPage(1)
+              }}
+              style={{ paddingLeft: 34 }}
+            />
+          </div>
+
+          {isAdmin && (
+            <div ref={adminMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                style={{ padding: '7px 10px' }}
+                onClick={() => setShowAdminMenu((prev) => !prev)}
+                disabled={busy || !semesterCode}
+                aria-expanded={showAdminMenu}
+                aria-haspopup="menu"
+                aria-label="Tác vụ quản trị nhóm"
+                title="Tác vụ quản trị nhóm"
+              >
+                <MoreVertical size={16} />
+              </button>
+
+              {showAdminMenu && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 'calc(100% + 6px)',
+                    minWidth: 260,
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-default)',
+                    borderRadius: 'var(--radius-md)',
+                    boxShadow: 'var(--shadow-lg)',
+                    padding: 6,
+                    zIndex: 35
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', padding: '6px 10px 4px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    Quản trị kỳ {semesterCode}
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowAdminMenu(false)
+                      handleDeleteUnlockedGroups()
+                    }}
+                    disabled={busy || groups.filter((g) => !g.isLocked).length === 0}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      padding: '9px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: 'none',
+                      background: 'transparent',
+                      color: groups.filter((g) => !g.isLocked).length === 0 ? 'var(--text-muted)' : 'var(--error)',
+                      cursor: groups.filter((g) => !g.isLocked).length === 0 ? 'not-allowed' : 'pointer',
+                      textAlign: 'left',
+                      fontSize: 13
+                    }}
+                  >
+                    <Trash2 size={15} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Xóa nhóm chưa khóa</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {groups.filter((g) => !g.isLocked).length} nhóm đang mở · giữ nguyên {groups.filter((g) => g.isLocked).length} nhóm Locked
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
