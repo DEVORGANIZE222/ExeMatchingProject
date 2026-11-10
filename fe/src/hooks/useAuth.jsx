@@ -242,12 +242,13 @@ export function AuthProvider({ children }) {
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.message || 'Phiên đăng nhập không hợp lệ.')
     const saved = localStorage.getItem('exe_account')
-    let savedStudent = null
+    let savedParsed = null
     try {
-      savedStudent = saved ? JSON.parse(saved)?.student : null
+      savedParsed = saved ? JSON.parse(saved) : null
     } catch {
       // ignore
     }
+    const savedStudent = savedParsed?.student || null
     let resolvedStudent = student || savedStudent
     if (!student && body.data?.role === 'Student' && savedStudent?.id) {
       try {
@@ -262,7 +263,21 @@ export function AuthProvider({ children }) {
         // ignore network hiccup and keep cached student payload
       }
     }
-    const next = { ...body.data, student: resolvedStudent }
+    let resolvedMentor = body.data?.role === 'Mentor' ? (savedParsed?.mentor || null) : null
+    if (body.data?.role === 'Mentor') {
+      try {
+        const mentorRes = await fetch(`${apiBase}/api/mentors/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        })
+        if (mentorRes.ok) {
+          const mentorBody = await mentorRes.json().catch(() => ({}))
+          if (mentorBody?.data) resolvedMentor = mentorBody.data
+        }
+      } catch {
+        // ignore network hiccup and keep cached mentor payload
+      }
+    }
+    const next = { ...body.data, student: resolvedStudent, mentor: resolvedMentor }
     setAccount(next)
     localStorage.setItem('exe_account', JSON.stringify(next))
     return next
@@ -272,6 +287,15 @@ export function AuthProvider({ children }) {
     setAccount((current) => {
       if (!current) return current
       const next = { ...current, student: updatedStudent }
+      localStorage.setItem('exe_account', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const updateMentorProfile = useCallback((updatedMentor) => {
+    setAccount((current) => {
+      if (!current) return current
+      const next = { ...current, mentor: updatedMentor }
       localStorage.setItem('exe_account', JSON.stringify(next))
       return next
     })
@@ -453,7 +477,18 @@ export function AuthProvider({ children }) {
     })
     const body = await response.json().catch(() => ({}))
     if (!response.ok) {
-      const error = new Error(body.message || 'Không thể kết nối dữ liệu.')
+      let errorMessage = body?.message
+      if (!errorMessage && body?.errors && typeof body.errors === 'object') {
+        const firstError = Object.values(body.errors).flat().find(Boolean)
+        if (firstError) errorMessage = firstError
+      }
+      if (!errorMessage && body?.title && response.status < 500) {
+        errorMessage = body.title
+      }
+      const fallback = response.status >= 500
+        ? 'Hệ thống đang gặp sự cố, vui lòng thử lại sau.'
+        : 'Yêu cầu không hợp lệ, vui lòng kiểm tra lại dữ liệu.'
+      const error = new Error(errorMessage || fallback)
       error.status = response.status
       throw error
     }
@@ -468,7 +503,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       token, account, loading, loginError,
       setLoginError, googleLogin, logout,
-      request, loadAccount, updateStudentProfile,
+      request, loadAccount, updateStudentProfile, updateMentorProfile,
       isAdmin, isMentor, isStudent,
       // Mentor & Quota exports
       mentorProfile,

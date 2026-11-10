@@ -80,24 +80,39 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         return Map(group);
     }
 
-    public async Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default)
+    public async Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false)
     {
         var semester = Code(request.SemesterCode);
-        var actor = await Enrollment(actorUserId, semester, ct);
-        await RegistrationOpen(semester, ct);
+        EnrollmentContext? actor = null;
+        if (!isAdmin)
+        {
+            actor = await Enrollment(actorUserId, semester, ct);
+            await RegistrationOpen(semester, ct);
+        }
+        else
+        {
+            try { actor = await Enrollment(actorUserId, semester, ct); }
+            catch (GroupException ex) when (ex.StatusCode == 404) { actor = null; }
+        }
         await using var tx = await repository.BeginSerializableTransactionAsync(ct);
-        if (await repository.GetStudentGroupAsync(actor.StudentId, semester, ct) is not null)
+        if (actor is not null && await repository.GetStudentGroupAsync(actor.StudentId, semester, ct) is not null)
             throw Conflict("You already belong to a group in this semester.");
         var group = new Group
         {
             GroupCode = NewCode(semester),
-            GroupName = Required(request.GroupName), ProjectDescription = Required(request.ProjectDescription), SemesterCode = semester, CreatedByStudentId = actor.StudentId,
-            Members = [Member(actor)]
+            GroupName = Required(request.GroupName),
+            ProjectDescription = Required(request.ProjectDescription),
+            SemesterCode = semester,
+            CreatedByStudentId = actor?.StudentId,
+            Members = actor is null ? [] : [Member(actor)]
         };
         ApplyRecruitmentNeeds(group, request.RecruitmentNeeds);
         repository.Add(group);
-        MembershipEvent(actor.StudentId, true);
-        Event("group-created", new GroupCreatedEvent(group.Id, group.GroupCode, group.GroupName, actor.StudentId, DateTime.UtcNow));
+        if (actor is not null)
+        {
+            MembershipEvent(actor.StudentId, true);
+            Event("group-created", new GroupCreatedEvent(group.Id, group.GroupCode, group.GroupName, actor.StudentId, DateTime.UtcNow));
+        }
         await repository.SaveAsync(ct);
         await tx.CommitAsync(ct);
         return Map(group);
@@ -322,12 +337,16 @@ public sealed class GroupService(IGroupRepository repository, IIdentitySemesterC
         await repository.SaveAsync(ct); return Map(group);
     }
 
-    public async Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default)
+    public async Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false)
     {
-        var group = await Group(id, ct); var actor = await Enrollment(actorUserId, group.SemesterCode, ct);
-        await TopicWindow(group.SemesterCode, ct);
+        var group = await Group(id, ct);
+        if (!isAdmin)
+        {
+            var actor = await Enrollment(actorUserId, group.SemesterCode, ct);
+            await TopicWindow(group.SemesterCode, ct);
+            if (group.LeaderStudentId != actor.StudentId) throw Forbidden("Only the elected leader can lock this group.");
+        }
         if (group.Status != GroupStatus.Open) throw Conflict("This group is already locked.");
-        if (group.LeaderStudentId != actor.StudentId) throw Forbidden("Only the elected leader can lock this group.");
         if (group.Members.Count is < 4 or > 5) throw Conflict("A group must contain 4 or 5 members before it can be locked.");
         group.Status = GroupStatus.Locked; group.UpdatedAt = DateTime.UtcNow;
         if (!string.IsNullOrWhiteSpace(group.TopicTitle) && group.TopicRegisteredAt is null)

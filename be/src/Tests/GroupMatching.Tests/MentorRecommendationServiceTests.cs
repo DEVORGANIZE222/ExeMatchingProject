@@ -60,7 +60,7 @@ public class MentorRecommendationServiceTests
         public Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default) => Task.FromResult(group);
         public Task<PageResult<GroupDto>> ListAsync(GroupListQuery query, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto?> GetMyGroupAsync(string semesterCode, Guid actorUserId, CancellationToken ct = default) => Task.FromResult<GroupDto?>(group);
-        public Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false) => throw new NotSupportedException();
         public Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<BulkDeleteGroupsResult> DeleteUnlockedBySemesterAsync(string semesterCode, CancellationToken ct = default) => throw new NotSupportedException();
@@ -71,7 +71,7 @@ public class MentorRecommendationServiceTests
         public Task RemoveMemberAsync(Guid id, Guid studentId, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default, bool allowDemoVotes = false) => throw new NotSupportedException();
-        public Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false) => throw new NotSupportedException();
         public Task<GroupDto> UnlockAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<GroupDto> RegisterTopicAsync(Guid id, RegisterTopicRequest request, Guid actorUserId, CancellationToken ct = default) => throw new NotSupportedException();
     }

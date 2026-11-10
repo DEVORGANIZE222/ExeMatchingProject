@@ -42,7 +42,7 @@ public interface IGroupService
     Task<GroupDto> GetAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> SeedDemoMembersAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> GetMentorRequestContextAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
-    Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> CreateAsync(CreateGroupRequest request, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false);
     Task<GroupDto> UpdateAsync(Guid id, UpdateGroupRequest request, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task DeleteAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<BulkDeleteGroupsResult> DeleteUnlockedBySemesterAsync(string semesterCode, CancellationToken ct = default);
@@ -53,7 +53,7 @@ public interface IGroupService
     Task RemoveMemberAsync(Guid id, Guid studentId, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task RemoveMemberAsAdminAsync(Guid id, Guid studentId, CancellationToken ct = default);
     Task<GroupDto> VoteAsync(Guid id, VoteLeaderRequest request, Guid actorUserId, CancellationToken ct = default, bool allowDemoVotes = false);
-    Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default);
+    Task<GroupDto> LockAsync(Guid id, Guid actorUserId, CancellationToken ct = default, bool isAdmin = false);
     Task<GroupDto> UnlockAsync(Guid id, Guid actorUserId, bool isAdmin, CancellationToken ct = default);
     Task<GroupDto> RegisterTopicAsync(Guid id, RegisterTopicRequest request, Guid actorUserId, CancellationToken ct = default);
 }

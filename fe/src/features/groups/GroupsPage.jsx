@@ -367,11 +367,17 @@ export default function GroupsPage() {
     if (!targetSemesterCode) {
       toast.error(isStudent
         ? 'Tài khoản chưa được xếp vào học kỳ. Vui lòng liên hệ Admin để được thêm vào danh sách sinh viên.'
-        : 'Chưa có học kỳ áp dụng. Vui lòng tạo hoặc mở một học kỳ trước.')
+        : 'Chưa có học kỳ áp dụng. Vui lòng tạo hoặc mở một học kỳ trước.', { id: 'group-create-error' })
       return
     }
-    if (!newGroupName.trim()) {
-      toast.error('Vui lòng nhập tên nhóm.')
+    const cleanName = newGroupName.trim()
+    const cleanDesc = newGroupTopic.trim() || cleanName
+    if (cleanName.length < 2) {
+      toast.error('Tên nhóm phải có ít nhất 2 ký tự.', { id: 'group-create-error' })
+      return
+    }
+    if (cleanDesc.length < 2) {
+      toast.error('Mô tả tóm tắt đề tài phải có ít nhất 2 ký tự.', { id: 'group-create-error' })
       return
     }
     try {
@@ -380,21 +386,21 @@ export default function GroupsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          groupName: newGroupName.trim(),
+          groupName: cleanName,
           semesterCode: targetSemesterCode,
-          projectDescription: newGroupTopic.trim() || newGroupName.trim(),
+          projectDescription: cleanDesc,
           recruitmentNeeds: newRecruitmentNeeds.map((roleCode) => ({ roleCode, slots: 1 }))
         })
       })
 
-      toast.success(`Đã khởi tạo nhóm "${newGroupName}".`)
+      toast.success(`Đã khởi tạo nhóm "${cleanName}".`)
       setShowCreateModal(false)
       setNewGroupName('')
       setNewGroupTopic('')
       setNewRecruitmentNeeds([])
       await loadGroups()
     } catch (error) {
-      toast.error(error.message || 'Không thể tạo nhóm.')
+      toast.error(error.message || 'Không thể tạo nhóm.', { id: 'group-create-error' })
     } finally {
       setBusy(false)
     }
@@ -476,7 +482,8 @@ export default function GroupsPage() {
           setConfirmState(null)
           await loadGroups()
         } catch (error) {
-          toast.error(error.message || 'Không thể khóa nhóm.')
+          setConfirmState(null)
+          toast.error(error.message || 'Không thể khóa nhóm.', { id: 'group-action-error' })
         } finally {
           setBusy(false)
         }
@@ -500,7 +507,8 @@ export default function GroupsPage() {
           setConfirmState(null)
           await loadGroups()
         } catch (error) {
-          toast.error(error.message || 'Không thể gỡ khóa nhóm.')
+          setConfirmState(null)
+          toast.error(error.message || 'Không thể gỡ khóa nhóm.', { id: 'group-action-error' })
         } finally {
           setBusy(false)
         }
@@ -1547,7 +1555,7 @@ export default function GroupsPage() {
                 <label className="input-label">Mô tả dự án *</label>
                 <textarea
                   required
-                  minLength={3}
+                  minLength={2}
                   maxLength={1200}
                   rows={3}
                   className="textarea"
@@ -1642,6 +1650,8 @@ export default function GroupsPage() {
                 <label className="input-label">Tên nhóm / Tên dự án *</label>
                 <input
                   required
+                  minLength={2}
+                  maxLength={120}
                   className="input"
                   placeholder="Ví dụ: AI HealthTech Core"
                   value={newGroupName}
@@ -1652,6 +1662,7 @@ export default function GroupsPage() {
               <div style={{ marginBottom: 18 }}>
                 <label className="input-label">Mô tả tóm tắt đề tài khởi nghiệp</label>
                 <textarea
+                  maxLength={1200}
                   rows={3}
                   className="textarea"
                   placeholder="Nêu ngắn gọn bài toán giải quyết, đối tượng khách hàng và công nghệ cốt lõi..."

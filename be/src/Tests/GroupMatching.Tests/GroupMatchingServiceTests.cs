@@ -308,12 +308,36 @@ public class GroupMatchingServiceTests
         Assert.Equal(2, store.Outbox.Count);
     }
 
+    [Fact]
+    public async Task Admin_without_enrollment_can_create_seed_and_lock_group()
+    {
+        var store = new MemoryStore();
+        var identity = new FakeIdentity { MatchingWindow = true }; // Current == null simulates Admin with no student enrollment
+        var service = new GroupService(store, identity);
+        var adminUserId = Guid.NewGuid();
+
+        var group = await service.CreateAsync(new CreateGroupRequest
+        {
+            GroupName = "Admin Managed Group",
+            SemesterCode = "TESE",
+            ProjectDescription = "Created by admin without student enrollment"
+        }, adminUserId, isAdmin: true);
+
+        Assert.Equal(0, group.MemberCount);
+        group = await service.SeedDemoMembersAsync(group.Id, adminUserId, isAdmin: true);
+        Assert.Equal(5, group.MemberCount);
+
+        group = await service.LockAsync(group.Id, adminUserId, isAdmin: true);
+        Assert.Equal(GroupStatus.Locked, group.Status);
+    }
+
     private sealed class FakeIdentity : IIdentitySemesterClient
     {
-        public EnrollmentContext Current { get; set; } = null!;
+        public EnrollmentContext? Current { get; set; }
         public bool MatchingWindow { get; set; }
         public List<EnrollmentContext> Unmatched { get; set; } = [];
-        public Task<EnrollmentContext> CurrentEnrollmentAsync(string semesterCode, CancellationToken ct = default) => Task.FromResult(Current);
+        public Task<EnrollmentContext> CurrentEnrollmentAsync(string semesterCode, CancellationToken ct = default)
+            => Current is not null ? Task.FromResult(Current) : throw new GroupException(404, "No enrollment found for this semester.");
         public Task<EnrollmentContext> LookupEnrollmentAsync(string semesterCode, string identifier, CancellationToken ct = default)
         {
             var found = Unmatched.SingleOrDefault(x => x.SemesterCode == semesterCode &&

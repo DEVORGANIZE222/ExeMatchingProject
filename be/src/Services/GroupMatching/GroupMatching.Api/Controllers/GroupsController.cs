@@ -39,7 +39,7 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
     [HttpPost]
     public async Task<ActionResult<ApiResponse<GroupDto>>> CreateGroup(CreateGroupRequest request, CancellationToken ct)
     {
-        var group = await service.CreateAsync(request, Actor, ct);
+        var group = await service.CreateAsync(request, Actor, ct, IsAdmin);
         return CreatedAtAction(nameof(GetGroupById), new { id = group.Id }, ApiResponse<GroupDto>.Ok(group));
     }
 
@@ -101,7 +101,7 @@ public class GroupsController(IGroupService service, IHostEnvironment environmen
 
     [HttpPost("{id:guid}/lock")]
     public async Task<ActionResult<ApiResponse<GroupDto>>> LockGroup(Guid id, CancellationToken ct)
-        => Ok(ApiResponse<GroupDto>.Ok(await service.LockAsync(id, Actor, ct)));
+        => Ok(ApiResponse<GroupDto>.Ok(await service.LockAsync(id, Actor, ct, IsAdmin)));
 
     [HttpPost("{id:guid}/unlock")]
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,Student")]
