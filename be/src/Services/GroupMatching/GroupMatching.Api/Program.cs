@@ -69,17 +69,11 @@ var grpcClientBuilder = builder.Services.AddGrpcClient<EXETeamMatching.Mentor.Gr
 });
 if (useGrpcWeb)
 {
-    grpcClientBuilder
-        .ConfigureHttpClient(client =>
+    grpcClientBuilder.ConfigurePrimaryHttpMessageHandler(() =>
+        new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler())
         {
-            client.DefaultRequestVersion = HttpVersion.Version11;
-            client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
-        })
-        .ConfigurePrimaryHttpMessageHandler(() =>
-            new GrpcWebHandler(GrpcWebMode.GrpcWeb, new HttpClientHandler())
-            {
-                HttpVersion = HttpVersion.Version11
-            });
+            HttpVersion = HttpVersion.Version11
+        });
 }
 builder.Services.AddScoped<IMentorRecommendationClient, MentorGrpcRecommendationClient>();
 var jwt = builder.Configuration.GetSection("JwtSettings");

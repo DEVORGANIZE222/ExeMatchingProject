@@ -1,7 +1,12 @@
+using System.Net;
+using System.Net.Http.Headers;
 using Confluent.Kafka;
+using EXETeamMatching.Mentor.Grpc;
 using EXETeamMatching.Messaging.Settings;
 using EXETeamMatching.SharedKernel.Configuration;
+using Grpc.Net.Client.Web;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace EXETeamMatching.GroupMatching.Tests;
@@ -83,6 +88,49 @@ public class HostingAndKafkaConfigTests
         Assert.Equal("kafka:29092", clientConfig.BootstrapServers);
         Assert.Null(clientConfig.SecurityProtocol);
         Assert.Null(clientConfig.SaslMechanism);
+    }
+
+    [Fact]
+    public async Task MentorGrpcClient_With_GrpcWeb_Resolves_From_DI_And_Uses_Http11_GrpcWeb()
+    {
+        var handler = new CaptureGrpcWebHandler();
+        var services = new ServiceCollection();
+        services.AddGrpcClient<MentorGrpcService.MentorGrpcServiceClient>(options =>
+        {
+            options.Address = new Uri("https://mentor.example.com");
+        }).ConfigurePrimaryHttpMessageHandler(() =>
+            new GrpcWebHandler(GrpcWebMode.GrpcWeb, handler)
+            {
+                HttpVersion = HttpVersion.Version11
+            });
+
+        await using var provider = services.BuildServiceProvider();
+        var client = provider.GetRequiredService<MentorGrpcService.MentorGrpcServiceClient>();
+        var response = await client.GetMentorsAsync(new GetMentorsRequest { PageNumber = 1, PageSize = 10 });
+
+        Assert.Equal(0, response.TotalCount);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(HttpVersion.Version11, handler.LastRequest!.Version);
+        Assert.Equal("application/grpc-web", handler.LastRequest.Content?.Headers.ContentType?.MediaType);
+        Assert.Equal("/mentor.MentorGrpcService/GetMentors", handler.LastRequest.RequestUri?.AbsolutePath);
+    }
+
+    private sealed class CaptureGrpcWebHandler : HttpMessageHandler
+    {
+        public HttpRequestMessage? LastRequest { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            var trailers = System.Text.Encoding.ASCII.GetBytes("grpc-status: 0\r\n");
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Version = HttpVersion.Version11,
+                Content = new ByteArrayContent([0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, (byte)trailers.Length, .. trailers])
+            };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/grpc-web");
+            return Task.FromResult(response);
+        }
     }
 }
 
