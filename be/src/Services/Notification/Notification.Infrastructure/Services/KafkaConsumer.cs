@@ -42,6 +42,8 @@ public class KafkaConsumer : IKafkaConsumer
 
     public async Task StartConsumingAsync(CancellationToken cancellationToken)
     {
+        await Task.Yield();
+
         var consumerConfig = new ConsumerConfig
         {
             GroupId = _settings.GroupId,
@@ -76,6 +78,7 @@ public class KafkaConsumer : IKafkaConsumer
                         var consumeResult = consumer.Consume(TimeSpan.FromMilliseconds(500));
                         if (consumeResult == null || consumeResult.IsPartitionEOF)
                         {
+                            await Task.Delay(50, cancellationToken);
                             continue;
                         }
 

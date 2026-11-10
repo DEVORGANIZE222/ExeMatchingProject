@@ -17,6 +17,9 @@ public class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Yield immediately so ASP.NET Core Kestrel binds the HTTP /health port before Kafka polling starts.
+        await Task.Yield();
+
         _logger.LogInformation("Notification Background Worker Service started at: {Time}", DateTimeOffset.Now);
 
         try
